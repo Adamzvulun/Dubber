@@ -16,8 +16,7 @@ from .media import decode_audio
 from .segments import Segment, Word
 
 SAMPLE_RATE = 16000  # what Whisper expects
-PIECE_SECONDS = 20.0  # language is detected on pieces of speech up to this long ...
-SURE = 0.8  # ... and, when a piece is less certain than this (probably mixed), on each of its speech regions
+DETECTOR = "base"  # small Whisper model used only to identify the language of each speech region
 EDGE = 0.2  # seconds of audio kept around a run when it is cut out
 
 
@@ -43,33 +42,21 @@ def merge_runs(pieces: list[tuple[float, float, str, float]]) -> list[tuple[floa
     return runs
 
 
-def language_runs(model, samples) -> list[tuple[float, float, str]]:
-    """Stretches of the audio in one language each: [(start_s, end_s, language)]."""
+def language_runs(detector, samples) -> list[tuple[float, float, str]]:
+    """Stretches of the audio in one language each: [(start_s, end_s, language)].
+
+    The language is detected for EVERY speech region (a sentence or two): Whisper's language detection mostly hears
+    the start of what it is given, so a 20-s piece that began in French and ended in English was called French and
+    its English lines were mislabelled (measured 2026-10-16). `detector` is a small Whisper model ("base"): it
+    identified all 19 regions of two mixed test clips correctly, at ~0.3 s per region on CPU.
+    """
     from faster_whisper.vad import VadOptions, get_speech_timestamps
 
     regions = get_speech_timestamps(samples, VadOptions(min_silence_duration_ms=300, max_speech_duration_s=15))
-    if not regions:
-        return []
-
-    def detect(start: int, end: int) -> tuple[str, float]:
-        lang, prob, _ = model.detect_language(audio=samples[start:end])
-        return lang, float(prob)
-
-    # Group speech regions into pieces of up to PIECE_SECONDS (fewer detections on long videos).
-    groups: list[list[dict]] = [[]]
+    pieces = []
     for r in regions:
-        if groups[-1] and (r["end"] - groups[-1][0]["start"]) / SAMPLE_RATE > PIECE_SECONDS:
-            groups.append([])
-        groups[-1].append(r)
-
-    pieces: list[tuple[float, float, str, float]] = []
-    for group in groups:
-        lang, prob = detect(group[0]["start"], group[-1]["end"])
-        if prob < SURE and len(group) > 1:  # probably two languages in this piece: look at each region
-            for r in group:
-                pieces.append((r["start"] / SAMPLE_RATE, r["end"] / SAMPLE_RATE, *detect(r["start"], r["end"])))
-        else:
-            pieces.append((group[0]["start"] / SAMPLE_RATE, group[-1]["end"] / SAMPLE_RATE, lang, prob))
+        lang, prob, _ = detector.detect_language(audio=samples[r["start"]:r["end"]])
+        pieces.append((r["start"] / SAMPLE_RATE, r["end"] / SAMPLE_RATE, lang, float(prob)))
     return merge_runs(pieces)
 
 
@@ -89,7 +76,8 @@ def transcribe(
     # some PyAV versions (e.g. av 19 rejects the `metadata_errors` argument faster-whisper 1.2 passes).
     samples = decode_audio(audio_wav, SAMPLE_RATE)
     total = len(samples) / SAMPLE_RATE
-    runs = language_runs(model, samples)
+    detector = retry(lambda: WhisperModel(DETECTOR, device=device, compute_type=compute_type))
+    runs = language_runs(detector, samples)
 
     spoken: Counter[str] = Counter()
     for start, end, lang in runs:

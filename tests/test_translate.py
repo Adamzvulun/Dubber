@@ -205,3 +205,14 @@ def test_claude_prompt_names_the_target_language():
     client = FakeClaude()
     ClaudeBackend(client=client, target="he").translate_texts(["Hello"])
     assert "Hebrew" in client.requests[0]["system"] and "Russian" not in client.requests[0]["system"]
+
+
+def test_gate_accepts_a_line_google_says_is_already_in_the_dub_language():
+    # Whisper mislabelled an English line as French; dubbing into English, Google returns it unchanged and
+    # reports "en" as its language: keep it instead of failing.
+    def fetch(text, source, target):
+        return (text, "en")
+
+    t = Translator("en", GoogleBackend("en", fetch=fetch))
+    assert t.translate_texts(["So patience and good flour are the secret."], ["fr"]) == [
+        "So patience and good flour are the secret."]

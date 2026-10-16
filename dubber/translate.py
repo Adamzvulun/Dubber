@@ -90,12 +90,14 @@ class GoogleBackend:
     def __init__(self, target: str = languages.DEFAULT, fetch: Callable[[str, str, str], str] | None = None,
                  sleep: Callable[[float], None] = time.sleep, waits: tuple[float, ...] = WAITS):
         self.target = languages.get(target)
-        self._fetch = fetch or self._http  # (text, source, target) -> translated text; raises TranslatorUnavailable
+        # (text, source, target) -> translated text, or (text, detected source); raises TranslatorUnavailable
+        self._fetch = fetch or self._http
+        self.detected = ""  # source language Google detected in the last request
         self._sleep = sleep
         self._waits = waits
 
     @classmethod
-    def _http(cls, text: str, source: str, target: str) -> str:
+    def _http(cls, text: str, source: str, target: str) -> tuple[str, str]:
         import requests
 
         try:
@@ -109,14 +111,16 @@ class GoogleBackend:
             raise TranslatorUnavailable(f"Google Translate refused the request (HTTP {r.status_code}, robot check)")
         try:
             data = r.json()
-            return "".join(part[0] for part in data[0] if part and part[0])
+            return "".join(part[0] for part in data[0] if part and part[0]), str(data[2] or "")
         except (ValueError, TypeError, IndexError) as exc:
             raise TranslatorUnavailable(f"Google Translate sent an unexpected answer: {r.text[:120]}") from exc
 
     def _request(self, text: str, source: str) -> str:
         for attempt, wait in enumerate((*self._waits, None)):
             try:
-                return self._fetch(text, source, self.target.google)
+                answer = self._fetch(text, source, self.target.google)
+                text_out, self.detected = answer if isinstance(answer, tuple) else (answer, "")
+                return text_out
             except TranslatorUnavailable as exc:
                 if wait is None:
                     raise
@@ -136,8 +140,12 @@ class GoogleBackend:
         return out
 
     def translate_one(self, line: str, source: str) -> str:
-        """Retry for a single line with the source language stated explicitly (quality gate)."""
-        return self._request(line, languages.google_code(source)).strip()
+        """Quality-gate retry for one line. Google auto-detects a single line reliably, which also covers a line
+        whose spoken language was mis-detected. If Google says the line is already in the dub language, keep it."""
+        out = self._request(line, "auto").strip()
+        if self.detected.lower() in (self.target.google.lower(), self.target.code):
+            self.detected = self.target.code
+        return out
 
 
 # ---------------------------------------------------------------- NLLB-200 (free, offline, any pair)
@@ -276,6 +284,8 @@ class Translator:
         for i in todo:
             if needs_retry(texts[i], out[i] or "", langs[i], self.target):
                 out[i] = self._call("translate_one", texts[i], langs[i])
+                if getattr(self._engine(), "detected", "") == self.target.code:
+                    langs[i] = self.target.code  # Google: this line is already in the dub language
                 if needs_retry(texts[i], out[i] or "", langs[i], self.target) and self._fallback_factory:
                     self.primary_failed = True  # one more chance with the other engine
                     out[i] = self._call("translate_one", texts[i], langs[i])
