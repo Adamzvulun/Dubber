@@ -100,6 +100,9 @@ _ERRORS: list[tuple[Callable[[str], bool], str, str]] = [
     (lambda t: "no speech found" in t,
      "В этом видео не найдено речи.",
      "No speech was found in this video."),
+    (lambda t: "could not translate" in t,
+     "Часть фраз не удалось перевести (ни Google, ни резервным переводчиком). Попробуйте ещё раз позже.",
+     "Some lines could not be translated (neither by Google nor by the offline backup). Please try again later."),
     (lambda t: "offline translator only" in t or ("google" in t and "translat" in t),
      "Не удалось перевести: сервис Google Translate недоступен. Без него можно переводить только "
      "с английского на русский. Попробуйте позже.",

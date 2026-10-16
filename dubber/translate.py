@@ -1,10 +1,16 @@
-"""Stage 3 — speech lines (any language) to the target language (Russian by default; see languages.py).
+"""Stage 3 — speech lines (any language, several per video) to the dub language (see languages.py).
 
-Backends share one interface (`translate_texts(list[str]) -> list[str]`):
-- GoogleBackend: free, via deep-translator, source language auto-detected. Default.
-- OfflineBackend: free, runs on this computer (Helsinki-NLP opus-mt-en-ru) — English→Russian only. Automatic
-  fallback for Russian dubs when Google refuses (e.g. its "unusual traffic" robot check), or DUBBER_TRANSLATOR=offline.
-- ClaudeBackend: context-aware, keeps lines short enough to dub. Used when ANTHROPIC_API_KEY is set.
+How a video is translated (`Translator`):
+1. Lines already in the dub language are kept as they are.
+2. The rest goes to the primary engine in batches of ONE spoken language each (`Segment.lang` from Whisper): a mixed
+   batch made Google detect one language and leave the French lines of an English video untranslated.
+   - GoogleBackend (free, default): Google's JSON endpoint, patient retries on its robot check / rate limit.
+   - ClaudeBackend (opt-in, ANTHROPIC_API_KEY): context-aware, concise lines for dubbing.
+3. If the primary engine stays unavailable, the rest of the video uses NllbBackend: Meta's NLLB-200 (1.3B, int8,
+   CTranslate2, ~1.4 GB, downloaded on first use), offline, any language pair. It replaced an English→Russian-only
+   model that turned French into gibberish when Google refused.
+4. Quality gate: a line whose "translation" is still the original (or not in the dub language's script) is re-sent
+   on its own; if it still isn't translated, the job stops — untranslated text is never voiced.
 """
 
 from __future__ import annotations
@@ -13,8 +19,8 @@ import json
 import logging
 import os
 import re
+import time
 from collections.abc import Callable
-from pathlib import Path
 from typing import Protocol
 
 from . import languages
@@ -26,7 +32,17 @@ log = logging.getLogger(__name__)
 class Backend(Protocol):
     name: str
 
-    def translate_texts(self, texts: list[str]) -> list[str]: ...
+    def translate_group(self, lines: list[str], source: str) -> list[str]:
+        """Translate lines that are all in one spoken language (`source`, a Whisper code; "" = unknown)."""
+        ...
+
+
+class TranslatorUnavailable(RuntimeError):
+    """The engine can't be reached or refuses (e.g. Google's robot check); another engine may take over."""
+
+
+class UntranslatedError(RuntimeError):
+    """Some lines could not be translated by any engine."""
 
 
 def _chunks(texts: list[str], max_chars: int, max_items: int) -> list[list[str]]:
@@ -44,101 +60,6 @@ def _chunks(texts: list[str], max_chars: int, max_items: int) -> list[list[str]]
     return chunks
 
 
-class GoogleBackend:
-    name = "google"
-
-    def __init__(self, translate_fn: Callable[[str], str] | None = None, target: str = languages.DEFAULT):
-        if translate_fn is None:
-            from deep_translator import GoogleTranslator
-
-            translate_fn = GoogleTranslator(source="auto", target=languages.get(target).google).translate
-        self._translate = translate_fn
-
-    def translate_texts(self, texts: list[str]) -> list[str]:
-        out: list[str] = []
-        # Google's limit is 5000 chars per request; send many lines at once, one per line.
-        for chunk in _chunks(texts, max_chars=4000, max_items=60):
-            joined = "\n".join(t.replace("\n", " ") for t in chunk)
-            lines = [ln.strip() for ln in self._checked(joined).split("\n")]
-            if len(lines) != len(chunk):  # line structure got lost — fall back to one-by-one
-                lines = [self._checked(t).strip() for t in chunk]
-            # Google detects ONE source language per request, so in a mixed video (English with some French) a
-            # line in the other language can come back untranslated. Re-send such lines on their own. When most
-            # of the chunk is unchanged, the video is simply already in the target language: leave it.
-            unchanged = [i for i, (src, dst) in enumerate(zip(chunk, lines, strict=True))
-                         if dst.casefold() == src.strip().casefold() and any(c.isalpha() for c in src)]
-            if unchanged and len(unchanged) <= len(chunk) // 2:
-                for i in unchanged:
-                    lines[i] = self._checked(chunk[i]).strip()
-            out.extend(lines)
-        return out
-
-    def _checked(self, text: str) -> str:
-        result = self._translate(text) or ""
-        if looks_like_block_page(result):
-            raise RuntimeError("Google Translate returned a robot-check page instead of a translation")
-        return result
-
-
-def looks_like_block_page(text: str) -> bool:
-    head = text.lstrip()[:300].lower()
-    return head.startswith(("<!doctype", "<html")) or "unusual traffic" in head
-
-
-class OfflineBackend:
-    """English→Russian on this computer: ONNX export of Helsinki-NLP/opus-mt-en-ru (Apache-2.0), ~110 MB.
-
-    Lower quality than Google or Claude, but needs no account and works when online services refuse.
-    The model downloads once from Hugging Face into the local cache.
-    """
-
-    name = "offline"
-    REPO = "Xenova/opus-mt-en-ru"
-    START_ID = 62517  # decoder_start_token_id (= pad) from the model's config.json
-    EOS_ID = 0
-
-    def __init__(self):
-        import onnxruntime as ort
-        from huggingface_hub import hf_hub_download
-        from tokenizers import Tokenizer
-
-        from .hub import retry
-
-        def fetch(filename: str) -> str:
-            return retry(lambda: hf_hub_download(self.REPO, filename))
-
-        spec = json.loads(Path(fetch("tokenizer.json")).read_text(encoding="utf-8"))
-        spec["normalizer"] = None  # the export has an empty "Precompiled" normalizer the library can't load
-        self._tok = Tokenizer.from_str(json.dumps(spec))
-        self._enc = ort.InferenceSession(fetch("onnx/encoder_model_quantized.onnx"))
-        self._dec = ort.InferenceSession(fetch("onnx/decoder_model_quantized.onnx"))
-
-    def _translate_one(self, text: str) -> str:
-        import numpy as np
-
-        if not text.strip():
-            return ""
-        ids = np.array([self._tok.encode(text).ids], dtype=np.int64)
-        mask = np.ones_like(ids)
-        hidden = self._enc.run(None, {"input_ids": ids, "attention_mask": mask})[0]
-        out = [self.START_ID]
-        for _ in range(3 * ids.shape[1] + 10):  # greedy decoding
-            logits = self._dec.run(
-                ["logits"],
-                {"input_ids": np.array([out], dtype=np.int64), "encoder_hidden_states": hidden,
-                 "encoder_attention_mask": mask},
-            )[0]
-            token = int(logits[0, -1].argmax())
-            if token == self.EOS_ID:
-                break
-            out.append(token)
-        return self._tok.decode(out[1:]).strip()
-
-    def translate_texts(self, texts: list[str]) -> list[str]:
-        # The model stops after the first sentence of its input, so translate sentence by sentence.
-        return [" ".join(self._translate_one(s) for s in split_sentences(t)) for t in texts]
-
-
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+|(?<=[.!?…][\"')\]»])\s+")
 
 
@@ -147,27 +68,224 @@ def split_sentences(text: str) -> list[str]:
     return [p for p in parts if p]
 
 
-class FallbackBackend:
-    """Use `primary`; if it fails once, switch to `fallback` for the rest of the run."""
+def looks_like_block_page(text: str) -> bool:
+    head = text.lstrip()[:300].lower()
+    return head.startswith(("<!doctype", "<html")) or "unusual traffic" in head
 
-    def __init__(self, primary: Backend, fallback_factory: Callable[[], Backend]):
+
+# ---------------------------------------------------------------- Google (free, default)
+
+class GoogleBackend:
+    """Google Translate's JSON endpoint (the one browser extensions use), free, no key.
+
+    Google answers some requests with a robot check / HTTP 429, more often from busy networks: wait and retry
+    (2+4+8+16+30 s) before giving up with TranslatorUnavailable.
+    """
+
+    name = "google"
+    URL = "https://translate.googleapis.com/translate_a/single"
+    WAITS = (2, 4, 8, 16, 30)
+    MAX_CHARS = 1500  # GET request: the text travels URL-encoded
+
+    def __init__(self, target: str = languages.DEFAULT, fetch: Callable[[str, str, str], str] | None = None,
+                 sleep: Callable[[float], None] = time.sleep, waits: tuple[float, ...] = WAITS):
+        self.target = languages.get(target)
+        self._fetch = fetch or self._http  # (text, source, target) -> translated text; raises TranslatorUnavailable
+        self._sleep = sleep
+        self._waits = waits
+
+    @classmethod
+    def _http(cls, text: str, source: str, target: str) -> str:
+        import requests
+
+        try:
+            r = requests.get(
+                cls.URL, params={"client": "gtx", "sl": source, "tl": target, "dt": "t", "q": text},
+                headers={"User-Agent": "Mozilla/5.0"}, timeout=20, allow_redirects=False,
+            )
+        except requests.RequestException as exc:
+            raise TranslatorUnavailable(f"Google Translate unreachable: {exc}") from exc
+        if r.status_code != 200 or looks_like_block_page(r.text):
+            raise TranslatorUnavailable(f"Google Translate refused the request (HTTP {r.status_code}, robot check)")
+        try:
+            data = r.json()
+            return "".join(part[0] for part in data[0] if part and part[0])
+        except (ValueError, TypeError, IndexError) as exc:
+            raise TranslatorUnavailable(f"Google Translate sent an unexpected answer: {r.text[:120]}") from exc
+
+    def _request(self, text: str, source: str) -> str:
+        for attempt, wait in enumerate((*self._waits, None)):
+            try:
+                return self._fetch(text, source, self.target.google)
+            except TranslatorUnavailable as exc:
+                if wait is None:
+                    raise
+                log.info("Google refused (%s); retry %d in %ss", exc, attempt + 1, wait)
+                self._sleep(wait)
+        raise AssertionError("unreachable")
+
+    def translate_group(self, lines: list[str], source: str = "") -> list[str]:
+        src = languages.google_code(source)
+        out: list[str] = []
+        for chunk in _chunks(lines, max_chars=self.MAX_CHARS, max_items=40):
+            joined = "\n".join(t.replace("\n", " ") for t in chunk)
+            parts = [ln.strip() for ln in self._request(joined, src).split("\n")]
+            if len(parts) != len(chunk):  # line structure got lost — one by one
+                parts = [self._request(t, src).strip() for t in chunk]
+            out.extend(parts)
+        return out
+
+    def translate_one(self, line: str, source: str) -> str:
+        """Retry for a single line with the source language stated explicitly (quality gate)."""
+        return self._request(line, languages.google_code(source)).strip()
+
+
+# ---------------------------------------------------------------- NLLB-200 (free, offline, any pair)
+
+class NllbBackend:
+    """Meta's NLLB-200 distilled 1.3B (CC-BY-NC 4.0 — fine for personal use), CTranslate2 int8 conversion by OpenNMT.
+
+    Measured 2026-10-16 on CPU: ~1 s per line; good French/English → Russian/Hebrew/Spanish. Known weaknesses handled
+    here: it may stop after the first sentence (→ translate sentence by sentence) and Chinese output may stop at a
+    comma (→ stricter length penalty, then clause by clause).
+    """
+
+    name = "offline"
+    REPO = "OpenNMT/nllb-200-distilled-1.3B-ct2-int8"
+
+    def __init__(self, target: str = languages.DEFAULT):
+        import ctranslate2
+        from huggingface_hub import snapshot_download
+        from tokenizers import Tokenizer
+
+        from .hub import retry
+
+        self.target = languages.get(target)
+        path = retry(lambda: snapshot_download(self.REPO))
+        self._tok = Tokenizer.from_file(os.path.join(path, "tokenizer.json"))
+        self._model = ctranslate2.Translator(path, device="cpu", compute_type="int8")
+
+    def _run(self, texts: list[str], src: str) -> list[str]:
+        if not texts:
+            return []
+        tokens = [[src, *self._tok.encode(t, add_special_tokens=False).tokens, "</s>"] for t in texts]
+        results = self._model.translate_batch(
+            tokens, target_prefix=[[self.target.nllb]] * len(texts), beam_size=4, length_penalty=1.5,
+            max_decoding_length=256,
+        )
+        return [self._tok.decode([self._tok.token_to_id(t) for t in r.hypotheses[0][1:]]).strip() for r in results]
+
+    def _looks_cut(self, source: str, out: str) -> bool:
+        return not out or out.endswith((",", "，", "、")) and not source.rstrip().endswith(",")
+
+    def translate_group(self, lines: list[str], source: str = "") -> list[str]:
+        src = languages.nllb_code(source)
+        sentences = [split_sentences(line) for line in lines]
+        flat = self._run([s for group in sentences for s in group], src)
+        out, i = [], 0
+        for group in sentences:
+            parts = []
+            for sentence in group:
+                text = flat[i]
+                i += 1
+                if self._looks_cut(sentence, text):  # stopped early: translate clause by clause
+                    clauses = [c for c in re.split(r"(?<=[,;:])\s+", sentence) if c]
+                    joiner = "，" if self.target.code in ("zh", "ja") else " "
+                    text = joiner.join(c.rstrip("，,") for c in self._run(clauses, src)) if len(clauses) > 1 else text
+                parts.append(text)
+            out.append((" " if self.target.code not in ("zh", "ja") else "").join(parts))
+        return out
+
+    def translate_one(self, line: str, source: str) -> str:
+        return self.translate_group([line], source)[0]
+
+
+# ---------------------------------------------------------------- quality gate + orchestration
+
+def needs_retry(source: str, out: str, line_lang: str, target: languages.Language) -> bool:
+    """True when `out` is not a translation of `source` into `target` (untranslated or wrong script)."""
+    if not any(c.isalpha() for c in source):
+        return False
+    if not out.strip():
+        return True
+    if target.script and not re.search(f"[{target.script}]", out):
+        return True  # e.g. French text came back for a Russian dub
+    words = len(source.split())
+    return line_lang != target.code and out.strip().casefold() == source.strip().casefold() and words >= 3
+
+
+class Translator:
+    """Translate a video's lines: same-language lines kept, one-language batches, fallback, quality gate."""
+
+    def __init__(self, target: str, primary, fallback_factory: Callable[[], object] | None = None):
+        self.target = languages.get(target)
         self.primary = primary
         self._fallback_factory = fallback_factory
-        self.used: Backend = primary
+        self._fallback = None
+        self.primary_failed = False
+        self.used: set[str] = set()
 
     @property
     def name(self) -> str:
-        return self.used.name
+        return "+".join(sorted(self.used)) or self.primary.name
 
-    def translate_texts(self, texts: list[str]) -> list[str]:
-        if self.used is self.primary:
+    def _engine(self):
+        if not self.primary_failed:
+            return self.primary
+        if self._fallback is None:
+            if self._fallback_factory is None:
+                raise TranslatorUnavailable(f"{self.primary.name} translator unavailable and no fallback")
+            self._fallback = self._fallback_factory()
+        return self._fallback
+
+    def _call(self, method: str, *args):
+        while True:
+            engine = self._engine()
             try:
-                return self.primary.translate_texts(texts)
-            except Exception as exc:
-                log.warning("%s translator failed (%s); switching to the offline translator", self.primary.name, exc)
-                self.used = self._fallback_factory()
-        return self.used.translate_texts(texts)
+                result = getattr(engine, method)(*args)
+                self.used.add(engine.name)
+                return result
+            except TranslatorUnavailable as exc:
+                if engine is not self.primary:
+                    raise
+                log.warning("%s unavailable (%s); using the offline translator for the rest", engine.name, exc)
+                self.primary_failed = True
 
+    def translate_texts(self, texts: list[str], langs: list[str] | None = None) -> list[str]:
+        langs = list(langs) if langs else [""] * len(texts)
+        out: list[str | None] = [None] * len(texts)
+        todo = []
+        for i, (text, lang) in enumerate(zip(texts, langs, strict=True)):
+            if lang == self.target.code or not any(c.isalpha() for c in text):
+                out[i] = text  # already in the dub language (or nothing to translate)
+            else:
+                todo.append(i)
+        # Consecutive lines of one spoken language form one batch.
+        groups: list[list[int]] = []
+        for i in todo:
+            if groups and groups[-1][-1] == i - 1 and langs[groups[-1][-1]] == langs[i]:
+                groups[-1].append(i)
+            else:
+                groups.append([i])
+        for group in groups:
+            result = self._call("translate_group", [texts[i] for i in group], langs[group[0]])
+            for i, line in zip(group, result, strict=True):
+                out[i] = line
+
+        # Quality gate: re-send failures alone (explicit source language), then give up loudly.
+        for i in todo:
+            if needs_retry(texts[i], out[i] or "", langs[i], self.target):
+                out[i] = self._call("translate_one", texts[i], langs[i])
+                if needs_retry(texts[i], out[i] or "", langs[i], self.target) and self._fallback_factory:
+                    self.primary_failed = True  # one more chance with the other engine
+                    out[i] = self._call("translate_one", texts[i], langs[i])
+        bad = [texts[i] for i in todo if needs_retry(texts[i], out[i] or "", langs[i], self.target)]
+        if bad:
+            raise UntranslatedError(f"Could not translate {len(bad)} line(s) into {self.target.name_en}: {bad[:3]}")
+        return [line or "" for line in out]
+
+
+# ---------------------------------------------------------------- Claude (opt-in, paid)
 
 CLAUDE_SYSTEM_PROMPT = """You translate video subtitles into natural spoken {target} for a voice-over.
 The source is usually English but may be any language, or several (translate every line into {target};
@@ -245,25 +363,35 @@ class ClaudeBackend:
         return out
 
 
+    def translate_group(self, lines: list[str], source: str = "") -> list[str]:
+        return self.translate_texts(lines)
+
+    def translate_one(self, line: str, source: str) -> str:
+        return self.translate_texts([line])[0]
+
+
 def make_backend(
     choice: str = "auto", claude_model: str = "claude-opus-5-5", glossary: str = "", target: str = languages.DEFAULT
-) -> Backend:
-    if choice == "claude" or (choice == "auto" and os.environ.get("ANTHROPIC_API_KEY")):
-        return ClaudeBackend(model=claude_model, glossary=glossary, target=target)
-    offline_ok = target == "ru"  # the offline model only knows English→Russian
+) -> Translator:
+    """The translator for a dub into `target`: auto = Claude if ANTHROPIC_API_KEY is set, else free Google; both fall
+    back to the offline NLLB model. "offline" = NLLB only."""
+    fallback = lambda: NllbBackend(target=target)  # noqa: E731 — built only if needed (1.4 GB model)
     if choice == "offline":
-        if not offline_ok:
-            raise RuntimeError("The offline translator only translates into Russian")
-        return OfflineBackend()
-    if choice == "google" or not offline_ok:
-        return GoogleBackend(target=target)
-    return FallbackBackend(GoogleBackend(target=target), OfflineBackend)
+        return Translator(target, NllbBackend(target=target))
+    if choice == "claude" or (choice == "auto" and os.environ.get("ANTHROPIC_API_KEY")):
+        return Translator(target, ClaudeBackend(model=claude_model, glossary=glossary, target=target), fallback)
+    return Translator(target, GoogleBackend(target=target), fallback)
 
 
-def translate_segments(segments: list[Segment], backend: Backend) -> list[Segment]:
-    russian = backend.translate_texts([s.text for s in segments])
-    if len(russian) != len(segments):
-        raise RuntimeError(f"translator returned {len(russian)} lines for {len(segments)} segments")
-    for seg, ru in zip(segments, russian, strict=True):
-        seg.ru = ru
+def translate_segments(segments: list[Segment], backend) -> list[Segment]:
+    """Fill `seg.ru` (the dub-language text). `backend` is a Translator, or any object with translate_texts()."""
+    texts = [s.text for s in segments]
+    if isinstance(backend, Translator):
+        translated = backend.translate_texts(texts, [s.lang for s in segments])
+    else:
+        translated = backend.translate_texts(texts)
+    if len(translated) != len(segments):
+        raise RuntimeError(f"translator returned {len(translated)} lines for {len(segments)} segments")
+    for seg, text in zip(segments, translated, strict=True):
+        seg.ru = text
     return segments

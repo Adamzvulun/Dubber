@@ -5,6 +5,7 @@ If a run fails half-way (e.g. the internet drops), running it again skips the fi
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -139,10 +140,11 @@ def run(
     target = languages.get(settings.target_lang)
     voice = languages.voice_for(target.code, settings.voice)
 
-    # 2. Transcribe (any language; the cache keeps its old "_en" name so existing videos aren't redone)
+    # 2. Transcribe (any language, several per video)
     report = p.stage("transcribe")
-    # "_v2": lines are cut from word timings (segments.split_into_units); older caches used Whisper's chunks.
-    src_json = work / "segments_en_v2.json"
+    # "_v3": every line carries its spoken language. Older caches came from Whisper forced to English (French parts
+    # became gibberish English) or lacked line languages, so they are redone.
+    src_json = work / "segments_src_v3.json"
     info_json = work / "speech_info.json"
     if not src_json.exists():
         audio = media.extract_audio(video, work / "audio_16k.wav")
@@ -166,11 +168,13 @@ def run(
 
     # 3. Translate
     report = p.stage("translate")
-    dub_json = work / f"segments_{target.code}_v2.json"
+    dub_json = work / f"segments_{target.code}_v3.json"
+    engine_file = work / f"segments_{target.code}_v3.translator"  # which engine translated (shown on the watch page)
     if not dub_json.exists():
         backend = translator or translate.make_backend(settings.translator, settings.claude_model, target=target.code)
         translate.translate_segments(segments, backend)
         save_segments(segments, dub_json)
+        engine_file.write_text(getattr(backend, "name", ""), encoding="utf-8")
     segments = load_segments(dub_json)
     report(1.0)
 
@@ -187,8 +191,10 @@ def run(
 
     # 5. Align clips into one dubbed track (the voice name already identifies the language)
     report = p.stage("align")
-    track = work / f"dub_track_v3_{voice}.wav"
-    timing_json = work / f"timing_v3_{voice}.json"
+    # Keyed by the lines' timing and text: any change to them can never reuse a stale track.
+    key = hashlib.sha1(json.dumps([(s.start, s.end, s.ru) for s in segments]).encode()).hexdigest()[:10]
+    track = work / f"dub_track_{voice}_{key}.wav"
+    timing_json = work / f"timing_{voice}_{key}.json"
     if not track.exists() or not timing_json.exists():
         lines: list[dict] = []
         align.build_track(segments, clips, media.duration(video), track, progress=report, report=lines)
@@ -224,6 +230,7 @@ def run(
         "target_lang": target.code,
         "source_lang": source_lang,
         "source_langs": source_langs,
+        "translator": engine_file.read_text(encoding="utf-8") if engine_file.exists() else "",
         "files": {key: path.name for key, path in files.items()},
         "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }

@@ -4,13 +4,17 @@ from types import SimpleNamespace
 
 import pytest
 
+from dubber import languages
 from dubber.segments import Segment
 from dubber.translate import (
     ClaudeBackend,
-    FallbackBackend,
     GoogleBackend,
-    OfflineBackend,
+    NllbBackend,
+    Translator,
+    TranslatorUnavailable,
+    UntranslatedError,
     _chunks,
+    needs_retry,
     translate_segments,
 )
 
@@ -22,23 +26,48 @@ def test_chunks_respect_limits():
     assert [len(c) for c in _chunks(["a"] * 5, max_chars=999, max_items=2)] == [2, 2, 1]
 
 
-def test_google_batches_lines():
+def fake_google(answer, calls=None):
+    """fetch(text, source, target) stand-in: `answer(line, source)` per line, joined like Google does."""
+    def fetch(text, source, target):
+        if calls is not None:
+            calls.append((text, source, target))
+        return "\n".join(answer(line, source) for line in text.split("\n"))
+    return fetch
+
+
+def test_google_batches_lines_and_names_target():
     calls = []
-
-    def fake(text):
-        calls.append(text)
-        return "\n".join(f"RU:{ln}" for ln in text.split("\n"))
-
-    out = GoogleBackend(fake).translate_texts(["one", "two", "three"])
-    assert out == ["RU:one", "RU:two", "RU:three"]
-    assert len(calls) == 1
+    g = GoogleBackend("he", fetch=fake_google(lambda ln, s: f"HE:{ln}", calls))
+    assert g.translate_group(["one", "two", "three"], "en") == ["HE:one", "HE:two", "HE:three"]
+    assert calls == [("one\ntwo\nthree", "en", "iw")]  # one request; Google's code for Hebrew is "iw"
 
 
-def test_google_falls_back_when_lines_merge():
-    def fake(text):
-        return "merged" if "\n" in text else f"RU:{text}"
+def test_google_retries_robot_check_then_gives_up():
+    attempts, waits = [], []
 
-    assert GoogleBackend(fake).translate_texts(["a", "b"]) == ["RU:a", "RU:b"]
+    def refusing(text, source, target):
+        attempts.append(text)
+        if len(attempts) < 3:
+            raise TranslatorUnavailable("HTTP 429")
+        return "ok"
+
+    g = GoogleBackend("ru", fetch=refusing, sleep=waits.append)
+    assert g.translate_group(["x"]) == ["ok"] and waits == [2, 4]
+
+    def always(text, source, target):
+        raise TranslatorUnavailable("HTTP 429")
+
+    with pytest.raises(TranslatorUnavailable):
+        GoogleBackend("ru", fetch=always, sleep=lambda s: None).translate_group(["x"])
+
+
+def test_google_rejects_robot_check_page(monkeypatch):
+    import requests
+
+    page = SimpleNamespace(status_code=200, text="<html><body>Our systems have detected unusual traffic</body></html>")
+    monkeypatch.setattr(requests, "get", lambda *a, **k: page)
+    with pytest.raises(TranslatorUnavailable):
+        GoogleBackend._http("Hello", "auto", "ru")
 
 
 class FakeClaude:
@@ -83,55 +112,10 @@ def test_claude_refusal_raises():
         ClaudeBackend(client=client).translate_texts(["x"])
 
 
-def test_translate_segments_sets_ru():
+def test_translate_segments_with_plain_backend():
     segs = [Segment(0, 1, "Hi")]
-    translate_segments(segs, GoogleBackend(lambda t: "Привет"))
+    translate_segments(segs, SimpleNamespace(translate_texts=lambda texts: ["Привет"]))
     assert segs[0].ru == "Привет"
-
-
-def test_google_rejects_robot_check_page():
-    page = "<html><head><title>Sorry...</title></head><body>unusual traffic</body></html>"
-    with pytest.raises(RuntimeError):
-        GoogleBackend(lambda t: page).translate_texts(["Hello"])
-
-
-class Boom:
-    name = "boom"
-
-    def translate_texts(self, texts):
-        raise RuntimeError("blocked")
-
-
-class Echo:
-    name = "echo"
-
-    def __init__(self):
-        self.calls = 0
-
-    def translate_texts(self, texts):
-        self.calls += 1
-        return [f"RU:{t}" for t in texts]
-
-
-def test_fallback_switches_once_and_stays():
-    echo = Echo()
-    fb = FallbackBackend(Boom(), lambda: echo)
-    assert fb.translate_texts(["a"]) == ["RU:a"]
-    assert fb.name == "echo"
-    assert fb.translate_texts(["b"]) == ["RU:b"] and echo.calls == 2
-
-
-def test_fallback_keeps_primary_when_it_works():
-    primary = Echo()
-    fb = FallbackBackend(primary, lambda: pytest.fail("fallback should not be built"))
-    assert fb.translate_texts(["a"]) == ["RU:a"] and fb.name == "echo"
-
-
-@pytest.mark.network
-@pytest.mark.skipif(not os.environ.get("DUBBER_NETWORK_TESTS"), reason="set DUBBER_NETWORK_TESTS=1")
-def test_offline_backend_real_model():
-    out = OfflineBackend().translate_texts(["Hello, this is a test.", ""])
-    assert out[1] == "" and any(ch in out[0].lower() for ch in "привет")
 
 
 def test_split_sentences():
@@ -143,45 +127,78 @@ def test_split_sentences():
     assert split_sentences("  ") == []
 
 
-@pytest.mark.network
-@pytest.mark.skipif(not os.environ.get("DUBBER_NETWORK_TESTS"), reason="set DUBBER_NETWORK_TESTS=1")
-def test_offline_backend_keeps_every_sentence():
-    out = OfflineBackend().translate_texts(["How do you soothe the burn? Why does wasabi make your eyes water?"])[0]
-    assert out.count("?") == 2
+class FakeEngine:
+    def __init__(self, name, answer):
+        self.name, self.answer, self.groups = name, answer, []
+
+    def translate_group(self, lines, source=""):
+        self.groups.append((source, list(lines)))
+        return [self.answer(line, source) for line in lines]
+
+    def translate_one(self, line, source):
+        return self.answer(line, source)
 
 
-def test_google_resends_a_line_left_in_another_language():
-    """Mixed video: Google detects one language per request, so a French line may come back unchanged."""
-    calls = []
-
-    def fake(text):
-        calls.append(text)
-        if "\n" in text:
-            return "\n".join("Bonjour" if ln == "Bonjour" else f"RU:{ln}" for ln in text.split("\n"))
-        return "Здравствуйте"
-
-    out = GoogleBackend(fake).translate_texts(["Hello", "Bonjour", "Thanks", "Bye"])
-    assert out == ["RU:Hello", "Здравствуйте", "RU:Thanks", "RU:Bye"] and calls[-1] == "Bonjour"
+def test_lines_are_batched_by_spoken_language_and_target_language_kept():
+    engine = FakeEngine("google", lambda ln, s: f"Перевод {ln}")
+    t = Translator("ru", engine)
+    texts = ["Hello there", "Bonjour à tous", "Je fais du pain", "Привет всем", "Thanks a lot"]
+    out = t.translate_texts(texts, ["en", "fr", "fr", "ru", "en"])
+    assert out[3] == "Привет всем"  # already Russian: untouched, never sent
+    assert engine.groups == [("en", ["Hello there"]), ("fr", ["Bonjour à tous", "Je fais du pain"]),
+                             ("en", ["Thanks a lot"])]
 
 
-def test_google_leaves_text_already_in_target_language():
-    calls = []
+def test_unavailable_primary_falls_back_for_the_rest():
+    def refuse(ln, s):
+        raise TranslatorUnavailable("robot check")
 
-    def echo(text):
-        calls.append(text)
-        return text
+    primary, backup = FakeEngine("google", refuse), FakeEngine("offline", lambda ln, s: f"Резерв {ln}")
+    t = Translator("ru", primary, lambda: backup)
+    out = t.translate_texts(["Hello you all", "Bonjour à tous"], ["en", "fr"])
+    assert out == ["Резерв Hello you all", "Резерв Bonjour à tous"] and t.name == "offline"
+    assert len(primary.groups) == 1  # after the first refusal Google isn't asked again
 
-    assert GoogleBackend(echo).translate_texts(["Привет", "Пока"]) == ["Привет", "Пока"] and len(calls) == 1
+
+def test_quality_gate_resends_untranslated_line_then_fails_loudly():
+    # Google leaves the French line as it is (mixed-language request); the gate re-sends it alone.
+    sent = []
+
+    def answer(ln, s):
+        sent.append((ln, s))
+        return ln if s == "fr" and len(sent) == 1 else f"Перевод {ln}"
+
+    t = Translator("ru", FakeEngine("google", answer))
+    assert t.translate_texts(["Je fais du pain ici"], ["fr"]) == ["Перевод Je fais du pain ici"]
+
+    stubborn = Translator("ru", FakeEngine("google", lambda ln, s: ln))  # never translates, no fallback
+    with pytest.raises(UntranslatedError):
+        stubborn.translate_texts(["Je fais du pain ici"], ["fr"])
 
 
-def test_backend_choice_per_target(monkeypatch):
+def test_needs_retry_rules():
+    ru, es = languages.get("ru"), languages.get("es")
+    assert needs_retry("Je fais du pain ici", "Je fais du pain ici", "fr", ru)  # untranslated
+    assert needs_retry("Bonjour à tous", "Bonjour", "fr", ru)  # no Cyrillic in a Russian dub
+    assert not needs_retry("Paris.", "Париж.", "fr", ru)
+    assert not needs_retry("OK.", "OK.", "en", es)  # short, Latin target: may legitimately stay the same
+    assert needs_retry("Hello there", "", "en", es)
+    assert not needs_retry("...", "...", "en", ru)  # nothing to translate
+
+
+def test_backend_choice(monkeypatch):
     from dubber.translate import make_backend
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    assert isinstance(make_backend("auto", target="ru"), FallbackBackend)  # offline en→ru fallback
-    assert isinstance(make_backend("auto", target="he"), GoogleBackend)  # no offline model for Hebrew
-    with pytest.raises(RuntimeError):
-        make_backend("offline", target="he")
+    t = make_backend("auto", target="he")
+    assert isinstance(t.primary, GoogleBackend) and t.primary.target.code == "he" and t._fallback_factory
+
+
+@pytest.mark.network
+@pytest.mark.skipif(not os.environ.get("DUBBER_NETWORK_TESTS"), reason="set DUBBER_NETWORK_TESTS=1")
+def test_nllb_real_model_any_pair():
+    out = NllbBackend("he").translate_group(["Bonjour à tous. Je fais du pain ici depuis vingt ans."], "fr")[0]
+    assert any("\u0590" <= c <= "\u05ff" for c in out) and len(out) > 20
 
 
 def test_claude_prompt_names_the_target_language():

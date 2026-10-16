@@ -112,9 +112,10 @@ def transcribe(
             chunk, language=language, vad_filter=True, beam_size=5, word_timestamps=True
         )
         for s in raw_segments:  # a generator: transcription happens while iterating
-            words = [Word(start + float(w.start), start + float(w.end), w.word) for w in (s.words or [])]
+            lang = language or ""
+            words = [Word(start + float(w.start), start + float(w.end), w.word, lang) for w in (s.words or [])]
             segments.append(Segment(start=start + float(s.start), end=start + float(s.end), text=s.text.strip(),
-                                    words=words))
+                                    words=words, lang=lang))
             if progress and total:
                 progress(min(1.0, (start + float(s.end)) / total))
     return segments

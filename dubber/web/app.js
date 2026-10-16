@@ -353,7 +353,8 @@ function renderWatchDetails() {
   $("#watch-title").textContent = video.title;
   $("#watch-meta").replaceChildren(...[
     video.channel, clock(video.duration), langName(video.target_lang), t("watch.voice", voiceName(video.voice)),
-    video.background === false ? t("watch.noBackground") : null, dateLabel(video.created),
+    video.background === false ? t("watch.noBackground") : null,
+    (video.translator || "").includes("offline") ? t("watch.offline") : null, dateLabel(video.created),
   ].filter(Boolean).map((text) => el("span", { text })));
 
   const files = video.files || {};

@@ -16,6 +16,7 @@ class Word:
     start: float  # seconds
     end: float  # seconds
     text: str  # as Whisper gives it, usually with a leading space
+    lang: str = ""  # spoken language of the run this word was transcribed in (transcribe.language_runs)
 
 
 @dataclass
@@ -25,6 +26,7 @@ class Segment:
     text: str  # what was said (any language; usually English)
     ru: str = ""  # the translation in the dub language (named "ru" for compatibility: Russian is the default)
     words: list[Word] = field(default_factory=list)  # word timings from Whisper (not saved)
+    lang: str = ""  # spoken language of this line ("" = unknown); the translator batches lines by it
 
     @property
     def duration(self) -> float:
@@ -90,6 +92,9 @@ def split_into_units(
                 sentences.append(current)
                 current = []
             continue
+        if current and w.lang != current[-1].lang:  # a line never mixes languages
+            sentences.append(current)
+            current = []
         current.append(w)
         next_start = words[i + 1].start if i + 1 < len(words) else None
         if w.text.strip().endswith(_SENTENCE_END) or (next_start is not None and next_start - w.end >= hard_pause):
@@ -103,7 +108,7 @@ def split_into_units(
         for part in _split_long(sentence, max_duration, min_part):
             text = " ".join(_NON_SPEECH.sub(" ", "".join(w.text for w in part)).split())
             if any(ch.isalnum() for ch in text):  # nothing to translate or say otherwise
-                units.append(Segment(start=part[0].start, end=part[-1].end, text=text))
+                units.append(Segment(start=part[0].start, end=part[-1].end, text=text, lang=part[0].lang))
     return units
 
 

@@ -65,3 +65,12 @@ def test_non_speech_is_not_a_line():
     units = split_into_units(_words([(0.0, 1.0, "♪"), (1.0, 2.0, "[Music]"), (2.0, 2.4, "Hello"), (2.5, 2.9, "all."),
                                      (4.5, 5.0, "♪♪"), (6.0, 6.5, "...")]))
     assert [(u.start, u.end, u.text) for u in units] == [(2.0, 2.9, "Hello all.")]
+
+
+def test_a_line_never_mixes_spoken_languages():
+    from dubber.segments import Word, split_into_units
+
+    words = [Word(0.0, 0.4, " Let's", "en"), Word(0.5, 0.9, " hear", "en"), Word(1.0, 1.3, " her", "en"),
+             Word(1.5, 1.9, " Bonjour", "fr"), Word(2.0, 2.4, " à", "fr"), Word(2.5, 2.9, " tous.", "fr")]
+    units = split_into_units(words)
+    assert [(u.text, u.lang) for u in units] == [("Let's hear her", "en"), ("Bonjour à tous.", "fr")]
