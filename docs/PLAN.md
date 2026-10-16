@@ -27,7 +27,9 @@ A Russian-speaking, non-technical user pastes a YouTube link into a local web pa
 - [x] subtitles & transcripts
 - [x] pipeline cache + CLI
 - [x] unit tests + offline end-to-end test (network services stubbed)
-- [ ] real end-to-end run with YouTube + Whisper + translation + TTS (blocked in cloud sandbox; needs allowed domains or a home PC)
+- [x] real end-to-end run with YouTube + Whisper + translation + TTS (2 real TED-Ed videos, CLI + web UI; offline translator because Google blocks the cloud server)
+- [x] offline translator fallback, cookies option, deno runtime
+- [ ] real run with Google translation (needs a non-datacenter connection — first run on father's PC)
 
 ### M2 — Russian web UI + installers
 - [x] Gradio app in Russian: link → progress → player + downloads + previous videos
@@ -51,5 +53,6 @@ A Russian-speaking, non-technical user pastes a YouTube link into a local web pa
 
 ## Open questions
 - What is the father's work field? (for the glossary)
+- Offline translations are understandable but clumsy; worth paying for Claude translation (~$0.05–0.20/video)?
 - Do we want a paid Claude key for better translation, or stay on free Google Translate?
 - Which OS does his PC run? (Windows assumed)

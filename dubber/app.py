@@ -24,7 +24,7 @@ CSS = """
 #dub-title p { color: var(--dub-muted); font-size: 1.15rem; margin: 0 0 0.6em; max-width: 60ch; }
 #dub-url textarea, #dub-url input { font-size: 1.15rem !important; padding: 14px !important; }
 #dub-go { font-size: 1.25rem !important; min-height: 60px; }
-#dub-status { font-size: 1.1rem; }
+#dub-status { font-size: 1.1rem; min-height: 96px; }  /* room for Gradio's progress bar */
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 """
 
@@ -149,8 +149,8 @@ def build_ui(settings: Settings | None = None, runner=pipeline.run) -> gr.Blocks
             gr.Markdown(HELP)
 
         outputs = [status, video, dl_video, dl_srt, dl_txt, dl_bi]
-        go.click(dub, inputs=[url, voice], outputs=[*outputs, history])
-        url.submit(dub, inputs=[url, voice], outputs=[*outputs, history])
+        go.click(dub, inputs=[url, voice], outputs=[*outputs, history], show_progress="full")
+        url.submit(dub, inputs=[url, voice], outputs=[*outputs, history], show_progress="full")
         history.change(open_previous, inputs=history, outputs=outputs)
 
     return ui

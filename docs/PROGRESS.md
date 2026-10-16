@@ -2,7 +2,7 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
-## 2026-10-16 — Session 1b: real end-to-end test (in progress)
+## 2026-10-16 — Session 1b: real end-to-end test ✅
 - Adam opened the network. Findings from real requests in the cloud sandbox:
   - YouTube: search + metadata work; **media download is refused** ("Sign in to confirm you're not a bot", then 403 on
     video data for every player client: mweb, web_embedded, web_safari, tv, android_vr). The browser-based PO-token
@@ -13,6 +13,22 @@ Newest entries at the top. One entry per working session / milestone.
     Quality: understandable, clearly below Google (e.g. literal phrasing, occasional wrong word).
   - edge-tts ignored HTTPS_PROXY (aiohttp) → pass proxy explicitly. Real Russian TTS now works.
   - Added `DUBBER_COOKIES` setting. 27 tests (1 network test with the real offline model, opt-in).
+- **Real run 1 (CLI)** — TED-Ed "The science of spiciness" (3:55), Adam's cookies, Whisper small on CPU:
+  - Bug: faster-whisper 1.2.1 crashes with PyAV 19 (`metadata_errors`). Fix: pass ffmpeg-decoded samples. Regression test.
+  - Bug: offline translator stops after the first sentence of each input → 11 of 25 segments lost text.
+    Fix: translate sentence by sentence. Tests (unit + network).
+  - Fix: retries re-downloaded the video → look up the id first and reuse `work/<id>/`.
+  - Speed-up: copy the English track instead of re-encoding (final step 32 s → 19 s).
+  - Result: 234.36 s in → 234.36 s out; streams h264 + aac(rus, default) + aac(eng) + mov_text(rus); all 25 segments
+    keep every sentence; every segment has Russian voice; Whisper listening to the dubbed track detects Russian
+    (p=1.00) and 91 % of heard words match our translation. Time: ~3.8 min for a 3.9 min video (download 9 s,
+    recognition 121 s, translation 40–53 s offline, voice 21–41 s, timing 5–8 s, assembly 19–32 s).
+- **Real run 2 (web UI via Playwright)** — TED-Ed "What is imposter syndrome…" (4:19), female voice, every stage
+  fresh: done in 250 s, "Скачать видео" downloaded a correct MP4, no browser console errors.
+  - UX bug: for the whole run the page showed nothing (progress bar had no visible place). Fix: fixed-height status
+    area + `show_progress="full"` → live bar "Озвучиваю по-русски – 63.7 %". Screenshots in `docs/images/`.
+- Not verifiable here: in-page playback (headless Chromium lacks H.264), Windows installer, Google translation
+  quality (Google blocks this server; the father's home connection should be fine).
 
 ## 2026-10-16 — Session 1: research, skills, foundation
 - Agreed scope with Adam: runs on father's PC, free-first, outputs = dubbed MP4 + RU subtitles + transcript.

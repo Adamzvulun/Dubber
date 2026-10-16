@@ -132,3 +132,19 @@ def test_fallback_keeps_primary_when_it_works():
 def test_offline_backend_real_model():
     out = OfflineBackend().translate_texts(["Hello, this is a test.", ""])
     assert out[1] == "" and any(ch in out[0].lower() for ch in "привет")
+
+
+def test_split_sentences():
+    from dubber.translate import split_sentences
+
+    assert split_sentences("Why? Because it burns. Really!") == ["Why?", "Because it burns.", "Really!"]
+    assert split_sentences('He said "hi." Then left.') == ['He said "hi."', "Then left."]
+    assert split_sentences("No end punctuation") == ["No end punctuation"]
+    assert split_sentences("  ") == []
+
+
+@pytest.mark.network
+@pytest.mark.skipif(not os.environ.get("DUBBER_NETWORK_TESTS"), reason="set DUBBER_NETWORK_TESTS=1")
+def test_offline_backend_keeps_every_sentence():
+    out = OfflineBackend().translate_texts(["How do you soothe the burn? Why does wasabi make your eyes water?"])[0]
+    assert out.count("?") == 2

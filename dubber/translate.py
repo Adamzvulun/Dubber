@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
@@ -120,7 +121,16 @@ class OfflineBackend:
         return self._tok.decode(out[1:]).strip()
 
     def translate_texts(self, texts: list[str]) -> list[str]:
-        return [self._translate_one(t) for t in texts]
+        # The model stops after the first sentence of its input, so translate sentence by sentence.
+        return [" ".join(self._translate_one(s) for s in split_sentences(t)) for t in texts]
+
+
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+|(?<=[.!?…][\"')\]»])\s+")
+
+
+def split_sentences(text: str) -> list[str]:
+    parts = [p.strip() for p in _SENTENCE_SPLIT.split(text.strip())]
+    return [p for p in parts if p]
 
 
 class FallbackBackend:

@@ -46,12 +46,13 @@ def mux(
 
     args += [
         "-c:v", "copy",
-        "-c:a", "aac", "-b:a", "160k",
+        "-c:a:0", "aac", "-b:a:0", "160k",
         "-metadata:s:a:0", "language=rus", "-metadata:s:a:0", "title=Русский",
         "-disposition:a:0", "default",
     ]
     if keep_original_track:
         args += [
+            "-c:a:1", "copy",  # the English original is kept as-is (no re-encoding: faster, no quality loss)
             "-metadata:s:a:1", "language=eng", "-metadata:s:a:1", "title=English (original)",
             "-disposition:a:1", "0",
         ]

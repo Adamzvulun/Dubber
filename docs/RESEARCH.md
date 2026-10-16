@@ -45,6 +45,18 @@ Conclusion: build a small, focused, well-tested tool from the same proven buildi
 - **Demucs** — separate voice from music so background music survives the dub. (M3)
 - **WhisperX** — better word-level alignment.
 
+## Findings from real tests in a cloud (datacenter) sandbox — 2026-10-16
+- **YouTube** blocks downloads from datacenter IPs ("Sign in to confirm you're not a bot", then HTTP 403 on video data
+  for mweb / web_embedded / web_safari / tv / android_vr clients). Browser cookies (`DUBBER_COOKIES`) fix it.
+  The browser-based PO-token plugin needs a desktop display. Home connections are normally not affected.
+- **yt-dlp** now requires a JavaScript runtime (deno) for YouTube; the `deno` PyPI package provides it.
+- **Google Translate** (unofficial free endpoints) answers datacenter IPs with a robot-check page.
+- **Helsinki-NLP opus-mt-en-ru** (ONNX, ~110 MB) works offline on CPU with onnxruntime; it stops after the first
+  sentence of each input, so we feed it single sentences. Quality: understandable, often literal.
+- **faster-whisper 1.2.1 + PyAV 19** are incompatible when loading files; passing decoded samples avoids it.
+- **edge-tts** (aiohttp) ignores `HTTPS_PROXY`; pass `proxy=` explicitly.
+- CPU speed (4 cores): Whisper small ≈ 0.5× real time; whole pipeline ≈ 1× real time.
+
 ## Risks
 - YouTube anti-bot changes → keep yt-dlp updated; cookies-from-browser fallback (see `youtube-downloader` skill references).
 - edge-tts is an unofficial client of a Microsoft service — may break; Silero offline fallback planned.
