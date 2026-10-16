@@ -1,10 +1,18 @@
 import json
+import os
 from types import SimpleNamespace
 
 import pytest
 
 from dubber.segments import Segment
-from dubber.translate import ClaudeBackend, GoogleBackend, _chunks, translate_segments
+from dubber.translate import (
+    ClaudeBackend,
+    FallbackBackend,
+    GoogleBackend,
+    OfflineBackend,
+    _chunks,
+    translate_segments,
+)
 
 
 def test_chunks_respect_limits():
@@ -79,3 +87,48 @@ def test_translate_segments_sets_ru():
     segs = [Segment(0, 1, "Hi")]
     translate_segments(segs, GoogleBackend(lambda t: "Привет"))
     assert segs[0].ru == "Привет"
+
+
+def test_google_rejects_robot_check_page():
+    page = "<html><head><title>Sorry...</title></head><body>unusual traffic</body></html>"
+    with pytest.raises(RuntimeError):
+        GoogleBackend(lambda t: page).translate_texts(["Hello"])
+
+
+class Boom:
+    name = "boom"
+
+    def translate_texts(self, texts):
+        raise RuntimeError("blocked")
+
+
+class Echo:
+    name = "echo"
+
+    def __init__(self):
+        self.calls = 0
+
+    def translate_texts(self, texts):
+        self.calls += 1
+        return [f"RU:{t}" for t in texts]
+
+
+def test_fallback_switches_once_and_stays():
+    echo = Echo()
+    fb = FallbackBackend(Boom(), lambda: echo)
+    assert fb.translate_texts(["a"]) == ["RU:a"]
+    assert fb.name == "echo"
+    assert fb.translate_texts(["b"]) == ["RU:b"] and echo.calls == 2
+
+
+def test_fallback_keeps_primary_when_it_works():
+    primary = Echo()
+    fb = FallbackBackend(primary, lambda: pytest.fail("fallback should not be built"))
+    assert fb.translate_texts(["a"]) == ["RU:a"] and fb.name == "echo"
+
+
+@pytest.mark.network
+@pytest.mark.skipif(not os.environ.get("DUBBER_NETWORK_TESTS"), reason="set DUBBER_NETWORK_TESTS=1")
+def test_offline_backend_real_model():
+    out = OfflineBackend().translate_texts(["Hello, this is a test.", ""])
+    assert out[1] == "" and any(ch in out[0].lower() for ch in "привет")

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,11 +28,34 @@ def local_video_id(path: Path) -> str:
     return f"local-{digest[:12]}"
 
 
+def find_deno() -> str | None:
+    """The deno JavaScript runtime YouTube extraction needs. Installed into the venv by pip (`deno` package)."""
+    bin_dir = Path(sys.executable).parent
+    for name in ("deno", "deno.exe"):
+        if (bin_dir / name).is_file():
+            return str(bin_dir / name)
+    return shutil.which("deno")
+
+
+def base_opts() -> dict:
+    opts = {"quiet": True, "no_warnings": True, "noplaylist": True}
+    # Optional browser cookies (Netscape cookies.txt) for when YouTube asks to "confirm you're not a bot".
+    cookies = os.environ.get("DUBBER_COOKIES")
+    if cookies:
+        if not Path(cookies).expanduser().is_file():
+            raise FileNotFoundError(f"DUBBER_COOKIES points to a missing file: {cookies}")
+        opts["cookiefile"] = str(Path(cookies).expanduser())
+    deno = find_deno()
+    if deno:
+        opts["js_runtimes"] = {"deno": {"path": deno}}
+    return opts
+
+
 def fetch_info(url: str) -> dict:
     """Video metadata without downloading (id, title, duration...)."""
     import yt_dlp
 
-    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "noplaylist": True}) as ydl:
+    with yt_dlp.YoutubeDL(base_opts()) as ydl:
         return ydl.extract_info(url, download=False)
 
 
@@ -59,6 +84,7 @@ def download(source: str, dest_dir: Path, max_height: int = 720, progress=None) 
                 progress(min(1.0, d.get("downloaded_bytes", 0) / total))
 
     opts = {
+        **base_opts(),
         # Prefer H.264 + AAC: plays everywhere (Windows player, browsers, phones).
         "format": (
             f"bv*[vcodec^=avc1][height<={max_height}]+ba[ext=m4a]/"
@@ -66,9 +92,6 @@ def download(source: str, dest_dir: Path, max_height: int = 720, progress=None) 
         ),
         "merge_output_format": "mp4",
         "outtmpl": str(dest_dir / "source.%(ext)s"),
-        "noplaylist": True,
-        "quiet": True,
-        "no_warnings": True,
         "progress_hooks": [hook],
     }
     with yt_dlp.YoutubeDL(opts) as ydl:

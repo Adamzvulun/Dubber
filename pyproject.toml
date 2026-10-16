@@ -9,10 +9,14 @@ description = "Paste a YouTube link, get the video dubbed into Russian (plus sub
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "yt-dlp>=2025.1.1",
+    "yt-dlp[default]>=2025.10.1",
+    "deno>=2.0",  # JavaScript runtime yt-dlp needs for YouTube
     "faster-whisper>=1.1",
     "edge-tts>=7.0",
     "deep-translator>=1.11",
+    "onnxruntime>=1.17",  # offline translator
+    "tokenizers>=0.15",
+    "huggingface_hub>=0.20",
     "numpy>=1.24",
     "gradio>=5.0",
 ]
@@ -38,3 +42,4 @@ select = ["E", "F", "W", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["network: needs internet + model downloads; run with DUBBER_NETWORK_TESTS=1"]

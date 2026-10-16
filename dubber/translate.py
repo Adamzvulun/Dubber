@@ -1,18 +1,24 @@
 """Stage 3 — English segments to Russian.
 
-Two backends behind one interface (`translate_texts(list[str]) -> list[str]`):
+Backends share one interface (`translate_texts(list[str]) -> list[str]`):
 - GoogleBackend: free, via deep-translator. Default.
+- OfflineBackend: free, runs on this computer (Helsinki-NLP opus-mt-en-ru). Automatic fallback when Google
+  refuses (e.g. its "unusual traffic" robot check), or forced with DUBBER_TRANSLATOR=offline.
 - ClaudeBackend: context-aware, keeps lines short enough to dub. Used when ANTHROPIC_API_KEY is set.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import Protocol
 
 from .segments import Segment
+
+log = logging.getLogger(__name__)
 
 
 class Backend(Protocol):
@@ -51,11 +57,92 @@ class GoogleBackend:
         # Google's limit is 5000 chars per request; send many lines at once, one per line.
         for chunk in _chunks(texts, max_chars=4000, max_items=60):
             joined = "\n".join(t.replace("\n", " ") for t in chunk)
-            lines = [ln.strip() for ln in (self._translate(joined) or "").split("\n")]
+            lines = [ln.strip() for ln in self._checked(joined).split("\n")]
             if len(lines) != len(chunk):  # line structure got lost — fall back to one-by-one
-                lines = [(self._translate(t) or "").strip() for t in chunk]
+                lines = [self._checked(t).strip() for t in chunk]
             out.extend(lines)
         return out
+
+    def _checked(self, text: str) -> str:
+        result = self._translate(text) or ""
+        if looks_like_block_page(result):
+            raise RuntimeError("Google Translate returned a robot-check page instead of a translation")
+        return result
+
+
+def looks_like_block_page(text: str) -> bool:
+    head = text.lstrip()[:300].lower()
+    return head.startswith(("<!doctype", "<html")) or "unusual traffic" in head
+
+
+class OfflineBackend:
+    """English→Russian on this computer: ONNX export of Helsinki-NLP/opus-mt-en-ru (Apache-2.0), ~110 MB.
+
+    Lower quality than Google or Claude, but needs no account and works when online services refuse.
+    The model downloads once from Hugging Face into the local cache.
+    """
+
+    name = "offline"
+    REPO = "Xenova/opus-mt-en-ru"
+    START_ID = 62517  # decoder_start_token_id (= pad) from the model's config.json
+    EOS_ID = 0
+
+    def __init__(self):
+        import onnxruntime as ort
+        from huggingface_hub import hf_hub_download
+        from tokenizers import Tokenizer
+
+        spec = json.loads(Path(hf_hub_download(self.REPO, "tokenizer.json")).read_text(encoding="utf-8"))
+        spec["normalizer"] = None  # the export has an empty "Precompiled" normalizer the library can't load
+        self._tok = Tokenizer.from_str(json.dumps(spec))
+        self._enc = ort.InferenceSession(hf_hub_download(self.REPO, "onnx/encoder_model_quantized.onnx"))
+        self._dec = ort.InferenceSession(hf_hub_download(self.REPO, "onnx/decoder_model_quantized.onnx"))
+
+    def _translate_one(self, text: str) -> str:
+        import numpy as np
+
+        if not text.strip():
+            return ""
+        ids = np.array([self._tok.encode(text).ids], dtype=np.int64)
+        mask = np.ones_like(ids)
+        hidden = self._enc.run(None, {"input_ids": ids, "attention_mask": mask})[0]
+        out = [self.START_ID]
+        for _ in range(3 * ids.shape[1] + 10):  # greedy decoding
+            logits = self._dec.run(
+                ["logits"],
+                {"input_ids": np.array([out], dtype=np.int64), "encoder_hidden_states": hidden,
+                 "encoder_attention_mask": mask},
+            )[0]
+            token = int(logits[0, -1].argmax())
+            if token == self.EOS_ID:
+                break
+            out.append(token)
+        return self._tok.decode(out[1:]).strip()
+
+    def translate_texts(self, texts: list[str]) -> list[str]:
+        return [self._translate_one(t) for t in texts]
+
+
+class FallbackBackend:
+    """Use `primary`; if it fails once, switch to `fallback` for the rest of the run."""
+
+    def __init__(self, primary: Backend, fallback_factory: Callable[[], Backend]):
+        self.primary = primary
+        self._fallback_factory = fallback_factory
+        self.used: Backend = primary
+
+    @property
+    def name(self) -> str:
+        return self.used.name
+
+    def translate_texts(self, texts: list[str]) -> list[str]:
+        if self.used is self.primary:
+            try:
+                return self.primary.translate_texts(texts)
+            except Exception as exc:
+                log.warning("%s translator failed (%s); switching to the offline translator", self.primary.name, exc)
+                self.used = self._fallback_factory()
+        return self.used.translate_texts(texts)
 
 
 CLAUDE_SYSTEM_PROMPT = """You translate English video subtitles into natural spoken Russian for a voice-over.
@@ -132,7 +219,11 @@ class ClaudeBackend:
 def make_backend(choice: str = "auto", claude_model: str = "claude-opus-5-5", glossary: str = "") -> Backend:
     if choice == "claude" or (choice == "auto" and os.environ.get("ANTHROPIC_API_KEY")):
         return ClaudeBackend(model=claude_model, glossary=glossary)
-    return GoogleBackend()
+    if choice == "offline":
+        return OfflineBackend()
+    if choice == "google":
+        return GoogleBackend()
+    return FallbackBackend(GoogleBackend(), OfflineBackend)
 
 
 def translate_segments(segments: list[Segment], backend: Backend) -> list[Segment]:

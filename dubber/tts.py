@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
@@ -20,7 +21,9 @@ SynthFn = Callable[[str, str, Path], Awaitable[None]]
 async def edge_synthesize(text: str, voice: str, out_path: Path) -> None:
     import edge_tts
 
-    await edge_tts.Communicate(text, voice).save(str(out_path))
+    # aiohttp ignores HTTPS_PROXY by itself; pass it explicitly so it works behind proxies.
+    proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or None
+    await edge_tts.Communicate(text, voice, proxy=proxy).save(str(out_path))
 
 
 def clip_path(clips_dir: Path, index: int) -> Path:

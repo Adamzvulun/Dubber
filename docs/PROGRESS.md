@@ -2,6 +2,18 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-16 — Session 1b: real end-to-end test (in progress)
+- Adam opened the network. Findings from real requests in the cloud sandbox:
+  - YouTube: search + metadata work; **media download is refused** ("Sign in to confirm you're not a bot", then 403 on
+    video data for every player client: mweb, web_embedded, web_safari, tv, android_vr). The browser-based PO-token
+    plugin (yt-dlp-getpot-wpc) could not start a browser without a display. → Adam will provide `cookies.txt`.
+  - yt-dlp now needs the **deno** JS runtime → added `deno` (pip) + `find_deno()`; works on Windows too.
+  - Google Translate (both endpoints) answers this datacenter IP with a robot-check page.
+    → Added **offline translator** (Helsinki-NLP opus-mt-en-ru, ONNX, ~110 MB, no torch) as automatic fallback.
+    Quality: understandable, clearly below Google (e.g. literal phrasing, occasional wrong word).
+  - edge-tts ignored HTTPS_PROXY (aiohttp) → pass proxy explicitly. Real Russian TTS now works.
+  - Added `DUBBER_COOKIES` setting. 27 tests (1 network test with the real offline model, opt-in).
+
 ## 2026-10-16 — Session 1: research, skills, foundation
 - Agreed scope with Adam: runs on father's PC, free-first, outputs = dubbed MP4 + RU subtitles + transcript.
 - Researched existing dubbing projects and building blocks → `docs/RESEARCH.md`.

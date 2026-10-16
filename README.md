@@ -37,7 +37,8 @@ Results go to `output/<video title>/`.
 |---|---|---|
 | `DUBBER_WHISPER_MODEL` | `small` | `tiny`/`base` faster, `medium`/`large-v3` more accurate (GPU recommended) |
 | `DUBBER_VOICE` | `ru-RU-DmitryNeural` | or `ru-RU-SvetlanaNeural` |
-| `DUBBER_TRANSLATOR` | `auto` | `google` (free), `claude` (better, paid), `auto` = Claude if a key is set |
+| `DUBBER_TRANSLATOR` | `auto` | `google` (free), `offline` (free, on this PC, lower quality), `claude` (best, paid); `auto` = Claude if a key is set, else Google with automatic offline fallback |
+| `DUBBER_COOKIES` | – | path to a `cookies.txt` exported from your browser, if YouTube says "confirm you're not a bot" |
 | `ANTHROPIC_API_KEY` | – | enables Claude translation (a few cents per video) |
 | `DUBBER_CLAUDE_MODEL` | `claude-opus-5-5` | Claude model used for translation |
 | `DUBBER_MAX_SPEEDUP` | `1.5` | max speed-up of Russian phrases to fit the timing |

@@ -36,3 +36,17 @@ Newest at the bottom. Format: context → decision → consequences.
 - **Decision:** One column, 18px+ text, one big primary action, PT Sans / PT Serif (ParaType fonts made for Cyrillic),
   calm slate + blue palette, all text in Russian, errors that say what to do. Result video hidden until it exists.
 - **Consequences:** No custom frontend to maintain; Gradio gives progress bar, player and downloads for free.
+
+## ADR-008 — Offline translator as automatic fallback (2026-10-16)
+- **Context:** Google's free endpoint is unofficial; it showed a robot check to our cloud test server and could do the
+  same to a home user who translates a lot.
+- **Decision:** `auto` = Google, switching for the rest of the run to an on-device model (Helsinki-NLP opus-mt-en-ru,
+  Xenova ONNX export, Apache-2.0) on the first failure. Runs with onnxruntime + tokenizers (already pulled in by
+  faster-whisper), so no PyTorch. `DUBBER_TRANSLATOR=offline` forces it.
+- **Consequences:** Dubbing never stops because of Google; quality drops when the fallback is used.
+
+## ADR-009 — yt-dlp needs deno; optional browser cookies (2026-10-16)
+- **Decision:** Ship the `deno` PyPI package (a JS runtime yt-dlp requires for YouTube) and pass its path explicitly.
+  Support `DUBBER_COOKIES=<cookies.txt>` for when YouTube demands "confirm you're not a bot".
+- **Consequences:** Works without a system-wide deno install. Cookies are only needed on blocked networks
+  (datacenters/VPNs); a spare Google account is recommended because YouTube may flag the account.
