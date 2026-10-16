@@ -9,10 +9,10 @@ Runs on a home PC (no GPU assumed), free by default.
 ## Pipeline (industry-standard shape)
 ```
 YouTube URL ──yt-dlp──► video.mp4 ──ffmpeg──► audio.wav
-   ──faster-whisper──► English segments [{start, end, text}]
+   ──faster-whisper──► English words with timings → sentence lines [{start, end, text}]
    ──translator──────► Russian segments (same timing)
-   ──edge-tts────────► one Russian clip per segment
-   ──align (atempo)──► clips fitted to timing → russian_track.wav
+   ──edge-tts────────► one Russian clip per line, measured, then re-spoken at a planned steady rate
+   ──align───────────► silence trimmed, lines placed at the speaker's start times → russian_track.wav
    ──ffmpeg──────────► original audio ducked + Russian track + RU subtitles → dubbed.mp4
 ```
 
@@ -35,7 +35,7 @@ Conclusion: build a small, focused, well-tested tool from the same proven buildi
 | Translation | [deep-translator](https://github.com/nidhaloff/deep-translator) Google backend — free default; [Claude API](https://docs.anthropic.com) (`claude-opus-5-5`, opt-in with a key) | LLM translation keeps context across segments and keeps sentences short enough to dub. |
 | Offline translation | [Helsinki-NLP opus-mt-en-ru](https://huggingface.co/Helsinki-NLP/opus-mt-en-ru) via [Xenova ONNX export](https://huggingface.co/Xenova/opus-mt-en-ru) + onnxruntime | Automatic fallback when Google refuses. ~110 MB, no PyTorch. Literal quality; translate one sentence at a time. |
 | Russian TTS | [edge-tts](https://github.com/rany2/edge-tts) | Free Microsoft neural voices: `ru-RU-DmitryNeural` (male), `ru-RU-SvetlanaNeural` (female). Needs internet. |
-| Timing | ffmpeg `atempo` | Speed clips up (capped) to fit segment slots. Measured: Russian Edge speech is ~1.47× the English duration (see "Dub timing" below) — to be replaced by TTS-rate control. |
+| Timing | ffmpeg `atempo` | Speed clips up (capped) to fit segment slots. Replaced by Edge TTS `rate` + a steady-pace planner (`timing.py`); `atempo` is now only a ≤1.1× correction. See "Dub timing". |
 | Mixing/mux | [ffmpeg](https://ffmpeg.org) | Duck original audio, overlay Russian, embed soft subtitles (`mov_text`). |
 | UI | [FastAPI](https://fastapi.tiangolo.com) + hand-built HTML/CSS/JS (`dubber/web/`) | Local website. Gradio was used first and replaced (ADR-010). Design: `docs/DESIGN.md`. |
 
@@ -105,6 +105,20 @@ Whole talk: 37.2 s English → 54.8 s natural Russian (**×1.47**). Root causes 
 +0% 5.62 s · +20% 4.68 s (×1.20) · +40% 4.03 s (×1.39) · +60% 3.53 s (×1.59) — Dmitry and Svetlana alike.
 So duration ≈ natural ÷ (1 + rate): **one natural-speed pass tells us the exact rate each line needs**, and the
 voice engine speeds up its own speech (no time-stretch artefacts).
+
+### Found while implementing: Edge clips are padded with silence
+Every Edge clip has ~0.25 s of silence before and ~0.9 s after the speech (also at faster rates). The old aligner
+started every line ~0.25 s late and counted ~1.15 s of silence as speech — a one-word line ("Нет.") "lasted" 1.9 s.
+(So the ×1.47 above overstates the real ratio a little.) Now trimmed (`align.trim_silence`).
+
+### Result on the same test talk (implemented, 2026-10-16)
+| | Before | After |
+|---|---|---|
+| Lines | 5 chunks of 4–11 s, one cut mid-sentence | 12 real sentences, speech-only bounds |
+| Pace | 1.25–1.50× by time-stretching | 1.40–1.50× by the voice itself, steady |
+| Start of each line | ~0.25 s late (clip padding) | on time (max 0.01 s) |
+| End vs speaker | unmeasured inside chunks | within ±0.12 s on 8 of 12 lines; others end up to 0.9 s early |
+| Time-stretched lines | all | none |
 
 ### Recommended approach (plan: `docs/PLAN.md` M3.5)
 1. Units = real sentences/phrases built from **word timestamps**, with speech-only start/end; split long sentences at

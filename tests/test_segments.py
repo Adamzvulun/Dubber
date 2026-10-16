@@ -22,3 +22,38 @@ def test_merge_drops_empty_and_roundtrips(tmp_path):
     merged[0].ru = "Привет."
     save_segments(merged, path)
     assert load_segments(path) == merged
+
+
+def _words(spec):
+    """spec: list of (start, end, text)."""
+    from dubber.segments import Word
+
+    return [Word(a, b, f" {t}") for a, b, t in spec]
+
+
+def test_units_are_sentences_with_speech_only_bounds():
+    from dubber.segments import split_into_units
+
+    words = _words([(0.5, 0.8, "Hi"), (0.9, 1.2, "there."), (1.3, 1.6, "How"), (1.7, 2.0, "are"), (2.1, 2.5, "you?")])
+    units = split_into_units(words)
+    assert [(u.start, u.end, u.text) for u in units] == [(0.5, 1.2, "Hi there."), (1.3, 2.5, "How are you?")]
+
+
+def test_units_split_at_a_long_pause_and_save_without_words(tmp_path):
+    from dubber.segments import load_segments, save_segments, split_into_units
+
+    units = split_into_units(_words([(0, 0.5, "So"), (0.6, 1.0, "basically"), (2.5, 3.0, "we"), (3.1, 3.5, "won.")]))
+    assert [u.text for u in units] == ["So basically", "we won."]
+    save_segments(units, tmp_path / "s.json")
+    assert "words" not in (tmp_path / "s.json").read_text(encoding="utf-8")
+    assert load_segments(tmp_path / "s.json")[1].text == "we won."
+
+
+def test_long_sentence_splits_at_its_best_break():
+    from dubber.segments import split_into_units
+
+    # 14 s sentence; a comma + 0.5 s pause at 6 s is the natural place to cut.
+    spec = [(t, t + 0.4, "word") for t in [0.0, 1.0, 2.0, 3.0, 4.0]] + [(5.0, 5.5, "point,")]
+    spec += [(6.0 + t, 6.4 + t, "more") for t in range(7)] + [(13.5, 14.0, "end.")]
+    units = split_into_units(_words(spec), max_duration=10.0)
+    assert len(units) == 2 and units[0].text.endswith("point,") and units[1].start == 6.0

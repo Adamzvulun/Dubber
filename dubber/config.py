@@ -38,8 +38,8 @@ class Settings:
     translator: str = field(default_factory=lambda: _env("DUBBER_TRANSLATOR", "auto"))
     claude_model: str = field(default_factory=lambda: _env("DUBBER_CLAUDE_MODEL", "claude-opus-5-5"))
     voice: str = field(default_factory=lambda: _env("DUBBER_VOICE", "ru-RU-DmitryNeural"))
-    # Max speed-up applied to a Russian phrase so it fits the English timing
-    max_speedup: float = field(default_factory=lambda: float(_env("DUBBER_MAX_SPEEDUP", "1.5")))
+    # Fastest the Russian voice may speak (1.6 = 60% faster than its natural speed); see dubber/timing.py
+    max_speedup: float = field(default_factory=lambda: float(_env("DUBBER_MAX_SPEEDUP", "1.6")))
     # Volume of the original audio under the Russian voice (0 = mute, 1 = unchanged)
     original_volume: float = field(default_factory=lambda: float(_env("DUBBER_ORIGINAL_VOLUME", "0.15")))
     # Keep the original soundtrack quietly under the Russian voice (False = Russian voice only)

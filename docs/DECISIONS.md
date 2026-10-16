@@ -69,3 +69,15 @@ Newest at the bottom. Format: context → decision → consequences.
   ("CAS Client Error ... error sending request"), while plain HTTPS downloads are the long-proven path.
 - **Decision:** `dubber/__init__.py` sets `HF_HUB_DISABLE_XET=1` unless the user set it; downloads retried 3×.
 - **Consequences:** Possibly slower first download; one fewer native network stack to fail on home PCs/antivirus.
+
+## ADR-013 — Dub timing: sentence lines, steady voice rate, no padding (2026-10-16)
+- **Context:** Adam heard the dub rush and drag against the speaker. Measured: every chunk time-stretched near the 1.5×
+  cap with jumps between chunks; Whisper chunks of 4–11 s cut mid-sentence; Edge clips padded with ~1.15 s silence.
+- **Decision:** Lines = sentences from Whisper word timestamps (split at ≥1.2 s pauses / >10 s at the best break).
+  Speak each line once to measure, plan a steady per-video rate (median RU/EN ratio, ±12% per line, ≤0.08 change
+  between neighbours, faster only to fit before the next line, cap `DUBBER_MAX_SPEEDUP`=1.6), re-speak with Edge
+  `rate`. Trim clip silence; atempo only ≤1.1× as a last correction. `timing.json` per video records the result.
+  Paid length-budgeted translation (Claude) deferred — Adam asked for free improvements only.
+- **Consequences:** TTS runs twice (≈2× Edge requests; still fast). Caches renamed (`_v2`/`_v3`), so existing videos
+  are re-transcribed with word timings when dubbed again. Short translations may end a little early (pace kept steady
+  instead of slowing down a lot).

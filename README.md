@@ -44,7 +44,7 @@ Results go to `output/<video id>/` and appear in the website's library.
 | `ANTHROPIC_API_KEY` | – | enables Claude translation (a few cents per video) |
 | `DUBBER_CLAUDE_MODEL` | `claude-opus-5-5` | Claude model used for translation |
 | `DUBBER_KEEP_BACKGROUND` | `1` | `0` = only the Russian voice, without the original sound underneath (also a switch on the website) |
-| `DUBBER_MAX_SPEEDUP` | `1.5` | max speed-up of Russian phrases to fit the timing |
+| `DUBBER_MAX_SPEEDUP` | `1.6` | fastest the Russian voice may speak (1.6 = 60% faster than natural) to keep the speaker's timing |
 | `DUBBER_ORIGINAL_VOLUME` | `0.15` | loudness of the English original under the dub |
 
 ## Development

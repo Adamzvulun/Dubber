@@ -58,12 +58,14 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 
 ### M3.5 — Dub timing that follows the speaker (Adam's report, research in `docs/RESEARCH.md` "Dub timing")
 - [x] Research + measurement of the current timing (RU ≈ 1.47× EN; every line at the 1.5× cap; speed jumps)
-- [ ] Word timestamps → sentence/phrase units with speech-only bounds; split long sentences at pauses
-- [ ] Steady per-video pace + smoothed per-line rate (narrow band)
-- [ ] Speed via Edge TTS `rate` (two-pass), `atempo` only as a small last correction
-- [ ] Use following pauses before speeding up; minimal push-back
-- [ ] Optional: length-budgeted translation with Claude (syllable budget, retry)
-- [ ] Timing report in `output/<id>/` + tests for the timing planner
+- [x] Word timestamps → sentence/phrase units with speech-only bounds; split long sentences at pauses
+- [x] Steady per-video pace + smoothed per-line rate (narrow band)
+- [x] Speed via Edge TTS `rate` (two-pass), `atempo` only as a small last correction
+- [x] Use following pauses before speeding up; minimal push-back
+- [ ] Optional (paid, not now): length-budgeted translation with Claude (syllable budget, retry)
+- [x] Timing report in `output/<id>/` + tests for the timing planner
+- [x] Trim the silence Edge puts around every clip (found while testing)
+- [ ] Adam re-dubs a real video on his PC and listens
 
 ### M4 — Nice to have
 - [ ] Queue of several links / playlists

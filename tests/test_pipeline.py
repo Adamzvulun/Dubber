@@ -20,7 +20,7 @@ class StubTranslator:
         return [f"Русский {i}" for i, _ in enumerate(texts)]
 
 
-async def stub_synth(text, voice, out_path):
+async def stub_synth(text, voice, out_path, rate="+0%"):
     await asyncio.to_thread(
         subprocess.run,
         ["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=600:duration=1.2",
@@ -57,6 +57,8 @@ def test_end_to_end_with_local_file(tmp_path, sample_video):
 
     assert (result.folder / "meta.json").exists() and (result.folder / "thumbnail.jpg").exists()
     assert (result.folder / "subtitles_ru.vtt").read_text(encoding="utf-8").startswith("WEBVTT")
+    report = json.loads((result.folder / "timing.json").read_text(encoding="utf-8"))
+    assert report["lines"] == 2 and report["late_lines"] == 0
 
     # Second run reuses the cache: no stage needs its backend again.
     again = pipeline.run(str(sample_video), settings, translator=None, synth=None, transcriber=None)
@@ -81,6 +83,22 @@ def test_without_background_russian_voice_only(tmp_path, sample_video):
     assert abs(len(audio) / 16000 - 6.0) < 0.3
 
 
+def test_lines_are_cut_from_word_timings(tmp_path, sample_video):
+    """With Whisper word timings, a chunk holding two sentences becomes two lines with speech-only bounds."""
+    from dubber.segments import Word
+
+    def worded_transcriber(audio):
+        words = [Word(0.6, 0.9, " Hello"), Word(1.0, 1.4, " there."),
+                 Word(2.6, 3.0, " Second"), Word(3.1, 3.6, " one.")]
+        return [Segment(0.0, 5.0, "Hello there. Second one.", words=words)]
+
+    settings = Settings(work_dir=tmp_path / "work", output_dir=tmp_path / "out")
+    result = pipeline.run(str(sample_video), settings, translator=StubTranslator(), synth=stub_synth,
+                          transcriber=worded_transcriber)
+    lines = json.loads((result.folder / "segments.json").read_text(encoding="utf-8"))
+    assert [(x["start"], x["end"], x["text"]) for x in lines] == [(0.6, 1.4, "Hello there."), (2.6, 3.6, "Second one.")]
+
+
 def test_youtube_id_and_cached_identify(tmp_path, monkeypatch):
     assert pipeline.youtube_id("https://www.youtube.com/watch?v=qD0_yWgifDM&t=5s") == "qD0_yWgifDM"
     assert pipeline.youtube_id("https://youtu.be/qD0_yWgifDM") == "qD0_yWgifDM"
@@ -99,12 +117,30 @@ def test_each_voice_gets_its_own_recordings(tmp_path, sample_video):
     """Regression: re-dubbing with another voice must not reuse the first voice's cached clips."""
     voices_used = []
 
-    async def recording_synth(text, voice, out_path):
+    async def recording_synth(text, voice, out_path, rate="+0%"):
         voices_used.append(voice)
-        await stub_synth(text, voice, out_path)
+        await stub_synth(text, voice, out_path, rate)
 
     for voice in ("ru-RU-DmitryNeural", "ru-RU-SvetlanaNeural"):
         settings = Settings(work_dir=tmp_path / "work", output_dir=tmp_path / "out", voice=voice)
         pipeline.run(str(sample_video), settings, translator=StubTranslator(), synth=recording_synth,
                      transcriber=stub_transcriber)
     assert "ru-RU-SvetlanaNeural" in voices_used and "ru-RU-DmitryNeural" in voices_used
+
+
+def test_voice_speaks_at_planned_rate_and_clips_follow_text(tmp_path):
+    """Second pass passes the planned Edge rate; a changed line never reuses an old recording."""
+    from dubber import tts
+
+    calls = []
+
+    async def fake(text, voice, out_path, rate="+0%"):
+        calls.append((text, rate))
+        out_path.write_bytes(b"x")
+
+    lines = [Segment(0, 1, "a", "один"), Segment(1, 2, "b", "")]
+    natural = tts.synthesize(lines, tmp_path, synth=fake)
+    fast = tts.synthesize(lines, tmp_path, synth=fake, rates=[1.35, 1.0])
+    assert calls == [("один", "+0%"), ("один", "+35%")] and natural[1] is None and fast[0] != natural[0]
+    lines[0].ru = "два"
+    assert tts.synthesize(lines, tmp_path, synth=fake)[0] != natural[0]

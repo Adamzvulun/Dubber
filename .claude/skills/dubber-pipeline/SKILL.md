@@ -10,14 +10,14 @@ description: How the Dubber YouTube→Russian dubbing pipeline works and how to 
 | # | Stage | Module | Cache file in `work/<video-id>/` |
 |---|---|---|---|
 | 1 | Download (yt-dlp or local copy) | `download.py` | `source.mp4` |
-| 2 | Transcribe EN (faster-whisper) + merge into sentences | `transcribe.py`, `segments.py` | `audio_16k.wav`, `segments_en.json` |
-| 3 | Translate EN→RU (Google free / Claude) | `translate.py` | `segments_ru.json` |
-| 4 | TTS per segment (edge-tts) | `tts.py` | `clips_<voice>/00000.mp3 …` (one cache per voice!) |
-| 5 | Fit clips to timing, build track | `align.py` | `russian_track_<voice>.wav` |
+| 2 | Transcribe EN (faster-whisper, word timestamps) → sentence lines (`split_into_units`) | `transcribe.py`, `segments.py` | `audio_16k.wav`, `segments_en_v2.json` |
+| 3 | Translate EN→RU (Google free / Claude) | `translate.py` | `segments_ru_v2.json` |
+| 4 | TTS twice: natural speed (measure) → `timing.plan_rates` → planned Edge `rate` | `tts.py`, `timing.py` | `clips_<voice>/00000_<texthash>[_+35].mp3` (per voice) |
+| 5 | Trim clip silence, place lines at their start, ≤1.1× atempo correction, build track | `align.py` | `russian_track_v3_<voice>.wav`, `timing_v3_<voice>.json` |
 | 6 | Subtitles + final MP4 | `subtitles.py`, `mux.py` | `output/<id>/` (dubbed.mp4, meta.json, thumbnail.jpg, segments.json, srt/vtt/txt) |
 
 **Resume/cache rule:** a stage is skipped if its cache file exists. To redo a stage, delete its file
-and everything after it (e.g. new translation → delete `segments_ru.json`, `clips/`, `russian_track_*.wav`).
+and everything after it (e.g. new translation → delete `segments_ru_v2.json` and `russian_track_*.wav`; clips are keyed by their text).
 
 ## Running
 ```bash
@@ -29,12 +29,14 @@ DUBBER_WHISPER_MODEL=tiny  DUBBER_TRANSLATOR=google  DUBBER_VOICE=ru-RU-Svetlana
 ## Debugging checklist
 - **Download fails (403 / "confirm you're not a bot")** → `pip install -U yt-dlp` first; then see the
   `youtube-downloader` skill references (cookies, PO tokens). Cloud/datacenter IPs are often blocked.
-- **Russian voice too fast / overlapping** → inspect `segments_ru.json` durations; tune `DUBBER_MAX_SPEEDUP`;
-  long Russian lines are best fixed at translation (Claude prompt asks for concise wording).
+- **Dub doesn't follow the speaker (rushing / dragging / late)** → read `output/<id>/timing.json`: `median_rate`
+  (voice pace), `late_lines`/`max_delay` (lines pushed back), `stretched_lines` (needed atempo). Pace rules live in
+  `timing.py` (BAND, STEP, BREATH); `DUBBER_MAX_SPEEDUP` caps the voice rate. Edge clips carry ~0.25 s + ~0.9 s of
+  silence — always measure with `align.speech_seconds`, never the file length. Research: `docs/RESEARCH.md` "Dub timing".
 - **Nothing heard** → `ffprobe` the track wav; check `clips/` sizes (0-byte = TTS failed).
 - **Slow** → transcription dominates on CPU; try `DUBBER_WHISPER_MODEL=base`.
 
 ## Extending
 - New translator: implement `translate_texts(list[str]) -> list[str]` (same length!) + `name`, wire in `make_backend`.
-- New TTS: an async `synth(text, voice, out_path)`; pass via `synth=` or make it the default in `tts.py`.
+- New TTS: an async `synth(text, voice, out_path, rate)` (`rate` like `"+35%"`); pass via `synth=` or make it the default in `tts.py`.
 - Every stage must stay testable offline: add a stub in `tests/test_pipeline.py` style, never call the network in tests.

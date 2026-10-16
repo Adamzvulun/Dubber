@@ -2,6 +2,16 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-16 — Session 1g: dub timing implemented (free parts)
+- Adam: "do everything that doesn't require payment" → M3.5 steps 1–5 (ADR-013).
+- `segments.split_into_units` (sentence lines from word timestamps), `timing.py` (steady pace planner + Edge rate),
+  two-pass TTS with clips keyed by text, `align.trim_silence` + ≤1.1× correction, `output/<id>/timing.json`.
+- Found while testing: Edge pads every clip with ~0.25 s + ~0.9 s silence → lines started late and short lines
+  looked huge to the planner. Fixed.
+- Real run (synthetic English talk, real Whisper + Edge, offline translator): 12 sentence lines, all start on time,
+  pace 1.40–1.50× with no time-stretching, 8/12 lines end within ±0.12 s of the speaker. Before/after table in
+  `docs/RESEARCH.md`. 48 tests pass. Not yet heard on a real YouTube video (YouTube blocks this server).
+
 ## 2026-10-16 — Session 1f: dub timing research
 - Adam: the dub works on his PC, but its pace doesn't follow the speaker (rushing / dragging).
 - Measured on a synthetic English talk: Russian ≈ 1.47× English; nearly every line hits the 1.5× atempo cap; per-line

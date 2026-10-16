@@ -7,16 +7,17 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import align, media, subtitles, transcribe, translate, tts
+from . import align, media, subtitles, timing, transcribe, translate, tts
 from .config import Settings
 from .download import download, fetch_info, is_url, local_video_id
 from .mux import mux
-from .segments import load_segments, merge_into_sentences, save_segments
+from .segments import load_segments, merge_into_sentences, save_segments, split_into_units
 
 # (message in Russian, overall fraction 0..1)
 ProgressFn = Callable[[str, float], None]
@@ -80,6 +81,21 @@ def identify(source: str, work_dir: Path | None = None) -> dict:
     return {"id": local_video_id(path), "title": path.stem, "channel": ""}
 
 
+def timing_report(lines: list[dict]) -> dict:
+    """How well the dub keeps the speaker's timing (saved as output/<id>/timing.json)."""
+    delays = [line["delay"] for line in lines]
+    rates = sorted(line["rate"] for line in lines)
+    return {
+        "lines": len(lines),
+        "median_rate": rates[len(rates) // 2] if rates else 1.0,
+        "max_rate": rates[-1] if rates else 1.0,
+        "late_lines": sum(d > 0.3 for d in delays),  # started >0.3 s after the speaker
+        "max_delay": max(delays, default=0.0),
+        "stretched_lines": sum(line["stretch"] > 1.01 for line in lines),
+        "detail": lines,
+    }
+
+
 class _Progress:
     def __init__(self, callback: ProgressFn | None):
         self.callback = callback
@@ -122,14 +138,16 @@ def run(
 
     # 2. Transcribe (English)
     report = p.stage("transcribe")
-    en_json = work / "segments_en.json"
+    # "_v2": lines are cut from word timings (segments.split_into_units); older caches used Whisper's chunks.
+    en_json = work / "segments_en_v2.json"
     if not en_json.exists():
         audio = media.extract_audio(video, work / "audio_16k.wav")
         if transcriber is not None:
             raw = transcriber(audio)
         else:
             raw = transcribe.transcribe(audio, settings.whisper_model, settings.whisper_device, progress=report)
-        save_segments(merge_into_sentences(raw), en_json)
+        words = [w for seg in raw for w in seg.words]
+        save_segments(split_into_units(words) if words else merge_into_sentences(raw), en_json)
     segments = load_segments(en_json)
     if not segments:
         raise RuntimeError("В видео не найдено английской речи.")  # no English speech found
@@ -137,7 +155,7 @@ def run(
 
     # 3. Translate
     report = p.stage("translate")
-    ru_json = work / "segments_ru.json"
+    ru_json = work / "segments_ru_v2.json"
     if not ru_json.exists():
         backend = translator or translate.make_backend(settings.translator, settings.claude_model)
         translate.translate_segments(segments, backend)
@@ -147,13 +165,25 @@ def run(
 
     # 4. Text to speech
     report = p.stage("tts")
-    clips = tts.synthesize(segments, work / f"clips_{settings.voice}", settings.voice, synth=synth, progress=report)
+    # Two passes: speak every line at natural speed to measure it, plan one steady pace for the video
+    # (timing.plan_rates), then speak again at the planned rates — Edge scales duration exactly by the rate.
+    clips_dir = work / f"clips_{settings.voice}"
+    natural = tts.synthesize(segments, clips_dir, settings.voice, synth=synth, progress=lambda f: report(f / 2))
+    lengths = [align.speech_seconds(c) if c else None for c in natural]
+    rates = timing.plan_rates(segments, lengths, settings.max_speedup)
+    clips = tts.synthesize(segments, clips_dir, settings.voice, synth=synth, rates=rates,
+                           progress=lambda f: report(0.5 + f / 2))
 
     # 5. Align clips into one Russian track
     report = p.stage("align")
-    track = work / f"russian_track_{settings.voice}.wav"
-    if not track.exists():
-        align.build_track(segments, clips, media.duration(video), track, settings.max_speedup, progress=report)
+    track = work / f"russian_track_v3_{settings.voice}.wav"
+    timing_json = work / f"timing_v3_{settings.voice}.json"
+    if not track.exists() or not timing_json.exists():
+        lines: list[dict] = []
+        align.build_track(segments, clips, media.duration(video), track, progress=report, report=lines)
+        for line in lines:
+            line["rate"] = round(rates[line["index"]], 3)
+        timing_json.write_text(json.dumps(timing_report(lines), ensure_ascii=False, indent=1), encoding="utf-8")
 
     # 6. Subtitles + final video, all in output/<id>/ (what the website's library reads)
     report = p.stage("mux")
@@ -169,6 +199,7 @@ def run(
     if not (folder / "thumbnail.jpg").exists():
         media.thumbnail(video, folder / "thumbnail.jpg")
     save_segments(segments, folder / "segments.json")
+    shutil.copyfile(timing_json, folder / "timing.json")
     meta = {
         "id": video_id,
         "title": title,

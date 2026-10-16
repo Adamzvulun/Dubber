@@ -13,11 +13,11 @@ website). The next milestone is the first install on a real Windows PC.
   so "Download ZIP" on the repo page just works.
 - **Code:** `dubber/` (pipeline stages + `app.py` server), `dubber/web/` (site), `tests/` (34 tests, offline),
   `scripts/` (installers/launchers). Architecture and conventions: `CLAUDE.md`.
-- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history), `DECISIONS.md` (ADRs 001–011), `DESIGN.md` (site design system),
+- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history), `DECISIONS.md` (ADRs 001–013), `DESIGN.md` (site design system),
   `RESEARCH.md` (tools + real-world findings), `SKILLS.md` (installed Claude skills), `README.ru.md` (father's guide).
-- **Data on a user's PC:** `work/<id>/` = cache per video (`source.mp4`, `info.json`, `segments_en/ru.json`,
-  `clips_<voice>/`, `russian_track_<voice>.wav`); `output/<id>/` = what the library shows (`dubbed.mp4`, `meta.json`,
-  `thumbnail.jpg`, `segments.json`, `subtitles_*.srt/.vtt`, `transcript_*.txt`). Both are git-ignored.
+- **Data on a user's PC:** `work/<id>/` = cache per video (`source.mp4`, `info.json`, `segments_en/ru_v2.json`,
+  `clips_<voice>/`, `russian_track_v3_<voice>.wav`, `timing_v3_<voice>.json`); `output/<id>/` = what the library shows (`dubbed.mp4`, `meta.json`,
+  `thumbnail.jpg`, `segments.json`, `timing.json`, `subtitles_*.srt/.vtt`, `transcript_*.txt`). Both are git-ignored.
 
 ## What works (verified by running it)
 - Download (yt-dlp + deno), transcription (faster-whisper `small`, CPU), translation (Google → automatic offline
@@ -29,13 +29,14 @@ website). The next milestone is the first install on a real Windows PC.
   streams/durations checked with ffprobe; Whisper listening to the dub detects Russian (p=1.00, 91 % words match).
 
 ## Not verified yet
-1. Windows installer (`scripts/install_windows.bat`) on a real PC.
+1. Windows installer: works on Adam's PC (shortcut + model-download fixes since); re-test the fixed shortcut.
+4. New dub timing (ADR-013) on a real YouTube video, by ear — verified only on a synthetic talk here.
 2. H.264 playback inside a real Chrome/Edge (test Chromium lacks H.264; playback logic verified with a VP9 copy).
 3. Google translation quality from a home connection (Google blocks the cloud test server, so only the offline
    translator was exercised — its Russian is understandable but literal).
 
 ## Next steps
-1. Adam installs on his/father's PC and reports: installer OK? video plays? translation quality? (`kanban/windows-install-test.md`)
+1. Adam re-dubs a video with the new timing and listens; check `output/<id>/timing.json` (`kanban/dub-timing.md`).
 2. Optional: PR `claude/bold-davinci-qfv627` → `main`.
 3. Translation quality: decide on a Claude API key (opt-in, ~$0.05–0.20 per 10-min video) and/or a glossary for the
    father's field.
