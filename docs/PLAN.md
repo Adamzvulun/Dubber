@@ -15,7 +15,7 @@ A Russian-speaking, non-technical user pastes a YouTube link into a local web pa
 - [x] Find, review and install Claude skills → `docs/SKILLS.md`
 - [x] Project skills: `dubber-pipeline`, `dubber-docs`, `ffmpeg-dubbing`
 - [x] `CLAUDE.md`, `README.md`, `.gitignore`, `pyproject.toml`
-- [ ] SessionStart hook for cloud sessions (installs deps)
+- [x] SessionStart hook for cloud sessions (installs deps)
 
 ### M1 — Pipeline (CLI)
 - [x] download (yt-dlp; local files also accepted)
@@ -30,10 +30,11 @@ A Russian-speaking, non-technical user pastes a YouTube link into a local web pa
 - [ ] real end-to-end run with YouTube + Whisper + translation + TTS (blocked in cloud sandbox; needs allowed domains or a home PC)
 
 ### M2 — Russian web UI + installers
-- [ ] Gradio app in Russian: link → progress → player + downloads
-- [ ] Windows `install_windows.bat` / `start_windows.bat`; Linux/macOS `install.sh` / `start.sh`
-- [ ] `docs/README.ru.md` user guide for the father
-- [ ] UI screenshot test (webapp-testing / Playwright)
+- [x] Gradio app in Russian: link → progress → player + downloads + previous videos
+- [x] Windows `install_windows.bat` / `start_windows.bat` (+ desktop shortcut); Linux/macOS `install.sh` / `start.sh`
+- [ ] Test the Windows installer on a real Windows PC
+- [x] `docs/README.ru.md` user guide for the father
+- [x] UI checked in Chromium with Playwright (desktop + phone width; stubbed pipeline) → `docs/images/ui-start.png`
 
 ### M3 — Quality
 - [ ] Smarter timing: merge short segments into sentences before translating
@@ -50,4 +51,5 @@ A Russian-speaking, non-technical user pastes a YouTube link into a local web pa
 
 ## Open questions
 - What is the father's work field? (for the glossary)
+- Do we want a paid Claude key for better translation, or stay on free Google Translate?
 - Which OS does his PC run? (Windows assumed)

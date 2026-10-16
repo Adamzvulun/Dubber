@@ -25,3 +25,14 @@ Newest at the bottom. Format: context → decision → consequences.
 - **Decision:** Skills from GitHub are read in full before being copied into `.claude/skills/`, with their LICENSE and a
   pinned commit recorded in `docs/SKILLS.md`. Skills without a license are not copied (used as reference only).
   Scripts that install software or phone home without asking are stripped.
+
+## ADR-006 — Claude translation uses `claude-opus-5-5` by default (2026-10-16)
+- **Context:** Optional paid translator. A cheaper model was considered; the model choice is the user's call.
+- **Decision:** Default `claude-opus-5-5` at effort `low`, structured JSON output (same line count guaranteed by
+  schema + count check + retry in halves), server-side refusal fallback. Override with `DUBBER_CLAUDE_MODEL`.
+- **Consequences:** ~$0.05–0.20 per 10-minute video. Only used when `ANTHROPIC_API_KEY` is set.
+
+## ADR-007 — Web UI with Gradio, designed for an older non-technical Russian reader (2026-10-16)
+- **Decision:** One column, 18px+ text, one big primary action, PT Sans / PT Serif (ParaType fonts made for Cyrillic),
+  calm slate + blue palette, all text in Russian, errors that say what to do. Result video hidden until it exists.
+- **Consequences:** No custom frontend to maintain; Gradio gives progress bar, player and downloads for free.

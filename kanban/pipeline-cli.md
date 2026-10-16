@@ -1,6 +1,6 @@
 ---
 id: 2
-status: todo
+status: doing
 priority: High
 blocked_by: [1]
 tags: [m1, pipeline]
@@ -12,3 +12,4 @@ download → transcribe → translate → tts → align → mux → subtitles, c
 
 ## Narrative
 - 2026-10-16: Card created during session 1 planning. (by @claude)
+- 2026-10-16: Code + 18 offline tests done. Real end-to-end run still pending: the cloud sandbox blocks YouTube, Bing TTS, Google Translate and Hugging Face. (by @claude)
