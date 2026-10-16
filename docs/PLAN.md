@@ -56,6 +56,15 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [ ] Optional Demucs: keep background music, remove English voice
 - [x] Translation prompt asks for "dub-length" Russian when using Claude (`translate.CLAUDE_SYSTEM_PROMPT`)
 
+### M3.5 — Dub timing that follows the speaker (Adam's report, research in `docs/RESEARCH.md` "Dub timing")
+- [x] Research + measurement of the current timing (RU ≈ 1.47× EN; every line at the 1.5× cap; speed jumps)
+- [ ] Word timestamps → sentence/phrase units with speech-only bounds; split long sentences at pauses
+- [ ] Steady per-video pace + smoothed per-line rate (narrow band)
+- [ ] Speed via Edge TTS `rate` (two-pass), `atempo` only as a small last correction
+- [ ] Use following pauses before speeding up; minimal push-back
+- [ ] Optional: length-budgeted translation with Claude (syllable budget, retry)
+- [ ] Timing report in `output/<id>/` + tests for the timing planner
+
 ### M4 — Nice to have
 - [ ] Queue of several links / playlists
 - [ ] Telegram bot front-end

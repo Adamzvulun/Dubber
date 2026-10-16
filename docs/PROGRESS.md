@@ -2,6 +2,13 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-16 — Session 1f: dub timing research
+- Adam: the dub works on his PC, but its pace doesn't follow the speaker (rushing / dragging).
+- Measured on a synthetic English talk: Russian ≈ 1.47× English; nearly every line hits the 1.5× atempo cap; per-line
+  speed jumps; Whisper units 4–11 s, cut mid-sentence. Verified Edge TTS `rate` scales duration exactly.
+- Research (Amazon isochrony / prosodic alignment, LLM duration-budget translation, WhisperX/stable-ts timing) and a
+  plan → `docs/RESEARCH.md` "Dub timing", `docs/PLAN.md` M3.5, `kanban/dub-timing.md`. Not implemented yet.
+
 ## 2026-10-16 — Session 1e: first Windows install
 - Adam ran `install_windows.bat` on his PC: Python packages installed fine, but the desktop shortcut failed
   ("Unable to save shortcut ...\?????? ?????.lnk"), and the script still printed "Готово!".
