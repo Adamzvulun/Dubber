@@ -148,3 +148,43 @@ def test_split_sentences():
 def test_offline_backend_keeps_every_sentence():
     out = OfflineBackend().translate_texts(["How do you soothe the burn? Why does wasabi make your eyes water?"])[0]
     assert out.count("?") == 2
+
+
+def test_google_resends_a_line_left_in_another_language():
+    """Mixed video: Google detects one language per request, so a French line may come back unchanged."""
+    calls = []
+
+    def fake(text):
+        calls.append(text)
+        if "\n" in text:
+            return "\n".join("Bonjour" if ln == "Bonjour" else f"RU:{ln}" for ln in text.split("\n"))
+        return "Здравствуйте"
+
+    out = GoogleBackend(fake).translate_texts(["Hello", "Bonjour", "Thanks", "Bye"])
+    assert out == ["RU:Hello", "Здравствуйте", "RU:Thanks", "RU:Bye"] and calls[-1] == "Bonjour"
+
+
+def test_google_leaves_text_already_in_target_language():
+    calls = []
+
+    def echo(text):
+        calls.append(text)
+        return text
+
+    assert GoogleBackend(echo).translate_texts(["Привет", "Пока"]) == ["Привет", "Пока"] and len(calls) == 1
+
+
+def test_backend_choice_per_target(monkeypatch):
+    from dubber.translate import make_backend
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert isinstance(make_backend("auto", target="ru"), FallbackBackend)  # offline en→ru fallback
+    assert isinstance(make_backend("auto", target="he"), GoogleBackend)  # no offline model for Hebrew
+    with pytest.raises(RuntimeError):
+        make_backend("offline", target="he")
+
+
+def test_claude_prompt_names_the_target_language():
+    client = FakeClaude()
+    ClaudeBackend(client=client, target="he").translate_texts(["Hello"])
+    assert "Hebrew" in client.requests[0]["system"] and "Russian" not in client.requests[0]["system"]

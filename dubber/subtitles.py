@@ -15,11 +15,11 @@ def srt_timestamp(seconds: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
-def to_srt(segments: list[Segment], russian: bool = True) -> str:
+def to_srt(segments: list[Segment], translated: bool = True) -> str:
     blocks = []
     n = 0
     for seg in segments:
-        text = (seg.ru if russian else seg.text).strip()
+        text = (seg.ru if translated else seg.text).strip()
         if not text:
             continue
         n += 1
@@ -27,11 +27,11 @@ def to_srt(segments: list[Segment], russian: bool = True) -> str:
     return "\n".join(blocks)
 
 
-def to_vtt(segments: list[Segment], russian: bool = True) -> str:
+def to_vtt(segments: list[Segment], translated: bool = True) -> str:
     """WebVTT (what browsers use for <track>)."""
     cues = []
     for seg in segments:
-        text = (seg.ru if russian else seg.text).strip()
+        text = (seg.ru if translated else seg.text).strip()
         if text:
             start, end = srt_timestamp(seg.start).replace(",", "."), srt_timestamp(seg.end).replace(",", ".")
             cues.append(f"{start} --> {end}\n{text}\n")
@@ -45,7 +45,7 @@ def _clock(seconds: float) -> str:
 
 
 def to_transcript(segments: list[Segment], title: str = "") -> str:
-    """Russian transcript, grouped into paragraphs of about a minute, with time marks."""
+    """Transcript in the dub language, grouped into paragraphs of about a minute, with time marks."""
     lines = [title, ""] if title else []
     paragraph: list[str] = []
     para_start = segments[0].start if segments else 0.0
@@ -60,24 +60,42 @@ def to_transcript(segments: list[Segment], title: str = "") -> str:
     return "\n".join(lines)
 
 
-def to_bilingual(segments: list[Segment], title: str = "") -> str:
-    """English line + Russian line, for studying the original wording."""
+def to_bilingual(segments: list[Segment], title: str = "", source: str = "en", target: str = "ru") -> str:
+    """Original line + translated line, for studying the original wording."""
+    src, tgt = (source or "orig").upper(), target.upper()
+    width = max(len(src), len(tgt))
     lines = [title, ""] if title else []
     for seg in segments:
-        lines += [f"[{_clock(seg.start)}] EN: {seg.text.strip()}", f"         RU: {seg.ru.strip()}", ""]
+        lines += [f"[{_clock(seg.start)}] {src.ljust(width)}: {seg.text.strip()}",
+                  f"         {tgt.ljust(width)}: {seg.ru.strip()}", ""]
     return "\n".join(lines)
 
 
-def write_all(segments: list[Segment], out_dir: Path, title: str = "") -> dict[str, Path]:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    files = {
-        "ru_srt": (out_dir / "subtitles_ru.srt", to_srt(segments, russian=True)),
-        "ru_vtt": (out_dir / "subtitles_ru.vtt", to_vtt(segments, russian=True)),
-        "en_vtt": (out_dir / "subtitles_en.vtt", to_vtt(segments, russian=False)),
-        "en_srt": (out_dir / "subtitles_en.srt", to_srt(segments, russian=False)),
-        "transcript": (out_dir / "transcript_ru.txt", to_transcript(segments, title)),
-        "bilingual": (out_dir / "transcript_en_ru.txt", to_bilingual(segments, title)),
+def file_names(target: str = "ru") -> dict[str, str]:
+    """Output file names for a dub into `target` (the website reads them from meta.json "files")."""
+    return {
+        "dub_srt": f"subtitles_{target}.srt",
+        "dub_vtt": f"subtitles_{target}.vtt",
+        "src_srt": "subtitles_src.srt",
+        "src_vtt": "subtitles_src.vtt",
+        "transcript": f"transcript_{target}.txt",
+        "bilingual": f"transcript_src_{target}.txt",
     }
-    for path, content in files.values():
-        path.write_text(content, encoding="utf-8")
-    return {key: path for key, (path, _) in files.items()}
+
+
+def write_all(
+    segments: list[Segment], out_dir: Path, title: str = "", target: str = "ru", source: str = ""
+) -> dict[str, Path]:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    content = {
+        "dub_srt": to_srt(segments, translated=True),
+        "dub_vtt": to_vtt(segments, translated=True),
+        "src_srt": to_srt(segments, translated=False),
+        "src_vtt": to_vtt(segments, translated=False),
+        "transcript": to_transcript(segments, title),
+        "bilingual": to_bilingual(segments, title, source, target),
+    }
+    paths = {key: out_dir / name for key, name in file_names(target).items()}
+    for key, path in paths.items():
+        path.write_text(content[key], encoding="utf-8")
+    return paths

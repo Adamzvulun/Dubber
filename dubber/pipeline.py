@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import align, media, subtitles, timing, transcribe, translate, tts
+from . import align, languages, media, subtitles, timing, transcribe, translate, tts
 from .config import Settings
 from .download import download, fetch_info, is_url, local_video_id
 from .mux import mux
@@ -25,9 +25,9 @@ ProgressFn = Callable[[str, float], None]
 # Share of the total progress bar for each stage (transcription is the slow one on CPU).
 STAGES = [
     ("download", "Скачиваю видео", 0.10),
-    ("transcribe", "Распознаю английскую речь", 0.40),
-    ("translate", "Перевожу на русский", 0.10),
-    ("tts", "Озвучиваю по-русски", 0.20),
+    ("transcribe", "Распознаю речь", 0.40),
+    ("translate", "Перевожу", 0.10),
+    ("tts", "Озвучиваю", 0.20),
     ("align", "Подгоняю озвучку по времени", 0.10),
     ("mux", "Собираю итоговое видео", 0.10),
 ]
@@ -38,8 +38,8 @@ class Result:
     id: str
     title: str
     video: Path
-    ru_srt: Path
-    en_srt: Path
+    dub_srt: Path  # subtitles in the dub language
+    src_srt: Path  # subtitles of what was said
     transcript: Path
     bilingual: Path
     folder: Path
@@ -136,48 +136,59 @@ def run(
         download(source, work, settings.max_height, progress=report)
     report(1.0)
 
-    # 2. Transcribe (English)
+    target = languages.get(settings.target_lang)
+    voice = languages.voice_for(target.code, settings.voice)
+
+    # 2. Transcribe (any language; the cache keeps its old "_en" name so existing videos aren't redone)
     report = p.stage("transcribe")
     # "_v2": lines are cut from word timings (segments.split_into_units); older caches used Whisper's chunks.
-    en_json = work / "segments_en_v2.json"
-    if not en_json.exists():
+    src_json = work / "segments_en_v2.json"
+    info_json = work / "speech_info.json"
+    if not src_json.exists():
         audio = media.extract_audio(video, work / "audio_16k.wav")
+        info: dict = {}
         if transcriber is not None:
             raw = transcriber(audio)
         else:
-            raw = transcribe.transcribe(audio, settings.whisper_model, settings.whisper_device, progress=report)
+            raw = transcribe.transcribe(
+                audio, settings.whisper_model, settings.whisper_device, progress=report, info_out=info
+            )
         words = [w for seg in raw for w in seg.words]
-        save_segments(split_into_units(words) if words else merge_into_sentences(raw), en_json)
-    segments = load_segments(en_json)
+        save_segments(split_into_units(words) if words else merge_into_sentences(raw), src_json)
+        info_json.write_text(json.dumps(info), encoding="utf-8")
+    segments = load_segments(src_json)
+    speech = json.loads(info_json.read_text(encoding="utf-8")) if info_json.exists() else {}
+    source_langs: list[str] = speech.get("languages") or ([speech["language"]] if speech.get("language") else [])
+    source_lang = source_langs[0] if len(source_langs) == 1 else ""  # "" = unknown or several languages
     if not segments:
-        raise RuntimeError("В видео не найдено английской речи.")  # no English speech found
+        raise RuntimeError("No speech found in this video")
     report(1.0)
 
     # 3. Translate
     report = p.stage("translate")
-    ru_json = work / "segments_ru_v2.json"
-    if not ru_json.exists():
-        backend = translator or translate.make_backend(settings.translator, settings.claude_model)
+    dub_json = work / f"segments_{target.code}_v2.json"
+    if not dub_json.exists():
+        backend = translator or translate.make_backend(settings.translator, settings.claude_model, target=target.code)
         translate.translate_segments(segments, backend)
-        save_segments(segments, ru_json)
-    segments = load_segments(ru_json)
+        save_segments(segments, dub_json)
+    segments = load_segments(dub_json)
     report(1.0)
 
     # 4. Text to speech
     report = p.stage("tts")
     # Two passes: speak every line at natural speed to measure it, plan one steady pace for the video
     # (timing.plan_rates), then speak again at the planned rates — Edge scales duration exactly by the rate.
-    clips_dir = work / f"clips_{settings.voice}"
-    natural = tts.synthesize(segments, clips_dir, settings.voice, synth=synth, progress=lambda f: report(f / 2))
+    clips_dir = work / f"clips_{voice}"
+    natural = tts.synthesize(segments, clips_dir, voice, synth=synth, progress=lambda f: report(f / 2))
     lengths = [align.speech_seconds(c) if c else None for c in natural]
     rates = timing.plan_rates(segments, lengths, settings.max_speedup)
-    clips = tts.synthesize(segments, clips_dir, settings.voice, synth=synth, rates=rates,
+    clips = tts.synthesize(segments, clips_dir, voice, synth=synth, rates=rates,
                            progress=lambda f: report(0.5 + f / 2))
 
-    # 5. Align clips into one Russian track
+    # 5. Align clips into one dubbed track (the voice name already identifies the language)
     report = p.stage("align")
-    track = work / f"russian_track_v3_{settings.voice}.wav"
-    timing_json = work / f"timing_v3_{settings.voice}.json"
+    track = work / f"dub_track_v3_{voice}.wav"
+    timing_json = work / f"timing_v3_{voice}.json"
     if not track.exists() or not timing_json.exists():
         lines: list[dict] = []
         align.build_track(segments, clips, media.duration(video), track, progress=report, report=lines)
@@ -188,12 +199,14 @@ def run(
     # 6. Subtitles + final video, all in output/<id>/ (what the website's library reads)
     report = p.stage("mux")
     folder = settings.output_dir / video_id
-    files = subtitles.write_all(segments, folder, title)
+    files = subtitles.write_all(segments, folder, title, target=target.code, source=source_lang)
     out_video = folder / "dubbed.mp4"
     partial = folder / "dubbed.partial.mp4"  # never serve a half-written file
     mux(
-        video, track, partial, ru_srt=files["ru_srt"],
+        video, track, partial, dub_srt=files["dub_srt"],
         original_volume=settings.original_volume, background=settings.keep_background,
+        dub_lang=target.iso3, dub_title=target.native,
+        original_lang="mul" if len(source_langs) > 1 else languages.iso3(source_lang),
     )
     partial.replace(out_video)
     if not (folder / "thumbnail.jpg").exists():
@@ -206,8 +219,12 @@ def run(
         "channel": source_info["channel"],
         "source": source if is_url(source) else "",
         "duration": round(media.duration(video), 2),
-        "voice": settings.voice,
+        "voice": voice,
         "background": settings.keep_background,
+        "target_lang": target.code,
+        "source_lang": source_lang,
+        "source_langs": source_langs,
+        "files": {key: path.name for key, path in files.items()},
         "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
     (folder / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -217,8 +234,8 @@ def run(
         id=video_id,
         title=title,
         video=out_video,
-        ru_srt=files["ru_srt"],
-        en_srt=files["en_srt"],
+        dub_srt=files["dub_srt"],
+        src_srt=files["src_srt"],
         transcript=files["transcript"],
         bilingual=files["bilingual"],
         folder=folder,

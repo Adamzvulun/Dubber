@@ -7,7 +7,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-_SENTENCE_END = (".", "!", "?", "…", '."', '?"', '!"')
+_SENTENCE_END = (".", "!", "?", "…", '."', '?"', '!"', "。", "！", "？")
 _NON_SPEECH = re.compile(r"\[[^\]]*\]|\([^)]*\)|[♪♫]")  # Whisper's "[Music]", "(applause)", "♪"
 
 
@@ -22,8 +22,8 @@ class Word:
 class Segment:
     start: float  # seconds
     end: float  # seconds
-    text: str  # English
-    ru: str = ""  # Russian translation
+    text: str  # what was said (any language; usually English)
+    ru: str = ""  # the translation in the dub language (named "ru" for compatibility: Russian is the default)
     words: list[Word] = field(default_factory=list)  # word timings from Whisper (not saved)
 
     @property

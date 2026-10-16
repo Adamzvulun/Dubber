@@ -13,7 +13,7 @@ def test_to_srt_russian_and_english():
     ru = to_srt(SEGS)
     assert ru.startswith("1\n00:00:00,500 --> 00:00:02,250\nПривет.\n")
     assert "2\n00:01:01,000 --> 01:02:05,500\nПока." in ru
-    assert "Hello." in to_srt(SEGS, russian=False)
+    assert "Hello." in to_srt(SEGS, translated=False)
 
 
 def test_srt_skips_empty_lines():
@@ -26,7 +26,10 @@ def test_transcripts(tmp_path):
     assert "[01:01] Пока." in text
     assert "EN: Hello." in to_bilingual(SEGS) and "RU: Привет." in to_bilingual(SEGS)
     files = write_all(SEGS, tmp_path / "out", "Title")
-    assert files["ru_srt"].read_text(encoding="utf-8") == to_srt(SEGS)
+    assert files["dub_srt"].name == "subtitles_ru.srt" and files["dub_srt"].read_text(encoding="utf-8") == to_srt(SEGS)
+    he = write_all(SEGS, tmp_path / "he", "T", target="he", source="fr")
+    assert he["dub_vtt"].name == "subtitles_he.vtt" and he["src_vtt"].name == "subtitles_src.vtt"
+    assert "FR: Hello." in he["bilingual"].read_text(encoding="utf-8")
 
 
 def test_to_vtt():

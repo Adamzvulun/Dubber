@@ -37,6 +37,9 @@ class Settings:
     # "auto" = Claude when ANTHROPIC_API_KEY is set, otherwise free Google Translate
     translator: str = field(default_factory=lambda: _env("DUBBER_TRANSLATOR", "auto"))
     claude_model: str = field(default_factory=lambda: _env("DUBBER_CLAUDE_MODEL", "claude-opus-5-5"))
+    # Language of the dub (code from dubber/languages.py: ru, en, he, uk, es, fr, de, it, pt, ar, zh, ja)
+    target_lang: str = field(default_factory=lambda: _env("DUBBER_LANG", "ru"))
+    # Edge voice, or "male"/"female"; a voice that doesn't speak target_lang is replaced by that language's voice
     voice: str = field(default_factory=lambda: _env("DUBBER_VOICE", "ru-RU-DmitryNeural"))
     # Fastest the Russian voice may speak (1.6 = 60% faster than its natural speed); see dubber/timing.py
     max_speedup: float = field(default_factory=lambda: float(_env("DUBBER_MAX_SPEEDUP", "1.6")))

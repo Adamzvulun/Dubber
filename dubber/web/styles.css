@@ -80,7 +80,12 @@ main { padding-bottom: 80px; outline: none; }
 .wordmark__mark { width: 26px; height: 26px; border-radius: 8px; background: var(--accent); position: relative; flex: none; }
 .wordmark__mark::before { content: ""; position: absolute; left: 6px; top: 7px; width: 7px; height: 12px; border-radius: 0 7px 7px 0; background: var(--accent-ink); }
 .wordmark__mark::after { content: ""; position: absolute; right: 5px; top: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--live); }
-.nav { display: flex; gap: 4px; }
+.nav { display: flex; gap: 4px; margin-left: auto; }
+.ui-lang { display: inline-flex; padding: 3px; background: var(--surface-2); border-radius: 999px; flex: none; }
+.ui-lang button { min-width: 40px; height: 32px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent;
+  color: var(--ink-2); font: 600 13px/1 var(--font); letter-spacing: .04em; cursor: pointer; }
+.ui-lang button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(13, 27, 46, .12); }
+.ui-lang button:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
 .nav a { padding: 8px 14px; border-radius: 999px; text-decoration: none; color: var(--ink-2); font-weight: 500; font-size: 16px; white-space: nowrap; }
 .nav a:hover { color: var(--ink); background: var(--surface-2); }
 .nav a[aria-current="page"] { color: var(--ink); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
@@ -116,6 +121,12 @@ main { padding-bottom: 80px; outline: none; }
 .composer__options { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px 40px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
 .option-label { display: block; font-weight: 500; font-size: 15px; }
 .option-hint { display: block; color: var(--ink-2); font-size: 14px; line-height: 1.4; }
+
+.select-field { display: flex; align-items: center; gap: 14px; }
+.select-field select { height: 40px; padding: 0 36px 0 14px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%234A5568' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 14px center / 12px 8px;
+  color: var(--ink); font: 500 15px/1 var(--font); appearance: none; cursor: pointer; }
+.select-field select:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
 
 .segmented { border: 0; margin: 0; padding: 0; display: flex; align-items: center; gap: 14px; }
 .segmented legend { float: left; padding: 0; }
@@ -200,6 +211,7 @@ main { padding-bottom: 80px; outline: none; }
 .line__ru { display: block; font-size: 16px; line-height: 1.45; }
 .line__en { display: block; font-size: 14px; line-height: 1.4; color: var(--ink-2); margin-top: 4px; }
 .transcript.hide-en .line__en { display: none; }
+.line [dir="rtl"] { text-align: right; }
 .line.is-current .line__time { color: var(--accent); font-weight: 600; }
 
 .empty { padding: 96px 0; display: grid; gap: 14px; justify-items: start; }
@@ -217,6 +229,9 @@ main { padding-bottom: 80px; outline: none; }
   .composer__row { flex-direction: column; }
   .btn--lg { width: 100%; }
   .nav a { padding: 7px 10px; font-size: 15px; }
+  .ui-lang button { min-width: 34px; padding: 0 6px; }
+  /* Header must fit 360 px phones: logo mark only (the link keeps its aria-label). */
+  .wordmark > [data-i18n] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .wordmark { font-size: 16px; gap: 8px; }
   .wordmark__mark { width: 24px; height: 24px; }
   .topbar__inner { height: 58px; gap: 8px; }

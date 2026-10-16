@@ -1,24 +1,20 @@
-/* Dubber front-end: hash router, dubbing jobs, library, watch page with synced transcript. */
+/* Dubber front-end: hash router, dubbing jobs, library, watch page with synced transcript.
+   Interface texts live in i18n.js (t()); dub languages come from /api/languages. */
 "use strict";
 
 const $ = (sel, root = document) => root.querySelector(sel);
-const STEPS = [
-  ["download", "Скачивание"],
-  ["transcribe", "Распознавание речи"],
-  ["translate", "Перевод"],
-  ["tts", "Озвучка"],
-  ["align", "Синхронизация"],
-  ["mux", "Сборка видео"],
-];
-const VOICE_NAMES = { "ru-RU-DmitryNeural": "Голос: Дмитрий", "ru-RU-SvetlanaNeural": "Голос: Светлана" };
+const STEP_KEYS = ["download", "transcribe", "translate", "tts", "align", "mux"];
+// Russian voices keep their Russian names in the Russian interface.
+const RU_VOICE_NAMES = { "ru-RU-DmitryNeural": "Дмитрий", "ru-RU-SvetlanaNeural": "Светлана" };
+const FALLBACK_LANGS = [{ code: "ru", name_ru: "Русский", name_en: "Russian", native: "Русский", rtl: false }];
 
-const state = { jobs: new Map(), pollTimer: null, videos: [], seenDone: new Set() };
+const state = { jobs: new Map(), pollTimer: null, videos: [], seenDone: new Set(), languages: FALLBACK_LANGS, video: null };
 
 /* ---------- helpers ---------- */
 async function api(path, options = {}) {
   const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
   if (!res.ok) {
-    let message = "Сервер не ответил. Проверьте, что окно программы открыто.";
+    let message = t("server.down");
     try { const body = await res.json(); if (typeof body.detail === "string") message = body.detail; } catch (_) {}
     throw new Error(message);
   }
@@ -34,8 +30,7 @@ function clock(seconds) {
 
 function dateLabel(iso) {
   if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+  return new Date(iso).toLocaleDateString(uiLang === "ru" ? "ru-RU" : "en-GB", { day: "numeric", month: "long", year: "numeric" });
 }
 
 function el(tag, attrs = {}, ...children) {
@@ -50,6 +45,25 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
+function language(code) {
+  return state.languages.find((l) => l.code === code) || null;
+}
+
+/** Name of a dub language in the interface language, e.g. "Иврит" / "Hebrew". */
+function langName(code) {
+  const lang = language(code);
+  if (!lang) return (code || "").toUpperCase();
+  return uiLang === "ru" ? lang.name_ru : lang.name_en;
+}
+
+/** "ru-RU-DmitryNeural" → "Дмитрий" (Russian UI) / "Dmitry"; "he-IL-HilaNeural" → "Hila". */
+function voiceName(voice) {
+  if (!voice) return "";
+  if (uiLang === "ru" && RU_VOICE_NAMES[voice]) return RU_VOICE_NAMES[voice];
+  const m = voice.match(/^[a-z]{2}-[A-Z]{2}-(.+?)(?:Multilingual)?Neural$/);
+  return m ? m[1] : voice;
+}
+
 /* ---------- router ---------- */
 function route() {
   const hash = location.hash || "#/";
@@ -57,11 +71,12 @@ function route() {
   document.querySelectorAll(".view").forEach((v) => (v.hidden = true));
   document.querySelectorAll("[data-nav]").forEach((a) => a.removeAttribute("aria-current"));
   stopPlayer();
+  state.video = null;
 
   if (page === "library") {
     $("#view-library").hidden = false;
     $('[data-nav="library"]').setAttribute("aria-current", "page");
-    document.title = "Библиотека — Дубляж";
+    document.title = t("title.library");
     loadLibrary();
   } else if (page === "watch" && id) {
     $("#view-watch").hidden = false;
@@ -69,7 +84,7 @@ function route() {
   } else {
     $("#view-home").hidden = false;
     $('[data-nav="home"]').setAttribute("aria-current", "page");
-    document.title = "Дубляж — английские видео на русском";
+    document.title = t("title.home");
     loadLibrary();
   }
   window.scrollTo(0, 0);
@@ -79,43 +94,49 @@ function route() {
 function card(video) {
   const node = $("#tpl-card").content.firstElementChild.cloneNode(true);
   node.href = `#/watch/${encodeURIComponent(video.id)}`;
-  const img = $("img", node);
-  img.src = video.thumbnail;
+  $("img", node).src = video.thumbnail;
   $(".card__duration", node).textContent = clock(video.duration);
   $(".card__title", node).textContent = video.title;
-  $(".card__meta", node).textContent = [video.channel, dateLabel(video.created)].filter(Boolean).join(", ");
+  $(".card__meta", node).textContent = [video.channel, langName(video.target_lang), dateLabel(video.created)]
+    .filter(Boolean).join(" · ");
   return node;
 }
 
 async function loadLibrary() {
   try { state.videos = await api("/api/videos"); } catch (_) { state.videos = []; }
+  renderLibrary();
+}
+
+function renderLibrary() {
   const recent = $("#recent"), all = $("#library");
   recent.replaceChildren(...state.videos.slice(0, 6).map(card));
-  if (!state.videos.length) recent.append(el("p", { class: "empty-note", text: "Здесь появятся видео, которые вы озвучите." }));
+  if (!state.videos.length) recent.append(el("p", { class: "empty-note", text: t("recent.empty") }));
   $("#all-link").hidden = state.videos.length <= 6;
 
   all.replaceChildren(...state.videos.map(card));
   if (!state.videos.length) {
     all.append(el("div", { class: "empty-note" },
-      el("p", { text: "В библиотеке пока пусто." }),
-      el("p", {}, el("a", { class: "link", href: "#/", text: "Озвучить первое видео" }))));
+      el("p", { text: t("library.empty") }),
+      el("p", {}, el("a", { class: "link", href: "#/", text: t("library.first") }))));
   }
   const n = state.videos.length;
-  $("#library-count").textContent = n ? `${n} ${plural(n, "видео", "видео", "видео")}` : "";
-}
-
-function plural(n, one, few, many) {
-  const m10 = n % 10, m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
+  $("#library-count").textContent = n ? t("library.count", n) : "";
 }
 
 /* ---------- dubbing jobs ---------- */
+function jobStatusText(job) {
+  if (job.status === "done") return t("job.done");
+  if (job.status === "error") return t("job.error");
+  if (job.status === "cancelled") return t("job.cancelled");
+  if (job.cancel_requested) return t("job.stopping");
+  if (job.status === "queued") return t("job.queued");
+  return `${job.stage ? t(`stage.${job.stage}`) : t("job.starting")}…`;
+}
+
 function jobCard(job) {
-  const activeIndex = STEPS.findIndex(([key]) => key === job.stage);
+  const activeIndex = STEP_KEYS.indexOf(job.stage);
   const running = job.status === "running" || job.status === "queued";
-  const steps = el("ol", { class: "steps" }, ...STEPS.map(([key, label], i) => {
+  const steps = el("ol", { class: "steps" }, ...t("steps").map((label, i) => {
     let cls = "";
     if (job.status === "done" || (running && activeIndex > i)) cls = "is-done";
     else if (running && activeIndex === i) cls = "is-active";
@@ -126,40 +147,35 @@ function jobCard(job) {
   const head = el("div", { class: "job__head" },
     el("span", { class: "job__status" },
       running ? el("span", { class: job.status === "queued" ? "lamp lamp--idle" : "lamp", "aria-hidden": "true" }) : null,
-      document.createTextNode(
-        job.status === "done" ? "Готово" :
-        job.status === "error" ? "Не получилось" :
-        job.status === "cancelled" ? "Отменено" :
-        job.cancel_requested ? "Останавливаю…" :
-        job.status === "queued" ? "В очереди" : `${job.label}…`)),
+      document.createTextNode(jobStatusText(job))),
     running ? el("span", { class: "job__time", text: clock(elapsed) }) : null);
 
   const node = el("article", { class: `job job--${job.status}`, "data-job": job.id },
-    head, el("p", { class: "job__url", text: job.url }));
+    head, el("p", { class: "job__url", text: `${t("job.into", langName(job.lang || "ru"))} · ${job.url}` }));
 
+  const hide = () => el("button", { class: "btn", type: "button", text: t("btn.hide"), onclick: () => dismissJob(job.id) });
   if (running) {
     node.append(
       el("div", { class: "bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100",
-        "aria-valuenow": String(Math.round(job.progress * 100)), "aria-label": "Готовность" },
+        "aria-valuenow": String(Math.round(job.progress * 100)), "aria-label": t("job.progress") },
         el("div", { class: "bar__fill", style: `width:${(job.progress * 100).toFixed(1)}%` })),
       steps,
-      el("p", { class: "job__note", text: "Обычно дубляж занимает примерно столько же времени, сколько длится видео. Эту страницу можно закрыть — работа продолжится." }),
+      el("p", { class: "job__note", text: t("job.note") }),
       el("div", { class: "job__actions" },
         el("button", { class: "btn", type: "button", disabled: job.cancel_requested,
-          text: job.cancel_requested ? "Останавливаю…" : "Отменить", onclick: (e) => cancelJob(job, e.currentTarget) })));
+          text: job.cancel_requested ? t("job.stopping") : t("btn.cancel"), onclick: (e) => cancelJob(job, e.currentTarget) })));
   } else if (job.status === "done") {
     node.append(steps, el("div", { class: "job__actions" },
-      el("a", { class: "btn btn--primary", href: `#/watch/${encodeURIComponent(job.video_id)}`, text: "Смотреть" }),
-      el("button", { class: "btn", type: "button", text: "Скрыть", onclick: () => dismissJob(job.id) })));
+      el("a", { class: "btn btn--primary", href: `#/watch/${encodeURIComponent(job.video_id)}`, text: t("btn.watch") }),
+      hide()));
   } else if (job.status === "cancelled") {
-    node.append(el("p", { class: "job__note", text: "Дубляж остановлен. Если начать заново, уже сделанная часть работы не пропадёт." }),
+    node.append(el("p", { class: "job__note", text: t("job.cancelledNote") }),
       el("div", { class: "job__actions" },
-        el("button", { class: "btn", type: "button", text: "Начать заново", onclick: () => retryJob(job) }),
-        el("button", { class: "btn", type: "button", text: "Скрыть", onclick: () => dismissJob(job.id) })));
+        el("button", { class: "btn", type: "button", text: t("btn.restart"), onclick: () => retryJob(job) }), hide()));
   } else if (job.status === "error") {
-    node.append(el("p", { class: "job__error", text: job.error }), el("div", { class: "job__actions" },
-      el("button", { class: "btn", type: "button", text: "Попробовать снова", onclick: () => retryJob(job) }),
-      el("button", { class: "btn", type: "button", text: "Скрыть", onclick: () => dismissJob(job.id) })));
+    const message = uiLang === "en" ? (job.error_en || job.error) : job.error;
+    node.append(el("p", { class: "job__error", text: message }), el("div", { class: "job__actions" },
+      el("button", { class: "btn", type: "button", text: t("btn.retry"), onclick: () => retryJob(job) }), hide()));
   }
   return node;
 }
@@ -193,12 +209,12 @@ async function pollJobs() {
   state.pollTimer = setTimeout(pollJobs, active ? 1000 : 5000);
 }
 
-async function startJob(url, voice, background) {
+async function startJob(url, voice, background, lang) {
   const error = $("#form-error");
   error.hidden = true;
   $("#submit").disabled = true;
   try {
-    await api("/api/jobs", { method: "POST", body: JSON.stringify({ url, voice, background }) });
+    await api("/api/jobs", { method: "POST", body: JSON.stringify({ url, voice, background, lang }) });
     $("#url").value = "";
     pollJobs();
   } catch (e) {
@@ -209,14 +225,14 @@ async function startJob(url, voice, background) {
 
 async function cancelJob(job, button) {
   button.disabled = true;
-  button.textContent = "Останавливаю…";
+  button.textContent = t("job.stopping");
   try { await api(`/api/jobs/${job.id}/cancel`, { method: "POST" }); } catch (_) {}
   pollJobs();
 }
 
 function retryJob(job) {
   dismissJob(job.id);
-  startJob(job.url, job.voice, job.background);
+  startJob(job.url, job.voice, job.background, job.lang || "ru");
 }
 
 /* ---------- watch page ---------- */
@@ -233,49 +249,67 @@ async function showVideo(id) {
   try { video = await api(`/api/videos/${encodeURIComponent(id)}`); } catch (_) {
     $("#view-watch").hidden = true; $("#view-missing").hidden = false; return;
   }
-  document.title = `${video.title} — Дубляж`;
-  const player = $("#player");
+  state.video = video;
+  const player = $("#player"), files = video.files || {}, src = (name) => `/files/${video.id}/${name}`;
   player.replaceChildren(
     el("source", { src: video.video, type: "video/mp4" }),
-    el("track", { kind: "subtitles", srclang: "ru", label: "Русские субтитры", src: `/files/${video.id}/subtitles_ru.vtt` }),
-    el("track", { kind: "subtitles", srclang: "en", label: "English subtitles", src: `/files/${video.id}/subtitles_en.vtt` }));
+    files.dub_vtt ? el("track", { kind: "subtitles", srclang: video.target_lang, src: src(files.dub_vtt), "data-label": "dub" }) : null,
+    files.src_vtt ? el("track", { kind: "subtitles", srclang: video.source_lang || "und", src: src(files.src_vtt), "data-label": "src" }) : null);
   player.poster = video.thumbnail;
   player.load();
-
-  $("#watch-title").textContent = video.title;
-  $("#watch-meta").replaceChildren(...[
-    video.channel, clock(video.duration), VOICE_NAMES[video.voice],
-    video.background === false ? "Без оригинального звука" : null, dateLabel(video.created),
-  ].filter(Boolean).map((t) => el("span", { text: t })));
-
-  const file = (name) => `/files/${video.id}/${name}?download=1`;
-  $("#downloads").replaceChildren(
-    el("a", { class: "btn btn--primary", href: file("dubbed.mp4"), download: true, text: "Скачать видео" }),
-    el("a", { class: "btn", href: file("subtitles_ru.srt"), download: true, text: "Субтитры .srt" }),
-    el("a", { class: "btn", href: file("transcript_ru.txt"), download: true, text: "Текст" }),
-    el("a", { class: "btn", href: file("transcript_en_ru.txt"), download: true, text: "Текст EN + RU" }),
-    el("span", { class: "spacer" }),
-    el("button", { class: "btn btn--danger", type: "button", text: "Удалить", onclick: () => deleteVideo(video) }));
-
-  renderTranscript(video.segments || []);
+  renderWatchDetails();
 }
 
-function renderTranscript(segments) {
-  const list = $("#transcript"), player = $("#player");
+/** Everything on the watch page that depends on the interface language (re-run when it changes). */
+function renderWatchDetails() {
+  const video = state.video;
+  if (!video) return;
+  document.title = `${video.title} — ${t("app.name")}`;
+  for (const track of $("#player").querySelectorAll("track")) {
+    track.label = track.dataset.label === "dub" ? t("watch.subs", langName(video.target_lang)) : t("watch.subsOriginal");
+  }
+  $("#watch-title").textContent = video.title;
+  $("#watch-meta").replaceChildren(...[
+    video.channel, clock(video.duration), langName(video.target_lang), t("watch.voice", voiceName(video.voice)),
+    video.background === false ? t("watch.noBackground") : null, dateLabel(video.created),
+  ].filter(Boolean).map((text) => el("span", { text })));
+
+  const files = video.files || {};
+  const file = (name) => `/files/${video.id}/${name}?download=1`;
+  const link = (name, text, primary) => name
+    ? el("a", { class: primary ? "btn btn--primary" : "btn", href: file(name), download: true, text }) : null;
+  $("#downloads").replaceChildren(...[
+    link("dubbed.mp4", t("btn.download"), true),
+    link(files.dub_srt, t("btn.srt")),
+    link(files.transcript, t("btn.text")),
+    link(files.bilingual, t("btn.bilingual")),
+    el("span", { class: "spacer" }),
+    el("button", { class: "btn btn--danger", type: "button", text: t("btn.delete"), onclick: () => deleteVideo(video) }),
+  ].filter(Boolean));
+
+  renderTranscript(video);
+}
+
+function renderTranscript(video) {
+  const segments = video.segments || [], list = $("#transcript"), player = $("#player");
+  if (syncHandler) { player.removeEventListener("timeupdate", syncHandler); syncHandler = null; }
+  const target = language(video.target_lang);
   const lines = segments.map((seg, i) => el("li", {
     class: "line", tabindex: "0", "data-i": String(i),
     onclick: () => { player.currentTime = seg.start + 0.01; player.play(); },
     onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } },
   },
   el("span", { class: "line__time", text: clock(seg.start) }),
-  el("span", {}, el("span", { class: "line__ru", text: seg.ru }), el("span", { class: "line__en", text: seg.text, lang: "en" }))));
+  el("span", {},
+    el("span", { class: "line__ru", text: seg.ru, lang: video.target_lang, dir: target?.rtl ? "rtl" : null }),
+    el("span", { class: "line__en", text: seg.text, lang: video.source_lang || null, dir: "auto" }))));
   list.replaceChildren(...lines);
-  if (!segments.length) list.append(el("li", { class: "empty-note", text: "Текст недоступен." }));
+  if (!segments.length) list.append(el("li", { class: "empty-note", text: t("watch.noText") }));
 
   let current = -1;
   syncHandler = () => {
-    const t = player.currentTime;
-    let i = segments.findIndex((s, k) => t >= s.start && t < (segments[k + 1]?.start ?? Infinity));
+    const time = player.currentTime;
+    const i = segments.findIndex((s, k) => time >= s.start && time < (segments[k + 1]?.start ?? Infinity));
     if (i === current) return;
     lines[current]?.classList.remove("is-current");
     current = i;
@@ -290,30 +324,58 @@ function renderTranscript(segments) {
 }
 
 async function deleteVideo(video) {
-  if (!confirm(`Удалить «${video.title}» из библиотеки? Файлы будут стёрты с компьютера.`)) return;
+  if (!confirm(t("watch.delete", video.title))) return;
   try { await api(`/api/videos/${encodeURIComponent(video.id)}`, { method: "DELETE" }); } catch (e) { alert(e.message); return; }
   location.hash = "#/library";
 }
 
+/* ---------- languages ---------- */
+function fillLanguageSelect() {
+  const select = $("#lang");
+  let chosen = select.value;
+  if (!chosen) { try { chosen = localStorage.getItem("dubber.dubLang") || "ru"; } catch (_) { chosen = "ru"; } }
+  select.replaceChildren(...state.languages.map((l) => {
+    const name = uiLang === "ru" ? l.name_ru : l.name_en;
+    return el("option", { value: l.code, text: name === l.native ? name : `${name} — ${l.native}` });
+  }));
+  select.value = language(chosen) ? chosen : "ru";
+}
+
+function updateBackgroundHint() {
+  $("#background-hint").textContent = t($("#background").checked ? "form.background.on" : "form.background.off");
+}
+
+/** Re-render everything after the interface language changes (without reloading the video). */
+function applyUiLang() {
+  applyStaticTexts();
+  document.querySelectorAll("[data-ui-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.uiLang === uiLang)));
+  fillLanguageSelect();
+  updateBackgroundHint();
+  renderJobs();
+  renderLibrary();
+  if (state.video) renderWatchDetails();
+  else if ($("#view-library").hidden === false) document.title = t("title.library");
+  else if ($("#view-home").hidden === false) document.title = t("title.home");
+}
+
 /* ---------- init ---------- */
-function init() {
+async function init() {
   $("#dub-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const url = $("#url").value.trim(), error = $("#form-error");
     if (!/^https?:\/\//i.test(url)) {
-      error.textContent = "Вставьте ссылку на видео — она начинается с https://";
+      error.textContent = t("form.badUrl");
       error.hidden = false; $("#url").focus(); return;
     }
     const voice = new FormData(e.target).get("voice") || "male";
-    startJob(url, voice, $("#background").checked);
+    startJob(url, voice, $("#background").checked, $("#lang").value || "ru");
   });
 
-  const hint = $("#background-hint");
-  $("#background").addEventListener("change", (e) => {
-    hint.textContent = e.target.checked
-      ? "Английская речь и музыка тихо звучат под русским голосом"
-      : "Будет слышен только русский голос, без музыки и оригинала";
-  });
+  $("#lang").addEventListener("change", (e) => { try { localStorage.setItem("dubber.dubLang", e.target.value); } catch (_) {} });
+  $("#background").addEventListener("change", updateBackgroundHint);
+  document.querySelectorAll("[data-ui-lang]").forEach((b) => b.addEventListener("click", () => {
+    setUiLang(b.dataset.uiLang); applyUiLang();
+  }));
 
   const showEn = $("#show-en");
   try { showEn.checked = localStorage.getItem("dubber.showEn") !== "0"; } catch (_) {}
@@ -321,6 +383,8 @@ function init() {
   showEn.addEventListener("change", () => { applyEn(); try { localStorage.setItem("dubber.showEn", showEn.checked ? "1" : "0"); } catch (_) {} });
   applyEn();
 
+  try { state.languages = await api("/api/languages"); } catch (_) {}
+  applyUiLang();
   window.addEventListener("hashchange", route);
   route();
   pollJobs();

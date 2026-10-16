@@ -12,16 +12,20 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <a class="skip" href="#main">Перейти к содержимому</a>
+  <a class="skip" href="#main" data-i18n="skip">Перейти к содержимому</a>
   <header class="topbar">
     <div class="wrap topbar__inner">
-      <a class="wordmark" href="#/" aria-label="Дубляж — на главную">
-        <span class="wordmark__mark" aria-hidden="true"></span>Дубляж
+      <a class="wordmark" href="#/" data-i18n-aria="home.aria" aria-label="Дубляж — на главную">
+        <span class="wordmark__mark" aria-hidden="true"></span><span data-i18n="app.name">Дубляж</span>
       </a>
-      <nav class="nav" aria-label="Разделы">
-        <a href="#/" data-nav="home">Новое видео</a>
-        <a href="#/library" data-nav="library">Библиотека</a>
+      <nav class="nav" data-i18n-aria="nav.label" aria-label="Разделы">
+        <a href="#/" data-nav="home" data-i18n="nav.home">Новое видео</a>
+        <a href="#/library" data-nav="library" data-i18n="nav.library">Библиотека</a>
       </nav>
+      <div class="ui-lang" role="group" data-i18n-aria="ui.lang" aria-label="Язык интерфейса">
+        <button type="button" data-ui-lang="ru" lang="ru">RU</button>
+        <button type="button" data-ui-lang="en" lang="en">EN</button>
+      </div>
     </div>
   </header>
 
@@ -29,30 +33,35 @@
     <!-- Home -->
     <section id="view-home" class="view" hidden>
       <div class="hero">
-        <h1 class="hero__title">Английские видео — на&nbsp;русском</h1>
-        <p class="hero__lead">Вставьте ссылку на YouTube. Дубляж переведёт речь, озвучит её по-русски и сохранит видео с субтитрами и текстом.</p>
+        <h1 class="hero__title" data-i18n="hero.title">Любое видео — на&nbsp;вашем языке</h1>
+        <p class="hero__lead" data-i18n="hero.lead"></p>
       </div>
 
       <form id="dub-form" class="composer" novalidate>
-        <label class="visually-hidden" for="url">Ссылка на видео</label>
+        <label class="visually-hidden" for="url" data-i18n="form.url">Ссылка на видео</label>
         <div class="composer__row">
           <div class="field">
             <svg class="field__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
             <input id="url" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
                    placeholder="https://www.youtube.com/watch?v=…" required>
           </div>
-          <button class="btn btn--primary btn--lg" type="submit" id="submit">Озвучить</button>
+          <button class="btn btn--primary btn--lg" type="submit" id="submit" data-i18n="form.submit">Озвучить</button>
         </div>
         <p class="composer__error" id="form-error" role="alert" hidden></p>
 
         <div class="composer__options">
-          <fieldset class="segmented" aria-label="Голос озвучки">
-            <legend class="option-label">Голос</legend>
+          <div class="select-field">
+            <label class="option-label" for="lang" data-i18n="form.lang">Язык озвучки</label>
+            <select id="lang" name="lang"></select>
+          </div>
+
+          <fieldset class="segmented">
+            <legend class="option-label" data-i18n="form.voice">Голос</legend>
             <div class="segmented__track">
               <input type="radio" name="voice" id="voice-male" value="male" checked>
-              <label for="voice-male">Дмитрий</label>
+              <label for="voice-male" data-i18n="form.male">Мужской</label>
               <input type="radio" name="voice" id="voice-female" value="female">
-              <label for="voice-female">Светлана</label>
+              <label for="voice-female" data-i18n="form.female">Женский</label>
             </div>
           </fieldset>
 
@@ -61,8 +70,8 @@
               <input type="checkbox" id="background" checked>
               <span class="switch__ui" aria-hidden="true"></span>
               <span class="switch__text">
-                <span class="option-label">Оригинальный звук фоном</span>
-                <span class="option-hint" id="background-hint">Английская речь и музыка тихо звучат под русским голосом</span>
+                <span class="option-label" data-i18n="form.background">Оригинальный звук фоном</span>
+                <span class="option-hint" id="background-hint"></span>
               </span>
             </label>
           </div>
@@ -73,8 +82,8 @@
 
       <section class="library-section" aria-labelledby="recent-title">
         <div class="section-head">
-          <h2 id="recent-title">Недавние видео</h2>
-          <a class="link" href="#/library" id="all-link" hidden>Вся библиотека</a>
+          <h2 id="recent-title" data-i18n="recent.title">Недавние видео</h2>
+          <a class="link" href="#/library" id="all-link" data-i18n="recent.all" hidden>Вся библиотека</a>
         </div>
         <div id="recent" class="grid"></div>
       </section>
@@ -83,7 +92,7 @@
     <!-- Library -->
     <section id="view-library" class="view" hidden>
       <div class="section-head section-head--page">
-        <h1>Библиотека</h1>
+        <h1 data-i18n="library.title">Библиотека</h1>
         <p class="muted" id="library-count"></p>
       </div>
       <div id="library" class="grid"></div>
@@ -91,7 +100,7 @@
 
     <!-- Watch -->
     <section id="view-watch" class="view" hidden>
-      <a class="back link" href="#/library">Библиотека</a>
+      <a class="back link" href="#/library" data-i18n="watch.back">Библиотека</a>
       <div class="watch">
         <div class="watch__main">
           <div class="player">
@@ -103,10 +112,10 @@
         </div>
         <aside class="transcript" aria-labelledby="transcript-title">
           <div class="transcript__head">
-            <h2 id="transcript-title">Текст</h2>
+            <h2 id="transcript-title" data-i18n="watch.text">Текст</h2>
             <label class="mini-switch">
               <input type="checkbox" id="show-en" checked>
-              <span>Английский оригинал</span>
+              <span data-i18n="watch.showOriginal">Оригинал</span>
             </label>
           </div>
           <ol class="transcript__list" id="transcript"></ol>
@@ -116,9 +125,9 @@
 
     <!-- Not found -->
     <section id="view-missing" class="view empty" hidden>
-      <h1>Видео не найдено</h1>
-      <p class="muted">Возможно, оно было удалено.</p>
-      <a class="btn" href="#/library">Открыть библиотеку</a>
+      <h1 data-i18n="missing.title">Видео не найдено</h1>
+      <p class="muted" data-i18n="missing.text">Возможно, оно было удалено.</p>
+      <a class="btn" href="#/library" data-i18n="btn.openLibrary">Открыть библиотеку</a>
     </section>
   </main>
 
@@ -132,6 +141,7 @@
     </a>
   </template>
 
+  <script src="/i18n.js" defer></script>
   <script src="/app.js" defer></script>
 </body>
 </html>

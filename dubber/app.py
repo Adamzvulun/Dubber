@@ -3,7 +3,8 @@
 Run: `python -m dubber.app` → opens http://127.0.0.1:7860
 
 API
-- POST /api/jobs {url, voice: "male"|"female", background: bool} → start dubbing (one job runs at a time)
+- POST /api/jobs {url, voice: "male"|"female", background: bool, lang} → start dubbing (one job at a time)
+- GET  /api/languages                                              → dub languages (code, names, voices)
 - GET  /api/jobs, /api/jobs/{id}                                   → progress
 - POST /api/jobs/{id}/cancel                                        → stop a queued or running job
 - GET  /api/videos, /api/videos/{id}                                → library, one video + its timed transcript
@@ -24,6 +25,7 @@ import time
 import traceback
 import uuid
 import webbrowser
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -32,58 +34,91 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import pipeline
+from . import languages, pipeline
 from .config import Settings, load_settings
 from .download import is_url
 
 WEB_DIR = Path(__file__).parent / "web"
-VOICES = {"male": "ru-RU-DmitryNeural", "female": "ru-RU-SvetlanaNeural"}
 STAGE_KEYS = {label: key for key, label, _ in pipeline.STAGES}
 _ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
-# Files the browser may fetch from output/<id>/, with the name used when downloading.
-FILES = {
-    "dubbed.mp4": ("video/mp4", "{title} (RU).mp4"),
-    "subtitles_ru.vtt": ("text/vtt", None),
-    "subtitles_en.vtt": ("text/vtt", None),
-    "subtitles_ru.srt": ("application/x-subrip", "{title} (RU).srt"),
-    "subtitles_en.srt": ("application/x-subrip", "{title} (EN).srt"),
-    "transcript_ru.txt": ("text/plain; charset=utf-8", "{title} — текст.txt"),
-    "transcript_en_ru.txt": ("text/plain; charset=utf-8", "{title} — EN+RU.txt"),
-    "thumbnail.jpg": ("image/jpeg", None),
+# Files the browser may fetch from output/<id>/ (see subtitles.file_names; "en"/"en_ru" names are from videos
+# dubbed before other languages existed, when the original was always English and the dub Russian).
+_LANG = "|".join(sorted(languages.LANGUAGES))
+_SUBTITLES = re.compile(rf"^subtitles_(src|{_LANG})\.(vtt|srt)$")
+_TRANSCRIPT = re.compile(rf"^transcript_(?:(src|en)_)?({_LANG})\.txt$")
+_TEXT = "text/plain; charset=utf-8"
+LEGACY_FILES = {
+    "dub_srt": "subtitles_ru.srt", "dub_vtt": "subtitles_ru.vtt", "src_srt": "subtitles_en.srt",
+    "src_vtt": "subtitles_en.vtt", "transcript": "transcript_ru.txt", "bilingual": "transcript_en_ru.txt",
 }
 
 
-def friendly_error(exc: Exception) -> str:
-    """Turn a technical error into a short Russian explanation with what to do."""
+def file_info(name: str, target: str) -> tuple[str, str | None] | None:
+    """(media type, download-name template) for a file the browser may fetch, or None if not allowed."""
+    tag = target.upper()
+    if name == "dubbed.mp4":
+        return "video/mp4", f"{{title}} ({tag}).mp4"
+    if name == "thumbnail.jpg":
+        return "image/jpeg", None
+    if m := _SUBTITLES.match(name):
+        lang, ext = m.groups()
+        if ext == "vtt":
+            return "text/vtt", None
+        legacy_original = lang == "en" and target == "ru"  # old videos: subtitles_en = the English original
+        label = "original" if lang == "src" or legacy_original else lang.upper()
+        return "application/x-subrip", f"{{title}} ({label}).srt"
+    if m := _TRANSCRIPT.match(name):
+        bilingual, lang = m.groups()
+        return _TEXT, (f"{{title}} — original + {lang.upper()}.txt" if bilingual else f"{{title}} — {lang.upper()}.txt")
+    return None
+
+
+# (words that identify the error, Russian message, English message) — checked in order.
+_ERRORS: list[tuple[Callable[[str], bool], str, str]] = [
+    (lambda t: "ffmpeg" in t and "not found" in t,
+     "Не найдена программа ffmpeg. Запустите установку ещё раз (install_windows.bat).",
+     "ffmpeg was not found. Run the installer again (install_windows.bat)."),
+    (lambda t: "not a bot" in t or "sign in to confirm" in t,
+     "YouTube попросил подтвердить, что вы не робот. Попробуйте позже или настройте файл cookies (см. инструкцию).",
+     "YouTube asked to confirm you're not a robot. Try again later or set up a cookies file (see the guide)."),
+    (lambda t: any(w in t for w in ("huggingface", "hf.co", "cas client", "xet")),
+     "Не удалось скачать модель распознавания речи (она скачивается один раз, около 500 МБ). Проверьте интернет "
+     "и попробуйте снова. Если ошибка повторяется — возможно, антивирус или сеть блокируют сайт huggingface.co.",
+     "Couldn't download the speech-recognition model (a one-time ~500 MB download). Check your internet and try "
+     "again. If it keeps failing, an antivirus or the network may be blocking huggingface.co."),
+    (lambda t: "no audio was received" in t,
+     "Сервис озвучки Microsoft сейчас не отвечает. Подождите несколько минут и нажмите «Попробовать снова» — "
+     "уже готовые части сохранятся.",
+     "Microsoft's voice service isn't responding right now. Wait a few minutes and press “Try again” — "
+     "the finished parts are kept."),
+    (lambda t: "downloaderror" in t or "youtube" in t or "unsupported url" in t,
+     "Не удалось скачать видео. Проверьте, что ссылка правильная и интернет работает. "
+     "Если ошибка повторяется — запустите установку ещё раз, она обновит загрузчик.",
+     "Couldn't download the video. Check that the link is right and the internet works. "
+     "If it keeps failing, run the installer again — it updates the downloader."),
+    (lambda t: "no speech found" in t,
+     "В этом видео не найдено речи.",
+     "No speech was found in this video."),
+    (lambda t: "offline translator only" in t or ("google" in t and "translat" in t),
+     "Не удалось перевести: сервис Google Translate недоступен. Без него можно переводить только "
+     "с английского на русский. Попробуйте позже.",
+     "Couldn't translate: Google Translate is unavailable. Without it only English→Russian works. "
+     "Try again later."),
+    (lambda t: any(w in t for w in ("connect", "timeout", "network", "dns", "proxy", "ssl")),
+     "Нет связи с интернет-сервисом перевода или озвучки. Проверьте интернет и попробуйте снова.",
+     "Can't reach the translation or voice service. Check your internet and try again."),
+]
+
+
+def friendly_error(exc: Exception, lang: str = "ru") -> str:
+    """Turn a technical error into a short explanation with what to do (Russian or English UI)."""
     text = f"{type(exc).__name__}: {exc}".lower()
-    if "ffmpeg" in text and "not found" in text:
-        return "Не найдена программа ffmpeg. Запустите установку ещё раз (install_windows.bat)."
-    if "not a bot" in text or "sign in to confirm" in text:
-        return (
-            "YouTube попросил подтвердить, что вы не робот. "
-            "Попробуйте позже или настройте файл cookies (см. инструкцию)."
-        )
-    if any(w in text for w in ("huggingface", "hf.co", "cas client", "xet")):
-        return (
-            "Не удалось скачать модель распознавания речи (она скачивается один раз, около 500 МБ). "
-            "Проверьте интернет и попробуйте снова. Если ошибка повторяется — возможно, антивирус или сеть "
-            "блокируют сайт huggingface.co."
-        )
-    if "no audio was received" in text:
-        return (
-            "Сервис озвучки Microsoft сейчас не отвечает. Подождите несколько минут и нажмите «Попробовать снова» — "
-            "уже готовые части сохранятся."
-        )
-    if "downloaderror" in text or "youtube" in text or "unsupported url" in text:
-        return (
-            "Не удалось скачать видео. Проверьте, что ссылка правильная и интернет работает. "
-            "Если ошибка повторяется — запустите установку ещё раз, она обновит загрузчик."
-        )
-    if "английской речи" in text:
-        return "В этом видео не найдено английской речи."
-    if any(w in text for w in ("connect", "timeout", "network", "dns", "proxy", "ssl")):
-        return "Нет связи с интернет-сервисом перевода или озвучки. Проверьте интернет и попробуйте снова."
+    for matches, ru, en in _ERRORS:
+        if matches(text):
+            return en if lang == "en" else ru
+    if lang == "en":
+        return f"Something went wrong. Please try again. Details for support: {exc}"
     return f"Что-то пошло не так. Попробуйте ещё раз. Подробности для помощника: {exc}"
 
 
@@ -91,13 +126,15 @@ def friendly_error(exc: Exception) -> str:
 class Job:
     id: str
     url: str
-    voice: str
+    voice: str  # "male" | "female"
     background: bool
+    lang: str = languages.DEFAULT  # dub language
     status: str = "queued"  # queued | running | done | error | cancelled
     stage: str = ""
     label: str = "В очереди"
     progress: float = 0.0
-    error: str = ""
+    error: str = ""  # Russian
+    error_en: str = ""
     video_id: str = ""
     created: float = field(default_factory=time.time)
     cancel_requested: bool = False
@@ -120,8 +157,8 @@ class JobRunner:
         self._queue: queue.Queue[Job] = queue.Queue()
         threading.Thread(target=self._work, daemon=True).start()
 
-    def submit(self, url: str, voice: str, background: bool) -> Job:
-        job = Job(id=uuid.uuid4().hex[:12], url=url, voice=voice, background=background)
+    def submit(self, url: str, voice: str, background: bool, lang: str = languages.DEFAULT) -> Job:
+        job = Job(id=uuid.uuid4().hex[:12], url=url, voice=voice, background=background, lang=lang)
         self.jobs[job.id] = job
         self._queue.put(job)
         return job
@@ -147,7 +184,10 @@ class JobRunner:
             if job.status == "cancelled":
                 continue
             job.status, job.label = "running", "Начинаю"
-            settings = dataclasses.replace(self.settings, voice=VOICES[job.voice], keep_background=job.background)
+            settings = dataclasses.replace(
+                self.settings, target_lang=job.lang, voice=languages.voice_for(job.lang, job.voice),
+                keep_background=job.background,
+            )
 
             def progress(label: str, fraction: float, job: Job = job) -> None:
                 # Called at the start of every stage and often inside long ones (download, Whisper, TTS).
@@ -163,13 +203,14 @@ class JobRunner:
                     job.status, job.label = "cancelled", "Отменено"
                     continue
                 traceback.print_exc()
-                job.status, job.error = "error", friendly_error(exc)
+                job.status, job.error, job.error_en = "error", friendly_error(exc), friendly_error(exc, "en")
 
 
 class JobRequest(BaseModel):
     url: str
     voice: str = "male"
     background: bool = True
+    lang: str = languages.DEFAULT
 
 
 def _read_meta(folder: Path) -> dict | None:
@@ -181,6 +222,8 @@ def _read_meta(folder: Path) -> dict | None:
         return None
     meta["thumbnail"] = f"/files/{folder.name}/thumbnail.jpg"
     meta["video"] = f"/files/{folder.name}/dubbed.mp4"
+    if "target_lang" not in meta:  # dubbed before other languages existed: English → Russian, old file names
+        meta.update(target_lang="ru", source_lang="en", files=LEGACY_FILES)
     return meta
 
 
@@ -202,9 +245,15 @@ def create_app(settings: Settings | None = None, runner=pipeline.run) -> FastAPI
         url = req.url.strip()
         if not is_url(url):
             raise HTTPException(422, "Вставьте ссылку на видео — она начинается с https://")
-        if req.voice not in VOICES:
+        if req.voice not in ("male", "female"):
             raise HTTPException(422, "Неизвестный голос")
-        return jobs.submit(url, req.voice, req.background).public()
+        if req.lang not in languages.LANGUAGES:
+            raise HTTPException(422, "Неизвестный язык")
+        return jobs.submit(url, req.voice, req.background, req.lang).public()
+
+    @app.get("/api/languages")
+    def list_languages() -> list[dict]:
+        return [lang.public() for lang in languages.LANGUAGES.values()]
 
     @app.get("/api/jobs")
     def list_jobs() -> list[dict]:
@@ -251,12 +300,13 @@ def create_app(settings: Settings | None = None, runner=pipeline.run) -> FastAPI
     @app.get("/files/{video_id}/{name}")
     def get_file(video_id: str, name: str, download: bool = False) -> FileResponse:
         folder = folder_for(video_id)
-        if name not in FILES or not (folder / name).is_file():
+        meta = _read_meta(folder) or {}
+        info = file_info(name, meta.get("target_lang", languages.DEFAULT))
+        if info is None or not (folder / name).is_file():
             raise HTTPException(404)
-        media_type, download_name = FILES[name]
+        media_type, download_name = info
         filename = None
         if download and download_name:
-            meta = _read_meta(folder) or {}
             filename = download_name.format(title=pipeline.safe_name(meta.get("title", video_id)))
         return FileResponse(folder / name, media_type=media_type, filename=filename)
 

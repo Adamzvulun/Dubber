@@ -1,9 +1,9 @@
-"""Stage 3 — English segments to Russian.
+"""Stage 3 — speech lines (any language) to the target language (Russian by default; see languages.py).
 
 Backends share one interface (`translate_texts(list[str]) -> list[str]`):
-- GoogleBackend: free, via deep-translator. Default.
-- OfflineBackend: free, runs on this computer (Helsinki-NLP opus-mt-en-ru). Automatic fallback when Google
-  refuses (e.g. its "unusual traffic" robot check), or forced with DUBBER_TRANSLATOR=offline.
+- GoogleBackend: free, via deep-translator, source language auto-detected. Default.
+- OfflineBackend: free, runs on this computer (Helsinki-NLP opus-mt-en-ru) — English→Russian only. Automatic
+  fallback for Russian dubs when Google refuses (e.g. its "unusual traffic" robot check), or DUBBER_TRANSLATOR=offline.
 - ClaudeBackend: context-aware, keeps lines short enough to dub. Used when ANTHROPIC_API_KEY is set.
 """
 
@@ -17,6 +17,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
+from . import languages
 from .segments import Segment
 
 log = logging.getLogger(__name__)
@@ -46,11 +47,11 @@ def _chunks(texts: list[str], max_chars: int, max_items: int) -> list[list[str]]
 class GoogleBackend:
     name = "google"
 
-    def __init__(self, translate_fn: Callable[[str], str] | None = None):
+    def __init__(self, translate_fn: Callable[[str], str] | None = None, target: str = languages.DEFAULT):
         if translate_fn is None:
             from deep_translator import GoogleTranslator
 
-            translate_fn = GoogleTranslator(source="en", target="ru").translate
+            translate_fn = GoogleTranslator(source="auto", target=languages.get(target).google).translate
         self._translate = translate_fn
 
     def translate_texts(self, texts: list[str]) -> list[str]:
@@ -61,6 +62,14 @@ class GoogleBackend:
             lines = [ln.strip() for ln in self._checked(joined).split("\n")]
             if len(lines) != len(chunk):  # line structure got lost — fall back to one-by-one
                 lines = [self._checked(t).strip() for t in chunk]
+            # Google detects ONE source language per request, so in a mixed video (English with some French) a
+            # line in the other language can come back untranslated. Re-send such lines on their own. When most
+            # of the chunk is unchanged, the video is simply already in the target language: leave it.
+            unchanged = [i for i, (src, dst) in enumerate(zip(chunk, lines, strict=True))
+                         if dst.casefold() == src.strip().casefold() and any(c.isalpha() for c in src)]
+            if unchanged and len(unchanged) <= len(chunk) // 2:
+                for i in unchanged:
+                    lines[i] = self._checked(chunk[i]).strip()
             out.extend(lines)
         return out
 
@@ -160,11 +169,13 @@ class FallbackBackend:
         return self.used.translate_texts(texts)
 
 
-CLAUDE_SYSTEM_PROMPT = """You translate English video subtitles into natural spoken Russian for a voice-over.
-The listener is a Russian-speaking professional learning from this video.
+CLAUDE_SYSTEM_PROMPT = """You translate video subtitles into natural spoken {target} for a voice-over.
+The source is usually English but may be any language, or several (translate every line into {target};
+keep a line that is already in {target}).
+The listener is a {target}-speaking professional learning from this video.
 Rules:
-- Return exactly one Russian line per input line, in the same order (same count).
-- Each Russian line will be spoken in the same time slot as the English one, so keep it concise:
+- Return exactly one {target} line per input line, in the same order (same count).
+- Each translated line will be spoken in the same time slot as the original one, so keep it concise:
   prefer short, natural wording over literal translation, but never drop meaning.
 - Keep technical terms accurate; keep product names, code and acronyms as in the original.
 - Use the surrounding lines as context, but translate each line on its own row."""
@@ -173,7 +184,9 @@ Rules:
 class ClaudeBackend:
     name = "claude"
 
-    def __init__(self, model: str = "claude-opus-5-5", client=None, glossary: str = ""):
+    def __init__(
+        self, model: str = "claude-opus-5-5", client=None, glossary: str = "", target: str = languages.DEFAULT
+    ):
         if client is None:
             import anthropic
 
@@ -181,10 +194,11 @@ class ClaudeBackend:
         self._client = client
         self._model = model
         self._glossary = glossary
+        self._target = languages.get(target).name_en
 
     def _translate_chunk(self, chunk: list[str]) -> list[str]:
         numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(chunk))
-        system = CLAUDE_SYSTEM_PROMPT
+        system = CLAUDE_SYSTEM_PROMPT.format(target=self._target)
         if self._glossary:
             system += f"\nGlossary (use these translations):\n{self._glossary}"
         response = self._client.beta.messages.create(
@@ -231,14 +245,19 @@ class ClaudeBackend:
         return out
 
 
-def make_backend(choice: str = "auto", claude_model: str = "claude-opus-5-5", glossary: str = "") -> Backend:
+def make_backend(
+    choice: str = "auto", claude_model: str = "claude-opus-5-5", glossary: str = "", target: str = languages.DEFAULT
+) -> Backend:
     if choice == "claude" or (choice == "auto" and os.environ.get("ANTHROPIC_API_KEY")):
-        return ClaudeBackend(model=claude_model, glossary=glossary)
+        return ClaudeBackend(model=claude_model, glossary=glossary, target=target)
+    offline_ok = target == "ru"  # the offline model only knows English→Russian
     if choice == "offline":
+        if not offline_ok:
+            raise RuntimeError("The offline translator only translates into Russian")
         return OfflineBackend()
-    if choice == "google":
-        return GoogleBackend()
-    return FallbackBackend(GoogleBackend(), OfflineBackend)
+    if choice == "google" or not offline_ok:
+        return GoogleBackend(target=target)
+    return FallbackBackend(GoogleBackend(target=target), OfflineBackend)
 
 
 def translate_segments(segments: list[Segment], backend: Backend) -> list[Segment]:

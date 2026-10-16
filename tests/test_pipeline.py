@@ -49,9 +49,9 @@ def test_end_to_end_with_local_file(tmp_path, sample_video):
     assert kinds.count("video") == 1 and kinds.count("audio") == 2 and kinds.count("subtitle") == 1
     assert abs(float(info["format"]["duration"]) - 6.0) < 0.3
     langs = [s.get("tags", {}).get("language") for s in info["streams"] if s["codec_type"] == "audio"]
-    assert langs == ["rus", "eng"]
+    assert langs == ["rus", "und"]  # the stub transcriber reports no language
 
-    srt = result.ru_srt.read_text(encoding="utf-8")
+    srt = result.dub_srt.read_text(encoding="utf-8")
     assert "Русский 0" in srt and "Русский 1" in srt and "Русский 2" not in srt  # 3 fragments -> 2 sentences
     assert result.transcript.exists() and result.bilingual.exists()
 
@@ -194,3 +194,33 @@ def test_voice_outage_is_reported_not_silenced(tmp_path):
     lines = [Segment(i, i + 1, "en", "слово") for i in range(5)]
     with pytest.raises(RuntimeError, match="No audio"):
         tts.synthesize(lines, tmp_path, synth=down, retries=0)
+
+
+def test_dub_into_hebrew_from_french(tmp_path, sample_video, monkeypatch):
+    """Another dub language: Hebrew voice, Hebrew tags, language-coded files, meta records both languages."""
+    from dubber import transcribe
+
+    voices = []
+
+    async def synth(text, voice, out_path, rate="+0%"):
+        voices.append(voice)
+        await stub_synth(text, voice, out_path, rate)
+
+    def fake_transcribe(audio, *a, info_out=None, **k):
+        info_out.update(language="fr", languages=["fr"])
+        return [Segment(0.5, 2.0, "Bonjour à tous."), Segment(2.5, 4.0, "C'est un test.")]
+
+    monkeypatch.setattr(transcribe, "transcribe", fake_transcribe)
+    settings = Settings(work_dir=tmp_path / "work", output_dir=tmp_path / "out", target_lang="he", voice="female")
+    result = pipeline.run(str(sample_video), settings, translator=StubTranslator(), synth=synth)
+
+    assert set(voices) == {"he-IL-HilaNeural"}
+    meta = json.loads((result.folder / "meta.json").read_text(encoding="utf-8"))
+    assert meta["target_lang"] == "he" and meta["source_lang"] == "fr"
+    assert meta["files"]["dub_vtt"] == "subtitles_he.vtt" and (result.folder / "subtitles_he.vtt").exists()
+    assert "FR" in (result.folder / meta["files"]["bilingual"]).read_text(encoding="utf-8")
+    info = json.loads(subprocess.run(
+        ["ffprobe", "-v", "error", "-print_format", "json", "-show_streams", str(result.video)],
+        capture_output=True, text=True, check=True).stdout)
+    tags = [(s["codec_type"], s.get("tags", {}).get("language")) for s in info["streams"] if s["codec_type"] != "video"]
+    assert tags == [("audio", "heb"), ("audio", "fre"), ("subtitle", "heb")]
