@@ -100,3 +100,47 @@ def test_home_page_is_served(tmp_path):
     page = c.get("/")
     assert page.status_code == 200 and "Дубляж" in page.text
     assert c.get("/app.js").status_code == 200 and c.get("/styles.css").status_code == 200
+
+
+def wait_for(c, job_id, status, tries=200):
+    for _ in range(tries):
+        job = c.get(f"/api/jobs/{job_id}").json()
+        if job["status"] == status:
+            return job
+        time.sleep(0.02)
+    return job
+
+
+def test_cancel_running_and_queued_jobs(tmp_path):
+    import threading
+
+    started, release, ran = threading.Event(), threading.Event(), []
+
+    def runner(url, settings, progress):
+        ran.append(url)
+        progress("Скачиваю видео", 0.0)
+        started.set()
+        release.wait(2)
+        progress("Распознаю английскую речь", 0.3)  # first report after cancel → stops here
+        ran.append("finished " + url)
+        return SimpleNamespace(id="v")
+
+    c, _ = client(tmp_path, runner)
+    first = c.post("/api/jobs", json={"url": "https://youtu.be/a"}).json()
+    second = c.post("/api/jobs", json={"url": "https://youtu.be/b"}).json()
+    assert started.wait(2)
+
+    queued = c.post(f"/api/jobs/{second['id']}/cancel").json()
+    assert queued["status"] == "cancelled"
+    running = c.post(f"/api/jobs/{first['id']}/cancel").json()
+    assert running["status"] == "running" and running["cancel_requested"]
+    release.set()
+
+    assert wait_for(c, first["id"], "cancelled")["status"] == "cancelled"
+    time.sleep(0.1)
+    assert ran == ["https://youtu.be/a"]  # neither finished, the queued one never started
+    assert c.post(f"/api/jobs/{first['id']}/cancel").status_code == 200  # cancelling twice is harmless
+    third = c.post("/api/jobs", json={"url": "https://youtu.be/c"}).json()
+    assert wait_for(c, third["id"], "done")["status"] == "done"
+    assert c.post(f"/api/jobs/{third['id']}/cancel").status_code == 409  # finished work can't be cancelled
+    assert c.post("/api/jobs/nope/cancel").status_code == 404

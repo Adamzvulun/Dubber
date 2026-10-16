@@ -5,6 +5,7 @@ Run: `python -m dubber.app` → opens http://127.0.0.1:7860
 API
 - POST /api/jobs {url, voice: "male"|"female", background: bool} → start dubbing (one job runs at a time)
 - GET  /api/jobs, /api/jobs/{id}                                   → progress
+- POST /api/jobs/{id}/cancel                                        → stop a queued or running job
 - GET  /api/videos, /api/videos/{id}                                → library, one video + its timed transcript
 - DELETE /api/videos/{id}                                           → remove from the library
 - GET  /files/{id}/{name}[?download=1]                               → video, subtitles, transcripts, thumbnail
@@ -92,16 +93,21 @@ class Job:
     url: str
     voice: str
     background: bool
-    status: str = "queued"  # queued | running | done | error
+    status: str = "queued"  # queued | running | done | error | cancelled
     stage: str = ""
     label: str = "В очереди"
     progress: float = 0.0
     error: str = ""
     video_id: str = ""
     created: float = field(default_factory=time.time)
+    cancel_requested: bool = False
 
     def public(self) -> dict:
         return dataclasses.asdict(self)
+
+
+class JobCancelled(Exception):
+    """Raised from the progress callback to stop a job the user cancelled."""
 
 
 class JobRunner:
@@ -120,19 +126,42 @@ class JobRunner:
         self._queue.put(job)
         return job
 
+    def cancel(self, job_id: str) -> Job | None:
+        """Stop a job: a queued one never starts; a running one stops at its next progress report.
+
+        Work already done stays in work/<id>/, so starting the same video again resumes from there.
+        """
+        job = self.jobs.get(job_id)
+        if job is None or job.status not in ("queued", "running"):
+            return job
+        job.cancel_requested = True
+        if job.status == "queued":
+            job.status, job.label = "cancelled", "Отменено"
+        else:
+            job.label = "Останавливаю"
+        return job
+
     def _work(self) -> None:
         while True:
             job = self._queue.get()
+            if job.status == "cancelled":
+                continue
             job.status, job.label = "running", "Начинаю"
             settings = dataclasses.replace(self.settings, voice=VOICES[job.voice], keep_background=job.background)
 
             def progress(label: str, fraction: float, job: Job = job) -> None:
+                # Called at the start of every stage and often inside long ones (download, Whisper, TTS).
+                if job.cancel_requested:
+                    raise JobCancelled()
                 job.stage, job.label, job.progress = STAGE_KEYS.get(label, ""), label, round(fraction, 4)
 
             try:
                 result = self.runner(job.url, settings, progress=progress)
                 job.video_id, job.status, job.progress, job.label = result.id, "done", 1.0, "Готово"
             except Exception as exc:  # shown to the user in Russian
+                if job.cancel_requested:  # yt-dlp may wrap our JobCancelled in its own error
+                    job.status, job.label = "cancelled", "Отменено"
+                    continue
                 traceback.print_exc()
                 job.status, job.error = "error", friendly_error(exc)
 
@@ -186,6 +215,15 @@ def create_app(settings: Settings | None = None, runner=pipeline.run) -> FastAPI
         job = jobs.jobs.get(job_id)
         if not job:
             raise HTTPException(404)
+        return job.public()
+
+    @app.post("/api/jobs/{job_id}/cancel")
+    def cancel_job(job_id: str) -> dict:
+        job = jobs.cancel(job_id)
+        if not job:
+            raise HTTPException(404)
+        if job.status not in ("cancelled", "running"):
+            raise HTTPException(409, "Эта работа уже закончена")
         return job.public()
 
     @app.get("/api/videos")

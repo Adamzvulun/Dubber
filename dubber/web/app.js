@@ -129,6 +129,8 @@ function jobCard(job) {
       document.createTextNode(
         job.status === "done" ? "Готово" :
         job.status === "error" ? "Не получилось" :
+        job.status === "cancelled" ? "Отменено" :
+        job.cancel_requested ? "Останавливаю…" :
         job.status === "queued" ? "В очереди" : `${job.label}…`)),
     running ? el("span", { class: "job__time", text: clock(elapsed) }) : null);
 
@@ -141,11 +143,19 @@ function jobCard(job) {
         "aria-valuenow": String(Math.round(job.progress * 100)), "aria-label": "Готовность" },
         el("div", { class: "bar__fill", style: `width:${(job.progress * 100).toFixed(1)}%` })),
       steps,
-      el("p", { class: "job__note", text: "Обычно дубляж занимает примерно столько же времени, сколько длится видео. Эту страницу можно закрыть — работа продолжится." }));
+      el("p", { class: "job__note", text: "Обычно дубляж занимает примерно столько же времени, сколько длится видео. Эту страницу можно закрыть — работа продолжится." }),
+      el("div", { class: "job__actions" },
+        el("button", { class: "btn", type: "button", disabled: job.cancel_requested,
+          text: job.cancel_requested ? "Останавливаю…" : "Отменить", onclick: (e) => cancelJob(job, e.currentTarget) })));
   } else if (job.status === "done") {
     node.append(steps, el("div", { class: "job__actions" },
       el("a", { class: "btn btn--primary", href: `#/watch/${encodeURIComponent(job.video_id)}`, text: "Смотреть" }),
       el("button", { class: "btn", type: "button", text: "Скрыть", onclick: () => dismissJob(job.id) })));
+  } else if (job.status === "cancelled") {
+    node.append(el("p", { class: "job__note", text: "Дубляж остановлен. Если начать заново, уже сделанная часть работы не пропадёт." }),
+      el("div", { class: "job__actions" },
+        el("button", { class: "btn", type: "button", text: "Начать заново", onclick: () => retryJob(job) }),
+        el("button", { class: "btn", type: "button", text: "Скрыть", onclick: () => dismissJob(job.id) })));
   } else if (job.status === "error") {
     node.append(el("p", { class: "job__error", text: job.error }), el("div", { class: "job__actions" },
       el("button", { class: "btn", type: "button", text: "Попробовать снова", onclick: () => retryJob(job) }),
@@ -195,6 +205,13 @@ async function startJob(url, voice, background) {
     error.textContent = e.message; error.hidden = false;
     $("#submit").disabled = false;
   }
+}
+
+async function cancelJob(job, button) {
+  button.disabled = true;
+  button.textContent = "Останавливаю…";
+  try { await api(`/api/jobs/${job.id}/cancel`, { method: "POST" }); } catch (_) {}
+  pollJobs();
 }
 
 function retryJob(job) {
