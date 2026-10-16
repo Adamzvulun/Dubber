@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .hub import retry
 from .media import decode_audio
 from .segments import Segment
 
@@ -18,7 +19,7 @@ def transcribe(audio_wav: Path, model_size: str = "small", device: str = "auto",
     from faster_whisper import WhisperModel
 
     compute_type = "int8" if device in ("auto", "cpu") else "float16"
-    model = WhisperModel(model_size, device=device, compute_type=compute_type)
+    model = retry(lambda: WhisperModel(model_size, device=device, compute_type=compute_type))  # downloads on first use
     # Decode with our own ffmpeg call and pass samples: faster-whisper's PyAV-based file loading breaks with
     # some PyAV versions (e.g. av 19 rejects the `metadata_errors` argument faster-whisper 1.2 passes).
     samples = decode_audio(audio_wav, SAMPLE_RATE)

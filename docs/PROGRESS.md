@@ -10,6 +10,14 @@ Newest entries at the top. One entry per working session / milestone.
   failure now says to use `scripts\start_windows.bat` instead of claiming success. Not yet re-run on Windows
   (no PowerShell in the sandbox).
 
+- Second report: site started, first dub failed downloading the Whisper model from Hugging Face
+  ("CAS Client Error ... error sending request for url https://us.aws.cdn.hf.co/xorbs/...") — the new Xet downloader.
+  Fix: `HF_HUB_DISABLE_XET=1` by default (plain HTTPS; verified here: 483 MB `faster-whisper-small` downloaded),
+  model downloads retried 3× (`dubber/hub.py`), a Russian message for model-download errors.
+- The error card ran off the page (long URL in a grid item without `min-width: 0`). Fixed `.jobs` column + wrap long
+  error text; checked in Chromium at 1280 and 390 px with the raw error: no horizontal scroll.
+- 37 tests pass.
+
 ## 2026-10-16 — Session 1d: documentation handoff
 - Added `docs/STATUS.md` (start-here page for future sessions), linked from `CLAUDE.md`; fixed stale Gradio/Haiku
   references in RESEARCH/PLAN/DECISIONS/kanban; ticked M3 items already done; new card `kanban/windows-install-test.md`.

@@ -14,6 +14,9 @@ def test_friendly_errors_are_russian():
     assert "робот" in app.friendly_error(RuntimeError("Sign in to confirm you're not a bot"))
     assert "интернет" in app.friendly_error(OSError("Cannot connect to host speech.platform.bing.com"))
     assert app.friendly_error(ValueError("boom")).startswith("Что-то пошло не так")
+    hf = RuntimeError("Task error: File reconstruction error: CAS Client Error: Request middleware error: "
+                      "error sending request for url (https://us.aws.cdn.hf.co/xorbs/default/0a6b)")
+    assert "модель распознавания" in app.friendly_error(hf)
 
 
 def make_video(output: Path, vid: str, title: str) -> Path:

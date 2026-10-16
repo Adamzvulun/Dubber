@@ -63,6 +63,12 @@ def friendly_error(exc: Exception) -> str:
             "YouTube попросил подтвердить, что вы не робот. "
             "Попробуйте позже или настройте файл cookies (см. инструкцию)."
         )
+    if any(w in text for w in ("huggingface", "hf.co", "cas client", "xet")):
+        return (
+            "Не удалось скачать модель распознавания речи (она скачивается один раз, около 500 МБ). "
+            "Проверьте интернет и попробуйте снова. Если ошибка повторяется — возможно, антивирус или сеть "
+            "блокируют сайт huggingface.co."
+        )
     if "downloaderror" in text or "youtube" in text or "unsupported url" in text:
         return (
             "Не удалось скачать видео. Проверьте, что ссылка правильная и интернет работает. "

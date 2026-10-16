@@ -16,3 +16,5 @@ Steps for Adam are in `docs/STATUS.md` / `README.md`; the father's guide is `doc
 - 2026-10-16: Created at the end of session 1 — the last unverified pieces all need a real PC. (by @claude)
 - 2026-10-16: First run: packages installed OK; desktop shortcut failed (Cyrillic name became `?`). Fixed in the
   installer; waiting for Adam to re-run it and start the site. (by @claude)
+- 2026-10-16: Site runs on Windows; first dub failed downloading Whisper via Hugging Face Xet. Switched to plain
+  HTTPS + retries; waiting for Adam's next try. (by @claude)

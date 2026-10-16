@@ -63,3 +63,9 @@ Newest at the bottom. Format: context → decision → consequences.
 - **Decision:** Switch "Оригинальный звук фоном" (on by default). Off → the default audio track is only the Russian
   voice; the English original stays available as the second audio track. `DUBBER_KEEP_BACKGROUND=0` for the CLI.
 - **Consequences:** Music and effects disappear too when it is off (Demucs voice/music separation is a later option).
+
+## ADR-012 — Plain HTTPS for Hugging Face model downloads (2026-10-16)
+- **Context:** On Adam's Windows PC the first Whisper download failed inside huggingface_hub's Xet client
+  ("CAS Client Error ... error sending request"), while plain HTTPS downloads are the long-proven path.
+- **Decision:** `dubber/__init__.py` sets `HF_HUB_DISABLE_XET=1` unless the user set it; downloads retried 3×.
+- **Consequences:** Possibly slower first download; one fewer native network stack to fail on home PCs/antivirus.

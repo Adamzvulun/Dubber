@@ -93,11 +93,16 @@ class OfflineBackend:
         from huggingface_hub import hf_hub_download
         from tokenizers import Tokenizer
 
-        spec = json.loads(Path(hf_hub_download(self.REPO, "tokenizer.json")).read_text(encoding="utf-8"))
+        from .hub import retry
+
+        def fetch(filename: str) -> str:
+            return retry(lambda: hf_hub_download(self.REPO, filename))
+
+        spec = json.loads(Path(fetch("tokenizer.json")).read_text(encoding="utf-8"))
         spec["normalizer"] = None  # the export has an empty "Precompiled" normalizer the library can't load
         self._tok = Tokenizer.from_str(json.dumps(spec))
-        self._enc = ort.InferenceSession(hf_hub_download(self.REPO, "onnx/encoder_model_quantized.onnx"))
-        self._dec = ort.InferenceSession(hf_hub_download(self.REPO, "onnx/decoder_model_quantized.onnx"))
+        self._enc = ort.InferenceSession(fetch("onnx/encoder_model_quantized.onnx"))
+        self._dec = ort.InferenceSession(fetch("onnx/decoder_model_quantized.onnx"))
 
     def _translate_one(self, text: str) -> str:
         import numpy as np
