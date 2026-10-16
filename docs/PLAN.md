@@ -1,9 +1,9 @@
 # Plan & roadmap
 
-_Last updated: 2026-10-16_ — task-level tracking lives in `kanban/` (one card per task).
+_Last updated: 2026-10-16_ — current state at a glance: `docs/STATUS.md`. Task cards: `kanban/`.
 
 ## Goal
-A Russian-speaking, non-technical user pastes a YouTube link into a local web page and gets:
+A Russian-speaking professional (not a developer) pastes a YouTube link into a local web page and gets:
 1. the video dubbed into Russian (MP4),
 2. Russian subtitles (SRT, also embedded in the MP4),
 3. a Russian transcript (plus a bilingual EN/RU one for learning).
@@ -32,11 +32,11 @@ A Russian-speaking, non-technical user pastes a YouTube link into a local web pa
 - [ ] real run with Google translation (needs a non-datacenter connection — first run on father's PC)
 
 ### M2 — Russian web UI + installers
-- [x] Gradio app in Russian: link → progress → player + downloads + previous videos
+- [x] ~~Gradio app in Russian~~ (first version; replaced by the custom website in M2.5)
 - [x] Windows `install_windows.bat` / `start_windows.bat` (+ desktop shortcut); Linux/macOS `install.sh` / `start.sh`
 - [ ] Test the Windows installer on a real Windows PC
 - [x] `docs/README.ru.md` user guide for the father
-- [x] UI checked in Chromium with Playwright (desktop + phone width; stubbed pipeline) → `docs/images/ui-start.png`
+- [x] UI checked in Chromium with Playwright (desktop + phone width) → now `docs/images/site-home-*.png`
 
 ### M2.5 — Professional website (Adam's request)
 - [x] Design research + design system → `docs/DESIGN.md`
@@ -46,14 +46,15 @@ A Russian-speaking, non-technical user pastes a YouTube link into a local web pa
 - [x] Option: dub without the original sound in the background
 - [x] Light + dark mode, phone layout; verified in Chromium (incl. real playback with a VP9 copy)
 - [ ] Verify H.264 playback in Chrome/Edge on a real PC
+- [ ] Optional: PR `claude/bold-davinci-qfv627` → `main` (so "Download ZIP" works without picking a branch)
 
 ### M3 — Quality
-- [ ] Smarter timing: merge short segments into sentences before translating
+- [x] Smarter timing: merge short segments into sentences before translating (`segments.merge_into_sentences`)
 - [ ] Glossary of domain terms (his work field) passed to the translator
 - [x] Voice choice (male/female) in the UI
 - [ ] Voice speed in the UI
 - [ ] Optional Demucs: keep background music, remove English voice
-- [ ] Translation prompt asks for "dub-length" Russian when using Claude
+- [x] Translation prompt asks for "dub-length" Russian when using Claude (`translate.CLAUDE_SYSTEM_PROMPT`)
 
 ### M4 — Nice to have
 - [ ] Queue of several links / playlists
@@ -63,6 +64,5 @@ A Russian-speaking, non-technical user pastes a YouTube link into a local web pa
 
 ## Open questions
 - What is the father's work field? (for the glossary)
-- Offline translations are understandable but clumsy; worth paying for Claude translation (~$0.05–0.20/video)?
-- Do we want a paid Claude key for better translation, or stay on free Google Translate?
+- Translation quality: stay on free Google (offline fallback is clumsy) or add a Claude key (~$0.05–0.20 per 10-min video)?
 - Which OS does his PC run? (Windows assumed)

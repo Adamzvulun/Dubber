@@ -4,7 +4,7 @@ Newest at the bottom. Format: context → decision → consequences.
 
 ## ADR-001 — Run locally on the user's PC (2026-10-16)
 - **Context:** YouTube blocks many datacenter IPs; hosting costs money; the user is one person.
-- **Decision:** Local app, opened in the browser (Gradio on `127.0.0.1:7860`), one-click Windows launchers.
+- **Decision:** Local app, opened in the browser on `127.0.0.1:7860` (first Gradio, now a custom FastAPI site — ADR-010), one-click Windows launchers.
 - **Consequences:** No server to maintain. CPU-only speed must be acceptable → default Whisper `small` int8.
 
 ## ADR-002 — Free-first stack (2026-10-16)

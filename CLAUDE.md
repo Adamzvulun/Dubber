@@ -1,5 +1,7 @@
 # CLAUDE.md — working rules for Dubber
 
+> **Start here: [`docs/STATUS.md`](docs/STATUS.md)** — current state, what's verified, next steps, and sandbox gotchas.
+
 Dubber turns an English YouTube video into a **Russian-dubbed** MP4 + Russian subtitles + transcript.
 End user: a Russian-speaking professional (not a developer) who learns from English videos, running it on his own PC
 (Windows likely). The website must look like a modern, professional product — see `docs/DESIGN.md`.
@@ -28,10 +30,16 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 - `dubber/` — pipeline stages (`download`, `transcribe`, `translate`, `tts`, `align`, `mux`, `subtitles`), orchestrated by `pipeline.py`; `cli.py`; `app.py` (FastAPI server + JSON API).
 - `dubber/web/` — the website front-end (plain HTML/CSS/JS, no build step): `index.html`, `styles.css`, `app.js`.
 - `tests/` — unit tests per stage; network stages are mocked.
-- `docs/` — PLAN, RESEARCH, DECISIONS, DESIGN, PROGRESS, SKILLS, README.ru.
+- `docs/` — STATUS (start here), PLAN, RESEARCH, DECISIONS, DESIGN, PROGRESS, SKILLS, README.ru.
 - `kanban/` — task cards (see `kanban-ai` skill).
 - `work/<id>/` — per-video cache (git-ignored). `output/<id>/` — finished video + subtitles + transcripts + `meta.json`
   + `thumbnail.jpg` + `segments.json`; the website library reads this folder (git-ignored).
+
+## Gotchas (details in docs/STATUS.md)
+- Cloud sandbox: YouTube and Google Translate block datacenter IPs (use fresh cookies via `DUBBER_COOKIES`, kept
+  outside the repo; translation falls back to the offline model). Headless Chromium can't play H.264.
+- Never commit cookies, `work/`, `output/`, or frames/dubs of third-party videos.
+- `pkill -f dubber.app` kills your own shell — kill by PID (see STATUS).
 
 ## Git
 Develop on the branch given in the session; commit with clear messages; push with `git push -u origin <branch>`.

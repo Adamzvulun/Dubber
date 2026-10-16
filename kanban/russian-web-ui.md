@@ -6,7 +6,7 @@ blocked_by: [2]
 tags: [m2, ui]
 ---
 
-# Russian web UI (Gradio) + one-click installers
+# Russian website + one-click installers
 
 Paste link, see progress, watch result, download MP4/SRT/TXT. Windows .bat launchers. Russian user guide.
 

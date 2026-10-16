@@ -7,6 +7,7 @@ description: Checklist for keeping Dubber's project documentation current. Use a
 
 The repository is the project's memory. Before committing, walk this list:
 
+0. **`docs/STATUS.md`** — the handoff page: keep "what works / not verified / next steps / gotchas" true.
 1. **`docs/PROGRESS.md`** — add/extend today's entry at the top: what was done, what was learned, what's blocked.
 2. **`docs/PLAN.md`** — tick finished items, add newly discovered work, update "Open questions" and the date.
 3. **`kanban/`** — move cards (`status:`), append a `## Narrative` note with the *why* (see `kanban-ai` skill).

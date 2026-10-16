@@ -32,11 +32,12 @@ Conclusion: build a small, focused, well-tested tool from the same proven buildi
 |---|---|---|
 | Download | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | De-facto standard. YouTube often blocks **datacenter IPs** — fine on a home PC. Keep yt-dlp updated (`pip install -U yt-dlp`). |
 | Speech→text | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | CTranslate2 Whisper, ~4× faster than openai-whisper, int8 on CPU. Model `small` is a good CPU default; `medium`/`large-v3` with GPU. |
-| Translation | [Claude API](https://docs.anthropic.com) (Haiku) — optional; [deep-translator](https://github.com/nidhaloff/deep-translator) Google backend — free default | LLM translation keeps context across segments and can keep sentences short enough to dub. |
+| Translation | [deep-translator](https://github.com/nidhaloff/deep-translator) Google backend — free default; [Claude API](https://docs.anthropic.com) (`claude-opus-5-5`, opt-in with a key) | LLM translation keeps context across segments and keeps sentences short enough to dub. |
+| Offline translation | [Helsinki-NLP opus-mt-en-ru](https://huggingface.co/Helsinki-NLP/opus-mt-en-ru) via [Xenova ONNX export](https://huggingface.co/Xenova/opus-mt-en-ru) + onnxruntime | Automatic fallback when Google refuses. ~110 MB, no PyTorch. Literal quality; translate one sentence at a time. |
 | Russian TTS | [edge-tts](https://github.com/rany2/edge-tts) | Free Microsoft neural voices: `ru-RU-DmitryNeural` (male), `ru-RU-SvetlanaNeural` (female). Needs internet. |
 | Timing | ffmpeg `atempo` | Russian is ~10–20% longer than English; speed clips up (capped) to fit segment slots. |
 | Mixing/mux | [ffmpeg](https://ffmpeg.org) | Duck original audio, overlay Russian, embed soft subtitles (`mov_text`). |
-| UI | [Gradio](https://gradio.app) | Local web page, built-in progress bar, video player, file downloads. |
+| UI | [FastAPI](https://fastapi.tiangolo.com) + hand-built HTML/CSS/JS (`dubber/web/`) | Local website. Gradio was used first and replaced (ADR-010). Design: `docs/DESIGN.md`. |
 
 ## Alternatives kept for later
 - **ElevenLabs Dubbing API** — best quality, keeps the speaker's own voice; ~$1+/min. (M4)

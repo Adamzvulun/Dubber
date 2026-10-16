@@ -2,6 +2,11 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-16 — Session 1d: documentation handoff
+- Added `docs/STATUS.md` (start-here page for future sessions), linked from `CLAUDE.md`; fixed stale Gradio/Haiku
+  references in RESEARCH/PLAN/DECISIONS/kanban; ticked M3 items already done; new card `kanban/windows-install-test.md`.
+- Explained to Adam how to install on his PC (branch `claude/bold-davinci-qfv627`, `scripts/install_windows.bat`).
+
 ## 2026-10-16 — Session 1c: professional website
 - Adam: the father is a professional, not elderly → modern product look. Researched design guidance and dubbing
   products; wrote `docs/DESIGN.md` (tokens, Onest + Unbounded fonts, cobalt accent, red "live" lamp, dark mode).
