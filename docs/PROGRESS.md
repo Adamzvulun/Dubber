@@ -2,6 +2,14 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-16 — Session 1e: first Windows install
+- Adam ran `install_windows.bat` on his PC: Python packages installed fine, but the desktop shortcut failed
+  ("Unable to save shortcut ...\?????? ?????.lnk"), and the script still printed "Готово!".
+- Cause: Windows PowerShell receives non-ASCII command-line text as `?`, and `?` is not allowed in file names.
+  Fix: the name is built from char codes inside PowerShell, the folder path is passed through an env var, and a
+  failure now says to use `scripts\start_windows.bat` instead of claiming success. Not yet re-run on Windows
+  (no PowerShell in the sandbox).
+
 ## 2026-10-16 — Session 1d: documentation handoff
 - Added `docs/STATUS.md` (start-here page for future sessions), linked from `CLAUDE.md`; fixed stale Gradio/Haiku
   references in RESEARCH/PLAN/DECISIONS/kanban; ticked M3 items already done; new card `kanban/windows-install-test.md`.
