@@ -68,9 +68,9 @@ def file_info(name: str, target: str) -> tuple[str, str | None] | None:
         legacy_original = lang == "en" and target == "ru"  # old videos: subtitles_en = the English original
         label = "original" if lang == "src" or legacy_original else lang.upper()
         return "application/x-subrip", f"{{title}} ({label}).srt"
-    if m := _TRANSCRIPT.match(name):
+    if m := _TRANSCRIPT.match(name):  # same "(…)" pattern as the video and subtitles
         bilingual, lang = m.groups()
-        return _TEXT, (f"{{title}} — original + {lang.upper()}.txt" if bilingual else f"{{title}} — {lang.upper()}.txt")
+        return _TEXT, (f"{{title}} (original + {lang.upper()}).txt" if bilingual else f"{{title}} ({lang.upper()}).txt")
     return None
 
 
@@ -109,6 +109,11 @@ _ERRORS: list[tuple[Callable[[str], bool], str, str]] = [
      "Нет связи с интернет-сервисом перевода или озвучки. Проверьте интернет и попробуйте снова.",
      "Can't reach the translation or voice service. Check your internet and try again."),
 ]
+
+
+def _detail(ru: str, en: str) -> dict:
+    """HTTP error detail in both interface languages (the website picks one)."""
+    return {"ru": ru, "en": en}
 
 
 def friendly_error(exc: Exception, lang: str = "ru") -> str:
@@ -244,11 +249,12 @@ def create_app(settings: Settings | None = None, runner=pipeline.run) -> FastAPI
     def start_job(req: JobRequest) -> dict:
         url = req.url.strip()
         if not is_url(url):
-            raise HTTPException(422, "Вставьте ссылку на видео — она начинается с https://")
+            raise HTTPException(422, _detail("Вставьте ссылку на видео — она начинается с https://",
+                                             "Paste a video link — it starts with https://"))
         if req.voice not in ("male", "female"):
-            raise HTTPException(422, "Неизвестный голос")
+            raise HTTPException(422, _detail("Неизвестный голос", "Unknown voice"))
         if req.lang not in languages.LANGUAGES:
-            raise HTTPException(422, "Неизвестный язык")
+            raise HTTPException(422, _detail("Неизвестный язык", "Unknown language"))
         return jobs.submit(url, req.voice, req.background, req.lang).public()
 
     @app.get("/api/languages")
@@ -272,7 +278,7 @@ def create_app(settings: Settings | None = None, runner=pipeline.run) -> FastAPI
         if not job:
             raise HTTPException(404)
         if job.status not in ("cancelled", "running"):
-            raise HTTPException(409, "Эта работа уже закончена")
+            raise HTTPException(409, _detail("Эта работа уже закончена", "This job has already finished"))
         return job.public()
 
     @app.get("/api/videos")

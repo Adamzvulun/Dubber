@@ -19,7 +19,14 @@ class VideoInfo:
 
 
 def is_url(source: str) -> bool:
-    return bool(re.match(r"^https?://", source.strip(), re.IGNORECASE))
+    """A web address worth trying: http(s), a host with a dot (or localhost) and no spaces."""
+    from urllib.parse import urlparse
+
+    source = source.strip()
+    if not re.match(r"^https?://", source, re.IGNORECASE) or re.search(r"\s", source):
+        return False
+    host = urlparse(source).hostname or ""
+    return host == "localhost" or bool(re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)+", host, re.IGNORECASE))
 
 
 def local_video_id(path: Path) -> str:

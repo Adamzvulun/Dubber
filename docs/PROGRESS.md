@@ -2,6 +2,25 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-16 — Session 1i: cancel, any language, RU/EN interface, agent QA
+- Adam: dubbing "works great"; asked for a cancel button, any-language dubbing (his video had French in it), and an
+  agent QA pass over the UX/UI with a QA skill.
+- Cancel (ADR-015): queued jobs never start, running ones stop at the next progress report; cache kept → resume.
+- Languages (ADR-014): measured that Whisper forced to English **dropped a French passage**, and auto-detect dropped
+  the English intro. Now: language per stretch of speech, each run transcribed in its own language — verified on a
+  real mixed EN/FR clip (all 11 sentences, correct languages). 12 dub languages with male/female Edge voices;
+  Google auto-source; offline fallback en→ru only. Real full run EN/FR → Hebrew (Hebrew text supplied by hand because
+  Google is blocked in the sandbox): Hila voice, pace 1.09×, all lines on time, tags heb/mul/heb.
+- RU/EN interface (`dubber/web/i18n.js`), dub-language select, RTL transcript, bilingual server errors.
+- QA skill: vendored Vercel `web-design-guidelines` (+ existing `webapp-testing`). Two agents: a guideline audit and a
+  hands-on Playwright tester (107 screenshots, RU/EN, light/dark, 360–1280 px). Fixed: focus lost every second on job
+  cards (cards now patched in place, live region for stage changes), skip link navigating to home, double submit,
+  "Failed to fetch" raw errors, RU-only API errors, loose URL check, focus ring radius/contrast, switch contrast,
+  invisible dark chevron, 360 px select/header overflow, job order (running first, compact queued cards), orphaned
+  Delete button, download labels, ragged RTL transcript, step badge alignment, transcript = one tab stop with arrows,
+  route focus, missing-page title, copy fixes (ё, EN wording). Not changed: native confirm() for delete.
+- 62 tests pass.
+
 ## 2026-10-16 — Session 1h: "No audio was received" fix
 - Adam's re-dub on his PC failed: edge-tts `NoAudioReceived`. (He also asked about hosting the site publicly on
   Vercel/Railway — explained Vercel can't run it and Railway would need paid hosting + YouTube cookies; he dropped it.)

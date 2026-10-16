@@ -5,6 +5,8 @@ from dubber.download import base_opts, is_url
 
 def test_is_url():
     assert is_url("https://youtu.be/x") and not is_url("C:/videos/a.mp4")
+    assert not is_url("https://exa mple") and not is_url("https://nodot") and not is_url("https://")
+    assert is_url(" https://www.youtube.com/watch?v=E5hJF0QRPnA&pp=ugUEEgJlbg%3D%3D ")
 
 
 def test_cookies_option(tmp_path, monkeypatch):

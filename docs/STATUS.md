@@ -1,22 +1,23 @@
 # Status — read this first
 
-_Last updated: 2026-10-16 (end of session 1). Update this page at the end of every session._
+_Last updated: 2026-10-16 (session 1i: languages, cancel, RU/EN UI, QA). Update this page at the end of every session._
 
 ## In one paragraph
-Dubber is a local website (FastAPI + hand-built front-end) that turns an English YouTube video into a Russian-dubbed
-MP4 with Russian subtitles and transcripts. It is built for Adam's father, a Russian-speaking professional who learns
-from English videos. The full pipeline works and has been run for real on two TED-Ed videos (CLI and through the
-website). The next milestone is the first install on a real Windows PC.
+Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video in any spoken language (also
+mixed, e.g. English + French) into a dubbed MP4 in one of 12 languages (Russian by default) with subtitles and
+transcripts. It is built for Adam's father, a Russian-speaking professional who learns from foreign videos. It runs on
+Adam's Windows PC; Adam reports the dub timing "works great". The UI has a RU/EN switch and a cancel button.
 
 ## Where things are
-- **Branch:** all work is on `claude/bold-davinci-qfv627` (pushed). **Not merged to `main` yet** — Adam may want a PR
-  so "Download ZIP" on the repo page just works.
-- **Code:** `dubber/` (pipeline stages + `app.py` server), `dubber/web/` (site), `tests/` (34 tests, offline),
+- **Branch:** current work is on `claude/inspiring-davinci-4qon8o` (pushed; builds on `claude/bold-davinci-qfv627`).
+  **Not merged to `main` yet** — Adam may want a PR so "Download ZIP" on the repo page just works.
+- **Code:** `dubber/` (pipeline stages + `app.py` server), `dubber/web/` (site), `tests/` (62 tests, offline),
   `scripts/` (installers/launchers). Architecture and conventions: `CLAUDE.md`.
-- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history), `DECISIONS.md` (ADRs 001–013), `DESIGN.md` (site design system),
+- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history), `DECISIONS.md` (ADRs 001–015), `DESIGN.md` (site design system),
   `RESEARCH.md` (tools + real-world findings), `SKILLS.md` (installed Claude skills), `README.ru.md` (father's guide).
-- **Data on a user's PC:** `work/<id>/` = cache per video (`source.mp4`, `info.json`, `segments_en/ru_v2.json`,
-  `clips_<voice>/`, `russian_track_v3_<voice>.wav`, `timing_v3_<voice>.json`); `output/<id>/` = what the library shows (`dubbed.mp4`, `meta.json`,
+- **Data on a user's PC:** `work/<id>/` = cache per video (`source.mp4`, `info.json`, `segments_en_v2.json` (original, any
+  language), `speech_info.json`, `segments_<lang>_v2.json`, `clips_<voice>/`, `dub_track_v3_<voice>.wav`,
+  `timing_v3_<voice>.json`); `output/<id>/` = what the library shows (`dubbed.mp4`, `meta.json`,
   `thumbnail.jpg`, `segments.json`, `timing.json`, `subtitles_*.srt/.vtt`, `transcript_*.txt`). Both are git-ignored.
 
 ## What works (verified by running it)

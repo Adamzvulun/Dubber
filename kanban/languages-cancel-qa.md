@@ -1,6 +1,6 @@
 ---
 id: 9
-status: doing
+status: done
 priority: High
 blocked_by: []
 tags: [m6, languages, i18n, cancel, qa]
@@ -16,3 +16,5 @@ languages too; find a QA skill and let an agent go over the whole UX/UI. Plan: `
   languages, language-coded outputs, RU/EN interface done; verified with a real mixed EN/FR clip dubbed into Hebrew
   (Google blocked in the sandbox → Hebrew text supplied by hand for that run). Installed `web-design-guidelines`;
   two QA agents running. (by @claude)
+- 2026-10-16: QA agents reported ~40 findings; all real ones fixed and re-verified in Chromium (focus, skip link,
+  360 px, dark mode, transcript keys, job order). Remaining: real non-Russian dub on Adam's PC (Google). (by @claude)

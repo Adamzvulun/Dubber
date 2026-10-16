@@ -8,14 +8,27 @@ const STEP_KEYS = ["download", "transcribe", "translate", "tts", "align", "mux"]
 const RU_VOICE_NAMES = { "ru-RU-DmitryNeural": "Дмитрий", "ru-RU-SvetlanaNeural": "Светлана" };
 const FALLBACK_LANGS = [{ code: "ru", name_ru: "Русский", name_en: "Russian", native: "Русский", rtl: false }];
 
-const state = { jobs: new Map(), pollTimer: null, videos: [], seenDone: new Set(), languages: FALLBACK_LANGS, video: null };
+const state = {
+  jobs: new Map(), pollTimer: null, videos: [], seenDone: new Set(), languages: FALLBACK_LANGS, video: null,
+  submitting: false, dubLang: "ru", firstRoute: true,
+};
+const jobNodes = new Map(); // job id → { node, sig }: cards are patched in place so focus survives polling
 
 /* ---------- helpers ---------- */
 async function api(path, options = {}) {
-  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+  let res;
+  try {
+    res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+  } catch (_) {
+    throw new Error(t("server.down")); // the program window was closed, or the network is down
+  }
   if (!res.ok) {
-    let message = t("server.down");
-    try { const body = await res.json(); if (typeof body.detail === "string") message = body.detail; } catch (_) {}
+    let message = res.status === 404 ? t("server.notFound") : t("server.down");
+    try {
+      const { detail } = await res.json();
+      // Our errors come as {ru, en}; FastAPI's own (404 "Not Found", 422 lists) are replaced by ours above.
+      if (detail && typeof detail === "object" && !Array.isArray(detail)) message = detail[uiLang] || detail.ru || message;
+    } catch (_) {}
     throw new Error(message);
   }
   return res.json();
@@ -64,6 +77,13 @@ function voiceName(voice) {
   return m ? m[1] : voice;
 }
 
+/** A web address worth sending: http(s), a host with a dot, no spaces (the server checks the same). */
+function looksLikeUrl(text) {
+  if (!/^https?:\/\//i.test(text) || /\s/.test(text)) return false;
+  try { const host = new URL(text).hostname; return host === "localhost" || /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(host); }
+  catch (_) { return false; }
+}
+
 /* ---------- router ---------- */
 function route() {
   const hash = location.hash || "#/";
@@ -72,6 +92,8 @@ function route() {
   document.querySelectorAll("[data-nav]").forEach((a) => a.removeAttribute("aria-current"));
   stopPlayer();
   state.video = null;
+  if (!state.firstRoute) $("#main").focus({ preventScroll: true }); // keyboard/screen-reader users land on the new page
+  state.firstRoute = false;
 
   if (page === "library") {
     $("#view-library").hidden = false;
@@ -80,6 +102,7 @@ function route() {
     loadLibrary();
   } else if (page === "watch" && id) {
     $("#view-watch").hidden = false;
+    $('[data-nav="library"]').setAttribute("aria-current", "page");
     showVideo(decodeURIComponent(id));
   } else {
     $("#view-home").hidden = false;
@@ -94,7 +117,7 @@ function route() {
 function card(video) {
   const node = $("#tpl-card").content.firstElementChild.cloneNode(true);
   node.href = `#/watch/${encodeURIComponent(video.id)}`;
-  $("img", node).src = video.thumbnail;
+  if (video.thumbnail) $("img", node).src = video.thumbnail;
   $(".card__duration", node).textContent = clock(video.duration);
   $(".card__title", node).textContent = video.title;
   $(".card__meta", node).textContent = [video.channel, langName(video.target_lang), dateLabel(video.created)]
@@ -133,9 +156,14 @@ function jobStatusText(job) {
   return `${job.stage ? t(`stage.${job.stage}`) : t("job.starting")}…`;
 }
 
+function jobSignature(job) {
+  return [job.status, job.cancel_requested, job.stage, uiLang].join("|");
+}
+
 function jobCard(job) {
   const activeIndex = STEP_KEYS.indexOf(job.stage);
   const running = job.status === "running" || job.status === "queued";
+  const started = job.status === "running";
   const steps = el("ol", { class: "steps" }, ...t("steps").map((label, i) => {
     let cls = "";
     if (job.status === "done" || (running && activeIndex > i)) cls = "is-done";
@@ -148,36 +176,46 @@ function jobCard(job) {
     el("span", { class: "job__status" },
       running ? el("span", { class: job.status === "queued" ? "lamp lamp--idle" : "lamp", "aria-hidden": "true" }) : null,
       document.createTextNode(jobStatusText(job))),
-    running ? el("span", { class: "job__time", text: clock(elapsed) }) : null);
+    started ? el("span", { class: "job__time", text: clock(elapsed) }) : null);
 
   const node = el("article", { class: `job job--${job.status}`, "data-job": job.id },
     head, el("p", { class: "job__url", text: `${t("job.into", langName(job.lang || "ru"))} · ${job.url}` }));
 
-  const hide = () => el("button", { class: "btn", type: "button", text: t("btn.hide"), onclick: () => dismissJob(job.id) });
-  if (running) {
+  const hide = () => el("button", { class: "btn", type: "button", "data-action": "hide", text: t("btn.hide"), onclick: () => dismissJob(job.id) });
+  const cancel = () => el("button", { class: "btn", type: "button", "data-action": "cancel", disabled: job.cancel_requested,
+    text: job.cancel_requested ? t("job.stopping") : t("btn.cancel"), onclick: (e) => cancelJob(job, e.currentTarget) });
+  if (started) {
     node.append(
       el("div", { class: "bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100",
         "aria-valuenow": String(Math.round(job.progress * 100)), "aria-label": t("job.progress") },
         el("div", { class: "bar__fill", style: `width:${(job.progress * 100).toFixed(1)}%` })),
       steps,
       el("p", { class: "job__note", text: t("job.note") }),
-      el("div", { class: "job__actions" },
-        el("button", { class: "btn", type: "button", disabled: job.cancel_requested,
-          text: job.cancel_requested ? t("job.stopping") : t("btn.cancel"), onclick: (e) => cancelJob(job, e.currentTarget) })));
+      el("div", { class: "job__actions" }, cancel()));
+  } else if (job.status === "queued") { // compact: waits for the running job
+    node.append(el("div", { class: "job__actions" }, cancel()));
   } else if (job.status === "done") {
     node.append(steps, el("div", { class: "job__actions" },
-      el("a", { class: "btn btn--primary", href: `#/watch/${encodeURIComponent(job.video_id)}`, text: t("btn.watch") }),
+      el("a", { class: "btn btn--primary", "data-action": "watch", href: `#/watch/${encodeURIComponent(job.video_id)}`, text: t("btn.watch") }),
       hide()));
   } else if (job.status === "cancelled") {
     node.append(el("p", { class: "job__note", text: t("job.cancelledNote") }),
       el("div", { class: "job__actions" },
-        el("button", { class: "btn", type: "button", text: t("btn.restart"), onclick: () => retryJob(job) }), hide()));
+        el("button", { class: "btn", type: "button", "data-action": "retry", text: t("btn.restart"), onclick: () => retryJob(job) }), hide()));
   } else if (job.status === "error") {
     const message = uiLang === "en" ? (job.error_en || job.error) : job.error;
     node.append(el("p", { class: "job__error", text: message }), el("div", { class: "job__actions" },
-      el("button", { class: "btn", type: "button", text: t("btn.retry"), onclick: () => retryJob(job) }), hide()));
+      el("button", { class: "btn", type: "button", "data-action": "retry", text: t("btn.retry"), onclick: () => retryJob(job) }), hide()));
   }
   return node;
+}
+
+/** Progress and elapsed time change every second: patch them without rebuilding the card. */
+function updateJobCard(node, job) {
+  const fill = $(".bar__fill", node), bar = $(".bar", node), time = $(".job__time", node);
+  if (fill) fill.style.width = `${(job.progress * 100).toFixed(1)}%`;
+  if (bar) bar.setAttribute("aria-valuenow", String(Math.round(job.progress * 100)));
+  if (time) time.textContent = clock((Date.now() / 1000) - job.created);
 }
 
 function hiddenJobs() {
@@ -189,10 +227,44 @@ function dismissJob(id) {
   renderJobs();
 }
 
+const JOB_ORDER = { running: 0, queued: 1 };
+
+/** Forget hidden-job ids the server no longer knows (keeps localStorage small). */
+function pruneHiddenJobs() {
+  const hidden = hiddenJobs(), kept = [...hidden].filter((id) => state.jobs.has(id));
+  if (kept.length === hidden.size) return;
+  try { localStorage.setItem("dubber.hiddenJobs", JSON.stringify(kept)); } catch (_) {}
+}
+
 function renderJobs() {
-  const hidden = hiddenJobs();
-  const visible = [...state.jobs.values()].filter((j) => !hidden.has(j.id)).sort((a, b) => b.created - a.created);
-  $("#jobs").replaceChildren(...visible.map(jobCard));
+  const hidden = hiddenJobs(), container = $("#jobs");
+  // The running job first, then the queue in the order it will run, then finished jobs (newest first).
+  const visible = [...state.jobs.values()].filter((j) => !hidden.has(j.id)).sort((a, b) =>
+    (JOB_ORDER[a.status] ?? 2) - (JOB_ORDER[b.status] ?? 2) || (a.status === "queued" ? a.created - b.created : b.created - a.created));
+
+  const focused = container.contains(document.activeElement) ? document.activeElement : null;
+  const focusJob = focused?.closest("[data-job]")?.dataset.job, focusAction = focused?.dataset.action;
+  let announce = "";
+  const nodes = visible.map((job) => {
+    let entry = jobNodes.get(job.id);
+    const sig = jobSignature(job);
+    if (!entry || entry.sig !== sig) {
+      if (entry) announce = jobStatusText(job); // a stage or status changed: tell screen readers once
+      entry = { node: jobCard(job), sig };
+      jobNodes.set(job.id, entry);
+    } else {
+      updateJobCard(entry.node, job);
+    }
+    return entry.node;
+  });
+  for (const id of [...jobNodes.keys()]) if (!state.jobs.has(id) || hidden.has(id)) jobNodes.delete(id);
+  const same = nodes.length === container.children.length && nodes.every((n, i) => container.children[i] === n);
+  if (!same) container.replaceChildren(...nodes);
+  if (focusJob && !container.contains(document.activeElement)) {
+    const card = container.querySelector(`[data-job="${focusJob}"]`);
+    (card?.querySelector(`[data-action="${focusAction}"]`) || card?.querySelector("button, a"))?.focus();
+  }
+  if (announce) $("#jobs-status").textContent = announce;
 }
 
 async function pollJobs() {
@@ -200,26 +272,36 @@ async function pollJobs() {
   let jobs = [];
   try { jobs = await api("/api/jobs"); } catch (_) {}
   state.jobs = new Map(jobs.map((j) => [j.id, j]));
+  pruneHiddenJobs();
   renderJobs();
   for (const j of jobs) {
     if (j.status === "done" && !state.seenDone.has(j.id)) { state.seenDone.add(j.id); loadLibrary(); }
   }
   const active = jobs.some((j) => j.status === "running" || j.status === "queued");
-  $("#submit").disabled = false;
   state.pollTimer = setTimeout(pollJobs, active ? 1000 : 5000);
 }
 
+function showFormError(message) {
+  const error = $("#form-error"), url = $("#url");
+  if (message) { error.hidden = false; error.textContent = message; url.setAttribute("aria-invalid", "true"); }
+  else { error.hidden = true; error.textContent = ""; url.removeAttribute("aria-invalid"); }
+}
+
 async function startJob(url, voice, background, lang) {
-  const error = $("#form-error");
-  error.hidden = true;
-  $("#submit").disabled = true;
+  if (state.submitting) return; // no double submits while the request is on its way
+  state.submitting = true;
+  const submit = $("#submit");
+  showFormError("");
+  submit.disabled = true; submit.textContent = t("form.sending");
   try {
     await api("/api/jobs", { method: "POST", body: JSON.stringify({ url, voice, background, lang }) });
     $("#url").value = "";
     pollJobs();
   } catch (e) {
-    error.textContent = e.message; error.hidden = false;
-    $("#submit").disabled = false;
+    showFormError(e.message);
+  } finally {
+    state.submitting = false;
+    submit.disabled = false; submit.textContent = t("form.submit");
   }
 }
 
@@ -247,7 +329,7 @@ function stopPlayer() {
 async function showVideo(id) {
   let video;
   try { video = await api(`/api/videos/${encodeURIComponent(id)}`); } catch (_) {
-    $("#view-watch").hidden = true; $("#view-missing").hidden = false; return;
+    $("#view-watch").hidden = true; $("#view-missing").hidden = false; document.title = t("missing.title"); return;
   }
   state.video = video;
   const player = $("#player"), files = video.files || {}, src = (name) => `/files/${video.id}/${name}`;
@@ -283,9 +365,8 @@ function renderWatchDetails() {
     link(files.dub_srt, t("btn.srt")),
     link(files.transcript, t("btn.text")),
     link(files.bilingual, t("btn.bilingual")),
-    el("span", { class: "spacer" }),
-    el("button", { class: "btn btn--danger", type: "button", text: t("btn.delete"), onclick: () => deleteVideo(video) }),
   ].filter(Boolean));
+  $("#delete-video").onclick = () => deleteVideo(video);
 
   renderTranscript(video);
 }
@@ -294,10 +375,20 @@ function renderTranscript(video) {
   const segments = video.segments || [], list = $("#transcript"), player = $("#player");
   if (syncHandler) { player.removeEventListener("timeupdate", syncHandler); syncHandler = null; }
   const target = language(video.target_lang);
+  // One tab stop for the whole list (roving tabindex); arrow keys move between lines, Enter/Space plays from a line.
+  const move = (from, to) => {
+    const next = lines[Math.max(0, Math.min(lines.length - 1, to))];
+    if (!next || next === lines[from]) return;
+    lines[from].tabIndex = -1; next.tabIndex = 0; next.focus();
+  };
+  const keys = { ArrowDown: (i) => i + 1, ArrowUp: (i) => i - 1, Home: () => 0, End: () => lines.length - 1 };
   const lines = segments.map((seg, i) => el("li", {
-    class: "line", tabindex: "0", "data-i": String(i),
+    class: target?.rtl ? "line line--rtl" : "line", tabindex: i === 0 ? "0" : "-1", "data-i": String(i),
     onclick: () => { player.currentTime = seg.start + 0.01; player.play(); },
-    onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } },
+    onkeydown: (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
+      else if (keys[e.key]) { e.preventDefault(); move(i, keys[e.key](i)); }
+    },
   },
   el("span", { class: "line__time", text: clock(seg.start) }),
   el("span", {},
@@ -312,10 +403,12 @@ function renderTranscript(video) {
     const i = segments.findIndex((s, k) => time >= s.start && time < (segments[k + 1]?.start ?? Infinity));
     if (i === current) return;
     lines[current]?.classList.remove("is-current");
+    lines[current]?.removeAttribute("aria-current");
     current = i;
     const line = lines[i];
     if (!line) return;
     line.classList.add("is-current");
+    line.setAttribute("aria-current", "true");
     // Scroll inside the panel only, never the page.
     const top = line.offsetTop - list.offsetTop - list.clientHeight / 3;
     list.scrollTo({ top, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
@@ -332,13 +425,11 @@ async function deleteVideo(video) {
 /* ---------- languages ---------- */
 function fillLanguageSelect() {
   const select = $("#lang");
-  let chosen = select.value;
-  if (!chosen) { try { chosen = localStorage.getItem("dubber.dubLang") || "ru"; } catch (_) { chosen = "ru"; } }
   select.replaceChildren(...state.languages.map((l) => {
     const name = uiLang === "ru" ? l.name_ru : l.name_en;
     return el("option", { value: l.code, text: name === l.native ? name : `${name} — ${l.native}` });
   }));
-  select.value = language(chosen) ? chosen : "ru";
+  select.value = language(state.dubLang) ? state.dubLang : "ru";
 }
 
 function updateBackgroundHint() {
@@ -348,30 +439,37 @@ function updateBackgroundHint() {
 /** Re-render everything after the interface language changes (without reloading the video). */
 function applyUiLang() {
   applyStaticTexts();
+  showFormError(""); // a validation message in the old language would linger otherwise
+  if (!state.submitting) $("#submit").textContent = t("form.submit");
   document.querySelectorAll("[data-ui-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.uiLang === uiLang)));
   fillLanguageSelect();
   updateBackgroundHint();
   renderJobs();
   renderLibrary();
   if (state.video) renderWatchDetails();
-  else if ($("#view-library").hidden === false) document.title = t("title.library");
-  else if ($("#view-home").hidden === false) document.title = t("title.home");
+  else if (!$("#view-library").hidden) document.title = t("title.library");
+  else if (!$("#view-home").hidden) document.title = t("title.home");
+  else if (!$("#view-missing").hidden) document.title = t("missing.title");
 }
 
 /* ---------- init ---------- */
 async function init() {
   $("#dub-form").addEventListener("submit", (e) => {
     e.preventDefault();
-    const url = $("#url").value.trim(), error = $("#form-error");
-    if (!/^https?:\/\//i.test(url)) {
-      error.textContent = t("form.badUrl");
-      error.hidden = false; $("#url").focus(); return;
-    }
+    const url = $("#url").value.trim();
+    if (!looksLikeUrl(url)) { showFormError(t("form.badUrl")); $("#url").focus(); return; }
     const voice = new FormData(e.target).get("voice") || "male";
     startJob(url, voice, $("#background").checked, $("#lang").value || "ru");
   });
 
-  $("#lang").addEventListener("change", (e) => { try { localStorage.setItem("dubber.dubLang", e.target.value); } catch (_) {} });
+  try { state.dubLang = localStorage.getItem("dubber.dubLang") || "ru"; } catch (_) {}
+  $("#lang").addEventListener("change", (e) => {
+    state.dubLang = e.target.value;
+    try { localStorage.setItem("dubber.dubLang", e.target.value); } catch (_) {}
+  });
+  $("#url").addEventListener("input", () => { if (!$("#form-error").hidden) showFormError(""); });
+  // The skip link must not change the hash (that is the router's job): just move focus to the content.
+  $(".skip").addEventListener("click", (e) => { e.preventDefault(); $("#main").focus(); });
   $("#background").addEventListener("change", updateBackgroundHint);
   document.querySelectorAll("[data-ui-lang]").forEach((b) => b.addEventListener("click", () => {
     setUiLang(b.dataset.uiLang); applyUiLang();
@@ -383,8 +481,8 @@ async function init() {
   showEn.addEventListener("change", () => { applyEn(); try { localStorage.setItem("dubber.showEn", showEn.checked ? "1" : "0"); } catch (_) {} });
   applyEn();
 
-  try { state.languages = await api("/api/languages"); } catch (_) {}
-  applyUiLang();
+  applyUiLang(); // interface language first, before waiting for the server (no flash of the other language)
+  try { state.languages = await api("/api/languages"); fillLanguageSelect(); renderLibrary(); } catch (_) {}
   window.addEventListener("hashchange", route);
   route();
   pollJobs();
