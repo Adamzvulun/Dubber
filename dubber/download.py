@@ -38,7 +38,7 @@ def find_deno() -> str | None:
 
 
 def base_opts() -> dict:
-    opts = {"quiet": True, "no_warnings": True, "noplaylist": True}
+    opts = {"quiet": True, "no_warnings": True, "noprogress": True, "noplaylist": True}
     # Optional browser cookies (Netscape cookies.txt) for when YouTube asks to "confirm you're not a bot".
     cookies = os.environ.get("DUBBER_COOKIES")
     if cookies:

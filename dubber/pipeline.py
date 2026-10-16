@@ -6,14 +6,13 @@ If a run fails half-way (e.g. the internet drops), running it again skips the fi
 from __future__ import annotations
 
 import re
-import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from . import align, media, subtitles, transcribe, translate, tts
 from .config import Settings
-from .download import download
+from .download import download, fetch_info, is_url, local_video_id
 from .mux import mux
 from .segments import load_segments, merge_into_sentences, save_segments
 
@@ -47,6 +46,17 @@ def safe_name(title: str, max_len: int = 80) -> str:
     return (name or "video")[:max_len].strip()
 
 
+def identify(source: str) -> tuple[str, str]:
+    """(cache id, title) for a URL or a local file, without downloading the video."""
+    if is_url(source):
+        meta = fetch_info(source)
+        return meta["id"], meta.get("title") or meta["id"]
+    path = Path(source).expanduser()
+    if not path.is_file():
+        raise FileNotFoundError(f"Not a URL and not an existing file: {source}")
+    return local_video_id(path), path.stem
+
+
 class _Progress:
     def __init__(self, callback: ProgressFn | None):
         self.callback = callback
@@ -77,18 +87,13 @@ def run(
     media.require_ffmpeg()
     p = _Progress(progress)
 
-    # 1. Download into a temporary folder, then move it to work/<id>/ once we know the id.
+    # 1. Download into work/<id>/ (skipped when a previous run already has the video).
     report = p.stage("download")
-    staging = settings.work_dir / "_incoming"
-    if staging.exists():
-        shutil.rmtree(staging)
-    info = download(source, staging, settings.max_height, progress=report)
-    work = settings.work_dir / info.id
-    work.mkdir(parents=True, exist_ok=True)
+    video_id, title = identify(source)
+    work = settings.work_dir / video_id
     video = work / "source.mp4"
     if not video.exists():
-        shutil.move(str(info.path), video)
-    shutil.rmtree(staging, ignore_errors=True)
+        download(source, work, settings.max_height, progress=report)
     report(1.0)
 
     # 2. Transcribe (English)
@@ -128,14 +133,14 @@ def run(
 
     # 6. Subtitles + final video
     report = p.stage("mux")
-    folder = settings.output_dir / safe_name(info.title)
-    files = subtitles.write_all(segments, folder, info.title)
-    out_video = folder / f"{safe_name(info.title)} (RU).mp4"
+    folder = settings.output_dir / safe_name(title)
+    files = subtitles.write_all(segments, folder, title)
+    out_video = folder / f"{safe_name(title)} (RU).mp4"
     mux(video, track, out_video, ru_srt=files["ru_srt"], original_volume=settings.original_volume)
     report(1.0)
 
     return Result(
-        title=info.title,
+        title=title,
         video=out_video,
         ru_srt=files["ru_srt"],
         en_srt=files["en_srt"],
