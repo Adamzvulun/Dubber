@@ -1,0 +1,53 @@
+# Plan & roadmap
+
+_Last updated: 2026-10-16_ — task-level tracking lives in `kanban/` (one card per task).
+
+## Goal
+A Russian-speaking, non-technical user pastes a YouTube link into a local web page and gets:
+1. the video dubbed into Russian (MP4),
+2. Russian subtitles (SRT, also embedded in the MP4),
+3. a Russian transcript (plus a bilingual EN/RU one for learning).
+
+## Milestones
+### M0 — Foundation
+- [x] Research tools and existing projects → `docs/RESEARCH.md`
+- [x] Decisions recorded → `docs/DECISIONS.md`
+- [x] Find, review and install Claude skills → `docs/SKILLS.md`
+- [x] Project skills: `dubber-pipeline`, `dubber-docs`, `ffmpeg-dubbing`
+- [x] `CLAUDE.md`, `README.md`, `.gitignore`, `pyproject.toml`
+- [ ] SessionStart hook for cloud sessions (installs deps)
+
+### M1 — Pipeline (CLI)
+- [x] download (yt-dlp; local files also accepted)
+- [x] transcribe (faster-whisper)
+- [x] translate (Google free / Claude optional)
+- [x] tts (edge-tts)
+- [x] align (fit clips into timing, build Russian track)
+- [x] mux (duck original, add Russian track + subtitles)
+- [x] subtitles & transcripts
+- [x] pipeline cache + CLI
+- [x] unit tests + offline end-to-end test (network services stubbed)
+- [ ] real end-to-end run with YouTube + Whisper + translation + TTS (blocked in cloud sandbox; needs allowed domains or a home PC)
+
+### M2 — Russian web UI + installers
+- [ ] Gradio app in Russian: link → progress → player + downloads
+- [ ] Windows `install_windows.bat` / `start_windows.bat`; Linux/macOS `install.sh` / `start.sh`
+- [ ] `docs/README.ru.md` user guide for the father
+- [ ] UI screenshot test (webapp-testing / Playwright)
+
+### M3 — Quality
+- [ ] Smarter timing: merge short segments into sentences before translating
+- [ ] Glossary of domain terms (his work field) passed to the translator
+- [ ] Voice choice (male/female) and speed in the UI
+- [ ] Optional Demucs: keep background music, remove English voice
+- [ ] Translation prompt asks for "dub-length" Russian when using Claude
+
+### M4 — Nice to have
+- [ ] Queue of several links / playlists
+- [ ] Telegram bot front-end
+- [ ] ElevenLabs dubbing backend (paid, keeps original voice)
+- [ ] Offline TTS fallback (Silero)
+
+## Open questions
+- What is the father's work field? (for the glossary)
+- Which OS does his PC run? (Windows assumed)
