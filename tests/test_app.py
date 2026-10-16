@@ -17,6 +17,7 @@ def test_friendly_errors_are_russian():
     hf = RuntimeError("Task error: File reconstruction error: CAS Client Error: Request middleware error: "
                       "error sending request for url (https://us.aws.cdn.hf.co/xorbs/default/0a6b)")
     assert "модель распознавания" in app.friendly_error(hf)
+    assert "озвучки" in app.friendly_error(RuntimeError("Edge TTS: No audio was received for many lines"))
 
 
 def make_video(output: Path, vid: str, title: str) -> Path:

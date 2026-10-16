@@ -57,3 +57,11 @@ def test_long_sentence_splits_at_its_best_break():
     spec += [(6.0 + t, 6.4 + t, "more") for t in range(7)] + [(13.5, 14.0, "end.")]
     units = split_into_units(_words(spec), max_duration=10.0)
     assert len(units) == 2 and units[0].text.endswith("point,") and units[1].start == 6.0
+
+
+def test_non_speech_is_not_a_line():
+    from dubber.segments import split_into_units
+
+    units = split_into_units(_words([(0.0, 1.0, "♪"), (1.0, 2.0, "[Music]"), (2.0, 2.4, "Hello"), (2.5, 2.9, "all."),
+                                     (4.5, 5.0, "♪♪"), (6.0, 6.5, "...")]))
+    assert [(u.start, u.end, u.text) for u in units] == [(2.0, 2.9, "Hello all.")]

@@ -33,6 +33,10 @@ DUBBER_WHISPER_MODEL=tiny  DUBBER_TRANSLATOR=google  DUBBER_VOICE=ru-RU-Svetlana
   (voice pace), `late_lines`/`max_delay` (lines pushed back), `stretched_lines` (needed atempo). Pace rules live in
   `timing.py` (BAND, STEP, BREATH); `DUBBER_MAX_SPEEDUP` caps the voice rate. Edge clips carry ~0.25 s + ~0.9 s of
   silence — always measure with `align.speech_seconds`, never the file length. Research: `docs/RESEARCH.md` "Dub timing".
+- **"No audio was received" (edge-tts `NoAudioReceived`)** → Edge answers no audio at random (~9% of requests,
+  measured 2026-10-16) and always for text without letters ("…", "—", "♪"). `tts.py` skips unspeakable lines, retries
+  5×, falls back to the natural-speed clip, leaves one line silent as a last resort, and only fails the job when >20%
+  of lines get no audio (= real outage).
 - **Nothing heard** → `ffprobe` the track wav; check `clips/` sizes (0-byte = TTS failed).
 - **Slow** → transcription dominates on CPU; try `DUBBER_WHISPER_MODEL=base`.
 

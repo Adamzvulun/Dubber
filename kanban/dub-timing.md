@@ -18,3 +18,5 @@ Free steps implemented (ADR-013); waiting for Adam to re-dub a real video and li
   (by @claude)
 - 2026-10-16: Implemented sentence lines, steady-pace planner, Edge rate two-pass, silence trim, timing.json.
   Test talk: all lines on time, pace 1.40–1.50×, no stretching. (by @claude)
+- 2026-10-16: Adam's re-dub failed with "No audio was received" (Edge random no-audio ~9% + punctuation-only
+  lines; 2× requests since the two-pass TTS). Fixed with skips/retries/fallbacks; waiting for his re-try. (by @claude)

@@ -69,6 +69,11 @@ def friendly_error(exc: Exception) -> str:
             "Проверьте интернет и попробуйте снова. Если ошибка повторяется — возможно, антивирус или сеть "
             "блокируют сайт huggingface.co."
         )
+    if "no audio was received" in text:
+        return (
+            "Сервис озвучки Microsoft сейчас не отвечает. Подождите несколько минут и нажмите «Попробовать снова» — "
+            "уже готовые части сохранятся."
+        )
     if "downloaderror" in text or "youtube" in text or "unsupported url" in text:
         return (
             "Не удалось скачать видео. Проверьте, что ссылка правильная и интернет работает. "

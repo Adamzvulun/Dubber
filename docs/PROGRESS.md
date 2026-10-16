@@ -2,6 +2,18 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-16 — Session 1h: "No audio was received" fix
+- Adam's re-dub on his PC failed: edge-tts `NoAudioReceived`. (He also asked about hosting the site publicly on
+  Vercel/Railway — explained Vercel can't run it and Railway would need paid hosting + YouTube cookies; he dropped it.)
+- Reproduced: Edge returns no audio for text without letters ("…", "—", "♪", "?") every time, and **at random for
+  normal text: 5 of 56 sequential requests (~9%)**. With per-sentence lines and two TTS passes (ADR-013) a long video
+  sends hundreds of requests, so one line failing all 3 attempts killed the whole job.
+- Fix: unspeakable lines get no clip (never sent); 6 attempts with backoff; a line failing at its planned rate uses its
+  natural-speed clip; last resort one silent line (logged); job fails only if >20% of lines get no audio (outage), with
+  a Russian message. Whisper non-speech words ("[Music]", "♪") no longer become lines.
+- Verified: fresh real dub of the test talk (timing unchanged: 12 lines on time, pace 1.42×); real Edge run with
+  "…"/"♪"/"—" lines. 52 tests pass.
+
 ## 2026-10-16 — Session 1g: dub timing implemented (free parts)
 - Adam: "do everything that doesn't require payment" → M3.5 steps 1–5 (ADR-013).
 - `segments.split_into_units` (sentence lines from word timestamps), `timing.py` (steady pace planner + Edge rate),

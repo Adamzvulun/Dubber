@@ -144,3 +144,53 @@ def test_voice_speaks_at_planned_rate_and_clips_follow_text(tmp_path):
     assert calls == [("один", "+0%"), ("один", "+35%")] and natural[1] is None and fast[0] != natural[0]
     lines[0].ru = "два"
     assert tts.synthesize(lines, tmp_path, synth=fake)[0] != natural[0]
+
+
+class NoAudioReceived(Exception):
+    """Same name as edge_tts.exceptions.NoAudioReceived."""
+
+
+def test_one_silent_line_does_not_fail_the_dub(tmp_path):
+    """Edge randomly returns no audio (~9%); after retries the line stays silent instead of failing the video."""
+    from dubber import tts
+
+    attempts = []
+
+    async def flaky(text, voice, out_path, rate="+0%"):
+        attempts.append(text)
+        if text == "никогда":
+            raise NoAudioReceived("No audio was received.")
+        if text == "иногда" and attempts.count(text) < 3:
+            raise NoAudioReceived("No audio was received.")
+        out_path.write_bytes(b"x")
+
+    lines = [Segment(i, i + 1, "en", ru) for i, ru in enumerate(["один", "иногда", "никогда", "…", "два", "три"])]
+    clips = tts.synthesize(lines, tmp_path, synth=flaky, retries=3)
+    assert [c is not None for c in clips] == [True, True, False, False, True, True]
+    assert attempts.count("никогда") == 4 and "…" not in attempts  # punctuation is never sent
+
+
+def test_rated_line_falls_back_to_natural_clip(tmp_path):
+    from dubber import tts
+
+    async def fails_when_fast(text, voice, out_path, rate="+0%"):
+        if rate != "+0%":
+            raise NoAudioReceived("No audio was received.")
+        out_path.write_bytes(b"x")
+
+    lines = [Segment(0, 1, "en", "один")]
+    natural = tts.synthesize(lines, tmp_path, synth=fails_when_fast)
+    assert tts.synthesize(lines, tmp_path, synth=fails_when_fast, rates=[1.4], retries=1) == natural
+
+
+def test_voice_outage_is_reported_not_silenced(tmp_path):
+    import pytest
+
+    from dubber import tts
+
+    async def down(text, voice, out_path, rate="+0%"):
+        raise NoAudioReceived("No audio was received.")
+
+    lines = [Segment(i, i + 1, "en", "слово") for i in range(5)]
+    with pytest.raises(RuntimeError, match="No audio"):
+        tts.synthesize(lines, tmp_path, synth=down, retries=0)

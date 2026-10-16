@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 _SENTENCE_END = (".", "!", "?", "…", '."', '?"', '!"')
+_NON_SPEECH = re.compile(r"\[[^\]]*\]|\([^)]*\)|[♪♫]")  # Whisper's "[Music]", "(applause)", "♪"
 
 
 @dataclass
@@ -83,7 +85,10 @@ def split_into_units(
     sentences: list[list[Word]] = []
     current: list[Word] = []
     for i, w in enumerate(words):
-        if not w.text.strip():
+        if not any(ch.isalnum() for ch in _NON_SPEECH.sub("", w.text)):  # "♪", "[Music]", "—": not speech
+            if current and w.text.strip().endswith(_SENTENCE_END):
+                sentences.append(current)
+                current = []
             continue
         current.append(w)
         next_start = words[i + 1].start if i + 1 < len(words) else None
@@ -96,8 +101,9 @@ def split_into_units(
     units: list[Segment] = []
     for sentence in sentences:
         for part in _split_long(sentence, max_duration, min_part):
-            text = "".join(w.text for w in part).strip()
-            units.append(Segment(start=part[0].start, end=part[-1].end, text=" ".join(text.split())))
+            text = " ".join(_NON_SPEECH.sub(" ", "".join(w.text for w in part)).split())
+            if any(ch.isalnum() for ch in text):  # nothing to translate or say otherwise
+                units.append(Segment(start=part[0].start, end=part[-1].end, text=text))
     return units
 
 

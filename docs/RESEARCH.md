@@ -111,6 +111,11 @@ Every Edge clip has ~0.25 s of silence before and ~0.9 s after the speech (also 
 started every line ~0.25 s late and counted ~1.15 s of silence as speech — a one-word line ("Нет.") "lasted" 1.9 s.
 (So the ×1.47 above overstates the real ratio a little.) Now trimmed (`align.trim_silence`).
 
+### Edge TTS reliability (measured 2026-10-16)
+`NoAudioReceived` for any text without letters/digits, and at random for normal text: 5/56 sequential requests
+(~9%), 0/56 at concurrency 4 in another run — i.e. random, not load-related. Retries (6 attempts) make a per-line
+failure ~1e-6; see `tts.py`.
+
 ### Result on the same test talk (implemented, 2026-10-16)
 | | Before | After |
 |---|---|---|
