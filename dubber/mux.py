@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .media import has_audio, run_ffmpeg
+from .media import has_audio, probe, run_ffmpeg
 
 
 def mux(
@@ -14,10 +14,12 @@ def mux(
     ru_srt: Path | None = None,
     original_volume: float = 0.15,
     keep_original_track: bool = True,
+    background: bool = True,
 ) -> Path:
     """Write `out_mp4`.
 
-    Audio track 1 (default): Russian voice mixed over the original at `original_volume`.
+    Audio track 1 (default): Russian voice mixed over the original at `original_volume`
+    (or the Russian voice alone when `background` is False).
     Audio track 2 (optional): the untouched English original, selectable in any player.
     Subtitle track: Russian, soft (can be turned on/off in the player).
     """
@@ -28,13 +30,18 @@ def mux(
     if ru_srt:
         args += ["-i", str(ru_srt)]
 
-    if original_has_audio:
+    if original_has_audio and background:
         args += [
             "-filter_complex",
             f"[0:a]volume={original_volume}[bg];[1:a]apad[fg];"
             "[bg][fg]amix=inputs=2:duration=first:normalize=0[dub]",
             "-map", "0:v:0", "-map", "[dub]",
         ]
+        if keep_original_track:
+            args += ["-map", "0:a:0"]
+    elif original_has_audio:  # Russian voice only, padded to the video's length
+        duration = probe(video)["format"]["duration"]
+        args += ["-filter_complex", f"[1:a]apad,atrim=0:{duration}[dub]", "-map", "0:v:0", "-map", "[dub]"]
         if keep_original_track:
             args += ["-map", "0:a:0"]
     else:

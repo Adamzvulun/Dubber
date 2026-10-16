@@ -42,6 +42,10 @@ class Settings:
     max_speedup: float = field(default_factory=lambda: float(_env("DUBBER_MAX_SPEEDUP", "1.5")))
     # Volume of the original audio under the Russian voice (0 = mute, 1 = unchanged)
     original_volume: float = field(default_factory=lambda: float(_env("DUBBER_ORIGINAL_VOLUME", "0.15")))
+    # Keep the original soundtrack quietly under the Russian voice (False = Russian voice only)
+    keep_background: bool = field(
+        default_factory=lambda: _env("DUBBER_KEEP_BACKGROUND", "1").lower() not in ("0", "false", "no")
+    )
     # Max video height to download (keeps files small)
     max_height: int = field(default_factory=lambda: int(_env("DUBBER_MAX_HEIGHT", "720")))
 

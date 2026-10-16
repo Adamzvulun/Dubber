@@ -2,6 +2,24 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-16 — Session 1c: professional website
+- Adam: the father is a professional, not elderly → modern product look. Researched design guidance and dubbing
+  products; wrote `docs/DESIGN.md` (tokens, Onest + Unbounded fonts, cobalt accent, red "live" lamp, dark mode).
+- Replaced Gradio with a FastAPI + hand-built site (`dubber/web/`): new-video page with live 6-step job card,
+  library with thumbnails, watch page with player, RU/EN subtitles and a synced bilingual transcript.
+- New option: dub without the original sound (Russian voice only; English kept as track 2).
+- Output layout is now `output/<id>/` with `meta.json`, `thumbnail.jpg`, `segments.json`, `.vtt` subtitles.
+- Bugs found while testing for real:
+  - YouTube details were fetched even for cached videos → when YouTube refused (cookies expired/flagged), finished
+    videos couldn't be rebuilt. Fix: id from the link + cached `info.json`. Test added.
+  - Re-dubbing with another voice reused the first voice's cached clips (Svetlana job came out in Dmitry's voice).
+    Fix: per-voice clip cache. Regression test; verified by pitch: Dmitry ≈ 113 Hz, Svetlana ≈ 179 Hz.
+  - Transcript lines ran EN into RU; mobile nav wrapped. Fixed in CSS.
+- Verified in Chromium: home/library/watch in light + dark + 390 px phone; a real job through the site; real playback
+  (VP9 test copy, since test Chromium lacks H.264): play, click-to-seek, highlighted line, 25 RU subtitle cues.
+- YouTube now refuses this cloud server even with the cookies (probably expired/flagged); not needed for the above.
+- 34 tests pass.
+
 ## 2026-10-16 — Session 1b: real end-to-end test ✅
 - Adam opened the network. Findings from real requests in the cloud sandbox:
   - YouTube: search + metadata work; **media download is refused** ("Sign in to confirm you're not a bot", then 403 on

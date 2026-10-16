@@ -27,3 +27,10 @@ def test_transcripts(tmp_path):
     assert "EN: Hello." in to_bilingual(SEGS) and "RU: Привет." in to_bilingual(SEGS)
     files = write_all(SEGS, tmp_path / "out", "Title")
     assert files["ru_srt"].read_text(encoding="utf-8") == to_srt(SEGS)
+
+
+def test_to_vtt():
+    from dubber.subtitles import to_vtt
+
+    vtt = to_vtt(SEGS)
+    assert vtt.startswith("WEBVTT\n\n00:00:00.500 --> 00:00:02.250\nПривет.\n")

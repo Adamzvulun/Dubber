@@ -12,9 +12,9 @@ description: How the Dubber YouTube→Russian dubbing pipeline works and how to 
 | 1 | Download (yt-dlp or local copy) | `download.py` | `source.mp4` |
 | 2 | Transcribe EN (faster-whisper) + merge into sentences | `transcribe.py`, `segments.py` | `audio_16k.wav`, `segments_en.json` |
 | 3 | Translate EN→RU (Google free / Claude) | `translate.py` | `segments_ru.json` |
-| 4 | TTS per segment (edge-tts) | `tts.py` | `clips/00000.mp3 …` |
+| 4 | TTS per segment (edge-tts) | `tts.py` | `clips_<voice>/00000.mp3 …` (one cache per voice!) |
 | 5 | Fit clips to timing, build track | `align.py` | `russian_track_<voice>.wav` |
-| 6 | Subtitles + final MP4 | `subtitles.py`, `mux.py` | `output/<title>/` |
+| 6 | Subtitles + final MP4 | `subtitles.py`, `mux.py` | `output/<id>/` (dubbed.mp4, meta.json, thumbnail.jpg, segments.json, srt/vtt/txt) |
 
 **Resume/cache rule:** a stage is skipped if its cache file exists. To redo a stage, delete its file
 and everything after it (e.g. new translation → delete `segments_ru.json`, `clips/`, `russian_track_*.wav`).
@@ -22,7 +22,7 @@ and everything after it (e.g. new translation → delete `segments_ru.json`, `cl
 ## Running
 ```bash
 .venv/bin/python -m dubber.cli "https://www.youtube.com/watch?v=..."   # or a local .mp4
-.venv/bin/python -m dubber.app                                          # web UI
+.venv/bin/python -m dubber.app                                          # website (FastAPI + dubber/web/)
 DUBBER_WHISPER_MODEL=tiny  DUBBER_TRANSLATOR=google  DUBBER_VOICE=ru-RU-SvetlanaNeural  # env knobs (see config.py)
 ```
 

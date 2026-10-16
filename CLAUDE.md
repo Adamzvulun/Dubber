@@ -1,7 +1,8 @@
 # CLAUDE.md — working rules for Dubber
 
 Dubber turns an English YouTube video into a **Russian-dubbed** MP4 + Russian subtitles + transcript.
-End user: a Russian-speaking, non-technical person running it on his own PC (Windows likely).
+End user: a Russian-speaking professional (not a developer) who learns from English videos, running it on his own PC
+(Windows likely). The website must look like a modern, professional product — see `docs/DESIGN.md`.
 
 ## Golden rules
 1. **The repo is the source of truth.** Every plan, decision and progress note lives in `docs/` and `kanban/`.
@@ -20,15 +21,17 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 .venv/bin/ruff check .                                         # lint
 .venv/bin/pytest                                               # tests (no network needed)
 .venv/bin/python -m dubber.cli <youtube-url-or-local-file>     # run pipeline
-.venv/bin/python -m dubber.app                                 # Russian web UI on http://127.0.0.1:7860
+.venv/bin/python -m dubber.app                                 # the website on http://127.0.0.1:7860
 ```
 
 ## Layout
-- `dubber/` — pipeline stages (`download`, `transcribe`, `translate`, `tts`, `align`, `mux`, `subtitles`), orchestrated by `pipeline.py`; `cli.py`, `app.py`.
+- `dubber/` — pipeline stages (`download`, `transcribe`, `translate`, `tts`, `align`, `mux`, `subtitles`), orchestrated by `pipeline.py`; `cli.py`; `app.py` (FastAPI server + JSON API).
+- `dubber/web/` — the website front-end (plain HTML/CSS/JS, no build step): `index.html`, `styles.css`, `app.js`.
 - `tests/` — unit tests per stage; network stages are mocked.
-- `docs/` — PLAN, RESEARCH, DECISIONS, PROGRESS, SKILLS, README.ru.
+- `docs/` — PLAN, RESEARCH, DECISIONS, DESIGN, PROGRESS, SKILLS, README.ru.
 - `kanban/` — task cards (see `kanban-ai` skill).
-- `work/` — per-video cache (git-ignored). `output/` — finished files (git-ignored).
+- `work/<id>/` — per-video cache (git-ignored). `output/<id>/` — finished video + subtitles + transcripts + `meta.json`
+  + `thumbnail.jpg` + `segments.json`; the website library reads this folder (git-ignored).
 
 ## Git
 Develop on the branch given in the session; commit with clear messages; push with `git push -u origin <branch>`.

@@ -55,6 +55,56 @@ def test_end_to_end_with_local_file(tmp_path, sample_video):
     assert "Русский 0" in srt and "Русский 1" in srt and "Русский 2" not in srt  # 3 fragments -> 2 sentences
     assert result.transcript.exists() and result.bilingual.exists()
 
+    assert (result.folder / "meta.json").exists() and (result.folder / "thumbnail.jpg").exists()
+    assert (result.folder / "subtitles_ru.vtt").read_text(encoding="utf-8").startswith("WEBVTT")
+
     # Second run reuses the cache: no stage needs its backend again.
     again = pipeline.run(str(sample_video), settings, translator=None, synth=None, transcriber=None)
     assert again.video == result.video
+
+
+def test_without_background_russian_voice_only(tmp_path, sample_video):
+    """Opt-in: no original sound under the Russian voice (the English track stays available separately)."""
+    import numpy as np
+
+    from dubber.media import decode_audio, run_ffmpeg
+
+    settings = Settings(work_dir=tmp_path / "work", output_dir=tmp_path / "out", keep_background=False)
+    result = pipeline.run(str(sample_video), settings, translator=StubTranslator(), synth=stub_synth,
+                          transcriber=stub_transcriber)
+    dub = tmp_path / "dub.wav"
+    run_ffmpeg(["-i", str(result.video), "-map", "0:a:0", "-ac", "1", "-ar", "16000", str(dub)])
+    audio = decode_audio(dub, 16000)
+    # The sample's 300 Hz tone fills the whole original track; without background, the gap before the
+    # first Russian phrase (0.0-0.5 s) must be silent.
+    assert float(np.abs(audio[: int(0.4 * 16000)]).mean()) < 1e-3
+    assert abs(len(audio) / 16000 - 6.0) < 0.3
+
+
+def test_youtube_id_and_cached_identify(tmp_path, monkeypatch):
+    assert pipeline.youtube_id("https://www.youtube.com/watch?v=qD0_yWgifDM&t=5s") == "qD0_yWgifDM"
+    assert pipeline.youtube_id("https://youtu.be/qD0_yWgifDM") == "qD0_yWgifDM"
+    assert pipeline.youtube_id("https://www.youtube.com/shorts/qD0_yWgifDM") == "qD0_yWgifDM"
+    assert pipeline.youtube_id("https://vimeo.com/123") is None
+
+    calls = []
+    monkeypatch.setattr(pipeline, "fetch_info", lambda url: calls.append(url) or {"id": "qD0_yWgifDM", "title": "T"})
+    url = "https://youtu.be/qD0_yWgifDM"
+    assert pipeline.identify(url, tmp_path)["title"] == "T"
+    assert pipeline.identify(url, tmp_path)["title"] == "T"  # second time from the cache, no network
+    assert len(calls) == 1
+
+
+def test_each_voice_gets_its_own_recordings(tmp_path, sample_video):
+    """Regression: re-dubbing with another voice must not reuse the first voice's cached clips."""
+    voices_used = []
+
+    async def recording_synth(text, voice, out_path):
+        voices_used.append(voice)
+        await stub_synth(text, voice, out_path)
+
+    for voice in ("ru-RU-DmitryNeural", "ru-RU-SvetlanaNeural"):
+        settings = Settings(work_dir=tmp_path / "work", output_dir=tmp_path / "out", voice=voice)
+        pipeline.run(str(sample_video), settings, translator=StubTranslator(), synth=recording_synth,
+                     transcriber=stub_transcriber)
+    assert "ru-RU-SvetlanaNeural" in voices_used and "ru-RU-DmitryNeural" in voices_used

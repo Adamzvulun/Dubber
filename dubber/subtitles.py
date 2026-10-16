@@ -27,6 +27,17 @@ def to_srt(segments: list[Segment], russian: bool = True) -> str:
     return "\n".join(blocks)
 
 
+def to_vtt(segments: list[Segment], russian: bool = True) -> str:
+    """WebVTT (what browsers use for <track>)."""
+    cues = []
+    for seg in segments:
+        text = (seg.ru if russian else seg.text).strip()
+        if text:
+            start, end = srt_timestamp(seg.start).replace(",", "."), srt_timestamp(seg.end).replace(",", ".")
+            cues.append(f"{start} --> {end}\n{text}\n")
+    return "WEBVTT\n\n" + "\n".join(cues)
+
+
 def _clock(seconds: float) -> str:
     m, s = divmod(int(seconds), 60)
     h, m = divmod(m, 60)
@@ -61,6 +72,8 @@ def write_all(segments: list[Segment], out_dir: Path, title: str = "") -> dict[s
     out_dir.mkdir(parents=True, exist_ok=True)
     files = {
         "ru_srt": (out_dir / "subtitles_ru.srt", to_srt(segments, russian=True)),
+        "ru_vtt": (out_dir / "subtitles_ru.vtt", to_vtt(segments, russian=True)),
+        "en_vtt": (out_dir / "subtitles_en.vtt", to_vtt(segments, russian=False)),
         "en_srt": (out_dir / "subtitles_en.srt", to_srt(segments, russian=False)),
         "transcript": (out_dir / "transcript_ru.txt", to_transcript(segments, title)),
         "bilingual": (out_dir / "transcript_en_ru.txt", to_bilingual(segments, title)),

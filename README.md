@@ -6,7 +6,9 @@ Paste a YouTube link, get back:
 - **a Russian transcript**, plus a bilingual EN/RU transcript for studying.
 
 Built for a Russian-speaking professional who learns from English videos. Runs on your own PC, free by default.
-Russian user guide: [`docs/README.ru.md`](docs/README.ru.md).
+Russian user guide: [`docs/README.ru.md`](docs/README.ru.md). Design: [`docs/DESIGN.md`](docs/DESIGN.md).
+
+![Dubber website](docs/images/site-home-light.png)
 
 ## How it works
 ```
@@ -30,7 +32,7 @@ Command line instead of the web page:
 ```bash
 .venv/bin/python -m dubber.cli "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
-Results go to `output/<video title>/`.
+Results go to `output/<video id>/` and appear in the website's library.
 
 ## Settings (optional, in a `.env` file next to this README)
 | Variable | Default | Meaning |
@@ -41,6 +43,7 @@ Results go to `output/<video title>/`.
 | `DUBBER_COOKIES` | – | path to a `cookies.txt` exported from your browser, if YouTube says "confirm you're not a bot" |
 | `ANTHROPIC_API_KEY` | – | enables Claude translation (a few cents per video) |
 | `DUBBER_CLAUDE_MODEL` | `claude-opus-5-5` | Claude model used for translation |
+| `DUBBER_KEEP_BACKGROUND` | `1` | `0` = only the Russian voice, without the original sound underneath (also a switch on the website) |
 | `DUBBER_MAX_SPEEDUP` | `1.5` | max speed-up of Russian phrases to fit the timing |
 | `DUBBER_ORIGINAL_VOLUME` | `0.15` | loudness of the English original under the dub |
 

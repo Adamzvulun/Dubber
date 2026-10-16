@@ -1,59 +1,56 @@
-"""Russian-language web page: paste a YouTube link, get the dubbed video.
+"""The Dubber website: a small FastAPI server + a hand-built front-end in dubber/web/.
 
 Run: `python -m dubber.app` → opens http://127.0.0.1:7860
+
+API
+- POST /api/jobs {url, voice: "male"|"female", background: bool} → start dubbing (one job runs at a time)
+- GET  /api/jobs, /api/jobs/{id}                                   → progress
+- GET  /api/videos, /api/videos/{id}                                → library, one video + its timed transcript
+- DELETE /api/videos/{id}                                           → remove from the library
+- GET  /files/{id}/{name}[?download=1]                               → video, subtitles, transcripts, thumbnail
 """
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import os
+import queue
+import re
+import shutil
+import threading
+import time
+import traceback
+import uuid
+import webbrowser
+from dataclasses import dataclass, field
 from pathlib import Path
 
-import gradio as gr
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from . import pipeline
 from .config import Settings, load_settings
 from .download import is_url
 
-VOICE_CHOICES = {"Мужской голос": "ru-RU-DmitryNeural", "Женский голос": "ru-RU-SvetlanaNeural"}
+WEB_DIR = Path(__file__).parent / "web"
+VOICES = {"male": "ru-RU-DmitryNeural", "female": "ru-RU-SvetlanaNeural"}
+STAGE_KEYS = {label: key for key, label, _ in pipeline.STAGES}
+_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
-CSS = """
-:root, .gradio-container { --dub-ink: #1B2433; --dub-blue: #2459D6; --dub-muted: #556070; }
-.gradio-container { max-width: 860px !important; margin: 0 auto !important; font-size: 18px; }
-#dub-title h1 { font-family: 'PT Serif', Georgia, serif; font-size: 2.3rem; font-weight: 700;
-  color: var(--dub-ink); margin: 0.6em 0 0.2em; letter-spacing: -0.01em; }
-#dub-title p { color: var(--dub-muted); font-size: 1.15rem; margin: 0 0 0.6em; max-width: 60ch; }
-#dub-url textarea, #dub-url input { font-size: 1.15rem !important; padding: 14px !important; }
-#dub-go { font-size: 1.25rem !important; min-height: 60px; }
-#dub-status { font-size: 1.1rem; min-height: 96px; }  /* room for Gradio's progress bar */
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
-"""
-
-HEAD = (
-    '<link rel="preconnect" href="https://fonts.googleapis.com">'
-    '<link href="https://fonts.googleapis.com/css2?family=PT+Serif:wght@700&display=swap" rel="stylesheet">'
-)
-
-HELP = """
-**Как пользоваться**
-1. Откройте видео на YouTube, скопируйте адрес из строки браузера.
-2. Вставьте его в поле выше и нажмите **«Озвучить по-русски»**.
-3. Дождитесь окончания. Обычно это занимает от половины до полной длины видео
-   (видео на 10 минут — примерно 5–10 минут). Окно можно не трогать.
-4. Смотрите прямо здесь или сохраните файлы кнопками ниже.
-
-**Полезно знать**
-- В готовом видео две звуковые дорожки: русская (по умолчанию) и оригинальная английская.
-  Переключить можно в плеере на компьютере (например, VLC: «Аудио → Аудиодорожка»).
-- Русские субтитры встроены в видео и лежат отдельным файлом `.srt`.
-- Файл «EN + RU» — английский текст с переводом построчно: удобно для изучения терминов.
-- Все готовые видео хранятся в папке `output` программы.
-"""
-
-
-def make_theme() -> gr.themes.Base:
-    # PT Sans / PT Serif were designed by ParaType for Russian Cyrillic.
-    fonts = [gr.themes.GoogleFont("PT Sans"), gr.themes.Font("Arial"), gr.themes.Font("sans-serif")]
-    return gr.themes.Base(primary_hue="blue", neutral_hue="slate", font=fonts)
+# Files the browser may fetch from output/<id>/, with the name used when downloading.
+FILES = {
+    "dubbed.mp4": ("video/mp4", "{title} (RU).mp4"),
+    "subtitles_ru.vtt": ("text/vtt", None),
+    "subtitles_en.vtt": ("text/vtt", None),
+    "subtitles_ru.srt": ("application/x-subrip", "{title} (RU).srt"),
+    "subtitles_en.srt": ("application/x-subrip", "{title} (EN).srt"),
+    "transcript_ru.txt": ("text/plain; charset=utf-8", "{title} — текст.txt"),
+    "transcript_en_ru.txt": ("text/plain; charset=utf-8", "{title} — EN+RU.txt"),
+    "thumbnail.jpg": ("image/jpeg", None),
+}
 
 
 def friendly_error(exc: Exception) -> str:
@@ -61,6 +58,11 @@ def friendly_error(exc: Exception) -> str:
     text = f"{type(exc).__name__}: {exc}".lower()
     if "ffmpeg" in text and "not found" in text:
         return "Не найдена программа ffmpeg. Запустите установку ещё раз (install_windows.bat)."
+    if "not a bot" in text or "sign in to confirm" in text:
+        return (
+            "YouTube попросил подтвердить, что вы не робот. "
+            "Попробуйте позже или настройте файл cookies (см. инструкцию)."
+        )
     if "downloaderror" in text or "youtube" in text or "unsupported url" in text:
         return (
             "Не удалось скачать видео. Проверьте, что ссылка правильная и интернет работает. "
@@ -73,102 +75,155 @@ def friendly_error(exc: Exception) -> str:
     return f"Что-то пошло не так. Попробуйте ещё раз. Подробности для помощника: {exc}"
 
 
-def previous_results(settings: Settings) -> list[tuple[str, str]]:
-    if not settings.output_dir.exists():
-        return []
-    folders = sorted(
-        (p for p in settings.output_dir.iterdir() if p.is_dir() and any(p.glob("*.mp4"))),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    return [(p.name, str(p)) for p in folders]
+@dataclass
+class Job:
+    id: str
+    url: str
+    voice: str
+    background: bool
+    status: str = "queued"  # queued | running | done | error
+    stage: str = ""
+    label: str = "В очереди"
+    progress: float = 0.0
+    error: str = ""
+    video_id: str = ""
+    created: float = field(default_factory=time.time)
+
+    def public(self) -> dict:
+        return dataclasses.asdict(self)
 
 
-def _outputs_for_folder(folder: Path):
-    video = next(folder.glob("*.mp4"), None)
-    files = [folder / n for n in ("subtitles_ru.srt", "transcript_ru.txt", "transcript_en_ru.txt")]
-    srt = files[0] if files[0].exists() else None
-    return (
-        gr.update(value=str(video) if video else None, subtitles=str(srt) if srt else None, visible=video is not None),
-        gr.update(value=str(video) if video else None, visible=video is not None),
-        *[gr.update(value=str(f) if f.exists() else None, visible=f.exists()) for f in files],
-    )
+class JobRunner:
+    """Runs dubbing jobs one after another in a background thread."""
+
+    def __init__(self, settings: Settings, runner=pipeline.run):
+        self.settings = settings
+        self.runner = runner
+        self.jobs: dict[str, Job] = {}
+        self._queue: queue.Queue[Job] = queue.Queue()
+        threading.Thread(target=self._work, daemon=True).start()
+
+    def submit(self, url: str, voice: str, background: bool) -> Job:
+        job = Job(id=uuid.uuid4().hex[:12], url=url, voice=voice, background=background)
+        self.jobs[job.id] = job
+        self._queue.put(job)
+        return job
+
+    def _work(self) -> None:
+        while True:
+            job = self._queue.get()
+            job.status, job.label = "running", "Начинаю"
+            settings = dataclasses.replace(self.settings, voice=VOICES[job.voice], keep_background=job.background)
+
+            def progress(label: str, fraction: float, job: Job = job) -> None:
+                job.stage, job.label, job.progress = STAGE_KEYS.get(label, ""), label, round(fraction, 4)
+
+            try:
+                result = self.runner(job.url, settings, progress=progress)
+                job.video_id, job.status, job.progress, job.label = result.id, "done", 1.0, "Готово"
+            except Exception as exc:  # shown to the user in Russian
+                traceback.print_exc()
+                job.status, job.error = "error", friendly_error(exc)
 
 
-def build_ui(settings: Settings | None = None, runner=pipeline.run) -> gr.Blocks:
+class JobRequest(BaseModel):
+    url: str
+    voice: str = "male"
+    background: bool = True
+
+
+def _read_meta(folder: Path) -> dict | None:
+    try:
+        meta = json.loads((folder / "meta.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not (folder / "dubbed.mp4").exists():
+        return None
+    meta["thumbnail"] = f"/files/{folder.name}/thumbnail.jpg"
+    meta["video"] = f"/files/{folder.name}/dubbed.mp4"
+    return meta
+
+
+def create_app(settings: Settings | None = None, runner=pipeline.run) -> FastAPI:
     settings = settings or load_settings()
+    jobs = JobRunner(settings, runner)
+    app = FastAPI(title="Дубляж", docs_url=None, redoc_url=None)
 
-    def dub(url: str, voice_label: str, progress=gr.Progress()):  # noqa: B008 (Gradio injects progress this way)
-        url = (url or "").strip()
-        if not url:
-            raise gr.Error("Вставьте ссылку на видео с YouTube.", title="Ошибка")
-        if not is_url(url) and not Path(url).is_file():
-            raise gr.Error("Это не похоже на ссылку. Она должна начинаться с https://", title="Ошибка")
-        settings.voice = VOICE_CHOICES.get(voice_label, settings.voice)
-        try:
-            result = runner(url, settings, progress=lambda label, f: progress(f, desc=label))
-        except gr.Error:
-            raise
-        except Exception as exc:  # shown to the user in Russian
-            raise gr.Error(friendly_error(exc), duration=None, title="Ошибка") from exc
-        status = f"✅ Готово: **{result.title}**"
-        return (status, *_outputs_for_folder(result.folder), gr.update(choices=previous_results(settings)))
+    def folder_for(video_id: str) -> Path:
+        if not _ID.match(video_id):
+            raise HTTPException(404)
+        folder = settings.output_dir / video_id
+        if not folder.is_dir():
+            raise HTTPException(404)
+        return folder
 
-    def open_previous(folder: str | None):
-        if not folder:
-            return ("", *[gr.update()] * 5)
-        return (f"Открыто: **{Path(folder).name}**", *_outputs_for_folder(Path(folder)))
+    @app.post("/api/jobs")
+    def start_job(req: JobRequest) -> dict:
+        url = req.url.strip()
+        if not is_url(url):
+            raise HTTPException(422, "Вставьте ссылку на видео — она начинается с https://")
+        if req.voice not in VOICES:
+            raise HTTPException(422, "Неизвестный голос")
+        return jobs.submit(url, req.voice, req.background).public()
 
-    with gr.Blocks(title="Дубляж видео") as ui:
-        gr.Markdown(
-            "# Дубляж видео с YouTube\n"
-            "Вставьте ссылку на английское видео — получите его с русской озвучкой, субтитрами и текстом.",
-            elem_id="dub-title",
-        )
-        url = gr.Textbox(
-            label="Ссылка на видео",
-            placeholder="https://www.youtube.com/watch?v=…",
-            elem_id="dub-url",
-            autofocus=True,
-        )
-        voice = gr.Radio(list(VOICE_CHOICES), value="Мужской голос", label="Голос озвучки")
-        go = gr.Button("Озвучить по-русски", variant="primary", size="lg", elem_id="dub-go")
-        status = gr.Markdown(elem_id="dub-status")
+    @app.get("/api/jobs")
+    def list_jobs() -> list[dict]:
+        return [j.public() for j in sorted(jobs.jobs.values(), key=lambda j: j.created, reverse=True)]
 
-        video = gr.Video(label="Видео на русском", interactive=False, height=420, visible=False)
-        with gr.Row():
-            dl_video = gr.DownloadButton("Скачать видео", visible=False, variant="primary")
-            dl_srt = gr.DownloadButton("Субтитры (.srt)", visible=False)
-            dl_txt = gr.DownloadButton("Текст на русском", visible=False)
-            dl_bi = gr.DownloadButton("Текст EN + RU", visible=False)
+    @app.get("/api/jobs/{job_id}")
+    def get_job(job_id: str) -> dict:
+        job = jobs.jobs.get(job_id)
+        if not job:
+            raise HTTPException(404)
+        return job.public()
 
-        with gr.Accordion("Ранее озвученные видео", open=False):
-            history = gr.Dropdown(choices=previous_results(settings), label="Выберите видео", value=None)
+    @app.get("/api/videos")
+    def list_videos() -> list[dict]:
+        if not settings.output_dir.is_dir():
+            return []
+        metas = (_read_meta(f) for f in settings.output_dir.iterdir() if f.is_dir())
+        return sorted((m for m in metas if m), key=lambda m: m.get("created", ""), reverse=True)
 
-        with gr.Accordion("Как пользоваться", open=False):
-            gr.Markdown(HELP)
+    @app.get("/api/videos/{video_id}")
+    def get_video(video_id: str) -> dict:
+        folder = folder_for(video_id)
+        meta = _read_meta(folder)
+        if not meta:
+            raise HTTPException(404)
+        segments_file = folder / "segments.json"
+        meta["segments"] = json.loads(segments_file.read_text(encoding="utf-8")) if segments_file.exists() else []
+        return meta
 
-        outputs = [status, video, dl_video, dl_srt, dl_txt, dl_bi]
-        go.click(dub, inputs=[url, voice], outputs=[*outputs, history], show_progress="full")
-        url.submit(dub, inputs=[url, voice], outputs=[*outputs, history], show_progress="full")
-        history.change(open_previous, inputs=history, outputs=outputs)
+    @app.delete("/api/videos/{video_id}")
+    def delete_video(video_id: str) -> dict:
+        shutil.rmtree(folder_for(video_id))
+        return {"deleted": video_id}
 
-    return ui
+    @app.get("/files/{video_id}/{name}")
+    def get_file(video_id: str, name: str, download: bool = False) -> FileResponse:
+        folder = folder_for(video_id)
+        if name not in FILES or not (folder / name).is_file():
+            raise HTTPException(404)
+        media_type, download_name = FILES[name]
+        filename = None
+        if download and download_name:
+            meta = _read_meta(folder) or {}
+            filename = download_name.format(title=pipeline.safe_name(meta.get("title", video_id)))
+        return FileResponse(folder / name, media_type=media_type, filename=filename)
+
+    app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
+    return app
 
 
 def main() -> None:
-    settings = load_settings()
-    ui = build_ui(settings)
-    ui.queue(default_concurrency_limit=1).launch(
-        server_name=os.environ.get("DUBBER_HOST", "127.0.0.1"),
-        server_port=int(os.environ.get("DUBBER_PORT", "7860")),
-        inbrowser=os.environ.get("DUBBER_NO_BROWSER") is None,
-        allowed_paths=[str(settings.output_dir)],
-        theme=make_theme(),
-        css=CSS,
-        head=HEAD,
-        footer_links=[],
-    )
+    import uvicorn
+
+    host = os.environ.get("DUBBER_HOST", "127.0.0.1")
+    port = int(os.environ.get("DUBBER_PORT", "7860"))
+    if os.environ.get("DUBBER_NO_BROWSER") is None:
+        threading.Timer(1.5, lambda: webbrowser.open(f"http://{host}:{port}")).start()
+    print(f"«Дубляж» работает: http://{host}:{port}  (не закрывайте это окно)")
+    uvicorn.run(create_app(), host=host, port=port, log_level="warning")
 
 
 if __name__ == "__main__":

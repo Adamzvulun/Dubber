@@ -38,10 +38,20 @@ A Russian-speaking, non-technical user pastes a YouTube link into a local web pa
 - [x] `docs/README.ru.md` user guide for the father
 - [x] UI checked in Chromium with Playwright (desktop + phone width; stubbed pipeline) → `docs/images/ui-start.png`
 
+### M2.5 — Professional website (Adam's request)
+- [x] Design research + design system → `docs/DESIGN.md`
+- [x] Replace Gradio with a custom site: new video, library with thumbnails, watch page
+- [x] Watch page: player with RU/EN subtitles + synced bilingual transcript (click a line to jump)
+- [x] Live job card: 6 steps, progress, elapsed time; jobs survive closing the page
+- [x] Option: dub without the original sound in the background
+- [x] Light + dark mode, phone layout; verified in Chromium (incl. real playback with a VP9 copy)
+- [ ] Verify H.264 playback in Chrome/Edge on a real PC
+
 ### M3 — Quality
 - [ ] Smarter timing: merge short segments into sentences before translating
 - [ ] Glossary of domain terms (his work field) passed to the translator
-- [ ] Voice choice (male/female) and speed in the UI
+- [x] Voice choice (male/female) in the UI
+- [ ] Voice speed in the UI
 - [ ] Optional Demucs: keep background music, remove English voice
 - [ ] Translation prompt asks for "dub-length" Russian when using Claude
 

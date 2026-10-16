@@ -74,3 +74,12 @@ def write_wav(samples, path: Path, sample_rate: int = 24000) -> Path:
         w.setframerate(sample_rate)
         w.writeframes(pcm.tobytes())
     return path
+
+
+def thumbnail(video: Path, out_jpg: Path, width: int = 640) -> Path:
+    """A frame from about a third into the video (skips black intros), as JPEG."""
+    at = min(30.0, duration(video) / 3)
+    run_ffmpeg(
+        ["-ss", f"{at:.2f}", "-i", str(video), "-frames:v", "1", "-vf", f"scale={width}:-2", "-q:v", "4", str(out_jpg)]
+    )
+    return out_jpg

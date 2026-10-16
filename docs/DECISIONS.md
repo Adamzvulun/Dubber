@@ -32,7 +32,7 @@ Newest at the bottom. Format: context → decision → consequences.
   schema + count check + retry in halves), server-side refusal fallback. Override with `DUBBER_CLAUDE_MODEL`.
 - **Consequences:** ~$0.05–0.20 per 10-minute video. Only used when `ANTHROPIC_API_KEY` is set.
 
-## ADR-007 — Web UI with Gradio, designed for an older non-technical Russian reader (2026-10-16)
+## ADR-007 — Web UI with Gradio, designed for an older non-technical Russian reader (2026-10-16) — superseded by ADR-010
 - **Decision:** One column, 18px+ text, one big primary action, PT Sans / PT Serif (ParaType fonts made for Cyrillic),
   calm slate + blue palette, all text in Russian, errors that say what to do. Result video hidden until it exists.
 - **Consequences:** No custom frontend to maintain; Gradio gives progress bar, player and downloads for free.
@@ -50,3 +50,16 @@ Newest at the bottom. Format: context → decision → consequences.
   Support `DUBBER_COOKIES=<cookies.txt>` for when YouTube demands "confirm you're not a bot".
 - **Consequences:** Works without a system-wide deno install. Cookies are only needed on blocked networks
   (datacenters/VPNs); a spare Google account is recommended because YouTube may flag the account.
+
+## ADR-010 — Custom website instead of Gradio (2026-10-16)
+- **Context:** Adam wants a modern, professional site; his father is a professional, not an elderly beginner
+  (ADR-007's assumption was wrong). Gradio limits layout and always looks like a demo.
+- **Decision:** FastAPI server (`dubber/app.py`) with a small JSON API + a hand-built front-end (`dubber/web/`, plain
+  HTML/CSS/JS, no build step). Pages: new video, library, watch page with a synced bilingual transcript.
+  Design tokens and rules in `docs/DESIGN.md`. One background worker runs jobs one at a time.
+- **Consequences:** Full design control, smaller install (Gradio removed), video seeking via HTTP range requests.
+
+## ADR-011 — Optional dub without the original sound (2026-10-16)
+- **Decision:** Switch "Оригинальный звук фоном" (on by default). Off → the default audio track is only the Russian
+  voice; the English original stays available as the second audio track. `DUBBER_KEEP_BACKGROUND=0` for the CLI.
+- **Consequences:** Music and effects disappear too when it is off (Demucs voice/music separation is a later option).

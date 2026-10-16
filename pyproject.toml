@@ -18,7 +18,8 @@ dependencies = [
     "tokenizers>=0.15",
     "huggingface_hub>=0.20",
     "numpy>=1.24",
-    "gradio>=5.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +32,9 @@ dubber-app = "dubber.app:main"
 
 [tool.setuptools.packages.find]
 include = ["dubber*"]
+
+[tool.setuptools.package-data]
+dubber = ["web/*"]
 
 [tool.ruff]
 line-length = 120
