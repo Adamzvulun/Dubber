@@ -10,14 +10,15 @@ description: How the Dubber YouTube→Russian dubbing pipeline works and how to 
 | # | Stage | Module | Cache file in `work/<video-id>/` |
 |---|---|---|---|
 | 1 | Download (yt-dlp or local copy) | `download.py` | `source.mp4` |
-| 2 | Transcribe EN (faster-whisper, word timestamps) → sentence lines (`split_into_units`) | `transcribe.py`, `segments.py` | `audio_16k.wav`, `segments_en_v2.json` |
-| 3 | Translate EN→RU (Google free / Claude) | `translate.py` | `segments_ru_v2.json` |
+| 2 | Transcribe any language: language per stretch of speech (`language_runs`), each run in its own language, word timestamps → sentence lines (`split_into_units`) | `transcribe.py`, `segments.py` | `audio_16k.wav`, `segments_en_v2.json` (name kept; any language), `speech_info.json` |
+| 3 | Translate → target language (`languages.py`; Google auto-source / Claude; offline en→ru fallback) | `translate.py` | `segments_<lang>_v2.json` |
 | 4 | TTS twice: natural speed (measure) → `timing.plan_rates` → planned Edge `rate` | `tts.py`, `timing.py` | `clips_<voice>/00000_<texthash>[_+35].mp3` (per voice) |
-| 5 | Trim clip silence, place lines at their start, ≤1.1× atempo correction, build track | `align.py` | `russian_track_v3_<voice>.wav`, `timing_v3_<voice>.json` |
-| 6 | Subtitles + final MP4 | `subtitles.py`, `mux.py` | `output/<id>/` (dubbed.mp4, meta.json, thumbnail.jpg, segments.json, srt/vtt/txt) |
+| 5 | Trim clip silence, place lines at their start, ≤1.1× atempo correction, build track | `align.py` | `dub_track_v3_<voice>.wav`, `timing_v3_<voice>.json` |
+| 6 | Subtitles + final MP4 | `subtitles.py`, `mux.py` | `output/<id>/` (dubbed.mp4, meta.json with `target_lang`/`source_lang(s)`/`files`, thumbnail.jpg, segments.json, `subtitles_<lang>/src.*`, `transcript_<lang>.txt`, `transcript_src_<lang>.txt`) |
 
 **Resume/cache rule:** a stage is skipped if its cache file exists. To redo a stage, delete its file
-and everything after it (e.g. new translation → delete `segments_ru_v2.json` and `russian_track_*.wav`; clips are keyed by their text).
+and everything after it (e.g. new translation → delete `segments_<lang>_v2.json` and `dub_track_*.wav`; clips are keyed by their text).
+`Segment.ru` holds the translation in whatever the dub language is (name kept for compatibility).
 
 ## Running
 ```bash
@@ -41,6 +42,9 @@ DUBBER_WHISPER_MODEL=tiny  DUBBER_TRANSLATOR=google  DUBBER_VOICE=ru-RU-Svetlana
 - **Slow** → transcription dominates on CPU; try `DUBBER_WHISPER_MODEL=base`.
 
 ## Extending
+- New dub language: add a row to `dubber/languages.py` (Edge voices from `edge_tts.list_voices()`, Google code from
+  `deep_translator.constants`, ISO 639-2 tag) and update the language count in `tests/test_app.py`; the UI reads `/api/languages`.
+- New UI text: add the key to both `ru` and `en` in `dubber/web/i18n.js`; never hard-code strings in `app.js`/`index.html`.
 - New translator: implement `translate_texts(list[str]) -> list[str]` (same length!) + `name`, wire in `make_backend`.
 - New TTS: an async `synth(text, voice, out_path, rate)` (`rate` like `"+35%"`); pass via `synth=` or make it the default in `tts.py`.
 - Every stage must stay testable offline: add a stub in `tests/test_pipeline.py` style, never call the network in tests.

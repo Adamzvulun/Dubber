@@ -81,3 +81,24 @@ Newest at the bottom. Format: context → decision → consequences.
 - **Consequences:** TTS runs twice (≈2× Edge requests; still fast). Caches renamed (`_v2`/`_v3`), so existing videos
   are re-transcribed with word timings when dubbed again. Short translations may end a little early (pace kept steady
   instead of slowing down a lot).
+
+## ADR-014 — Any source language, 12 dub languages, RU/EN interface (2026-10-16)
+- **Context:** Adam's test video mixed English and French; he asked to dub any language, into other languages too.
+  Measured: Whisper with `language="en"` **dropped the French passage**; auto-detect (`multilingual=True` too) picks one
+  language per 30-s window and **dropped the English before it**.
+- **Decision:** detect the language per stretch of speech (Silero VAD regions grouped into ≤20 s pieces; uncertain
+  pieces re-checked region by region), transcribe each run of one language separately (single-language videos: one
+  pass, as before). Google translates with `source="auto"` and re-sends lines left unchanged in mixed chunks.
+  Curated targets in `dubber/languages.py` (ru default, en, he, uk, es, fr, de, it, pt, ar, zh, ja; male + female Edge
+  voice each, verified against the live voice list). Offline translator stays as fallback for en→ru only. Output files
+  are language-coded and listed in `meta.json` (`files`, `target_lang`, `source_lang(s)`); old videos read via legacy
+  defaults. Website: dub-language select, RU/EN interface (`dubber/web/i18n.js`), RTL transcript lines.
+- **Consequences:** translating into non-Russian languages needs Google (or a Claude key); mixed-language originals are
+  tagged `mul` and labelled ORIG in the study transcript; the original transcript cache keeps its `segments_en_v2.json`
+  name so existing videos aren't re-transcribed.
+
+## ADR-015 — Cancel = stop at the next progress report, keep the cache (2026-10-16)
+- **Decision:** `POST /api/jobs/{id}/cancel`. Queued jobs never start; a running job raises from its progress callback
+  (called at every stage start and continuously in download, Whisper and TTS). No confirmation dialog: everything done
+  so far stays in `work/<id>/`, so "Start again" resumes.
+- **Consequences:** a stage without progress calls (model loading, final mux) finishes before the job stops — seconds.

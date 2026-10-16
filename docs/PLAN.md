@@ -67,6 +67,14 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [x] Trim the silence Edge puts around every clip (found while testing)
 - [ ] Adam re-dubs a real video on his PC and listens
 
+### M6 — Languages & polish (Adam, 2026-10-16)
+- [x] Cancel button for a running/queued dub (ADR-015)
+- [x] Any source language, incl. mixed videos — language detected per stretch of speech (ADR-014)
+- [x] 12 dub languages, male/female voice each; language-coded outputs; old library still works
+- [x] RU/EN interface switch; bilingual error messages; RTL transcript
+- [x] QA skill (`web-design-guidelines`) + two QA agents over the whole UX/UI; fixes
+- [ ] Real check on Adam's PC: a non-Russian dub (needs Google from a home connection)
+
 ### M4 — Nice to have
 - [ ] Queue of several links / playlists
 - [ ] Telegram bot front-end

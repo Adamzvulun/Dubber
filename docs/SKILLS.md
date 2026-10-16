@@ -17,6 +17,7 @@ Third-party skills were reviewed line-by-line before installing (see ADR-005). U
 | `webapp-testing` | Playwright testing/screenshots of the local UI | anthropics/skills `dbd4588` | Apache-2.0 | |
 | `youtube-downloader` | yt-dlp troubleshooting (403, nsig, PO tokens, cookies) | [daymade/claude-code-skills](https://github.com/daymade/claude-code-skills) `4ff168c` | MIT | **`scripts/download_video.py` removed** — it auto-installs pip packages from a third-party mirror without asking |
 | `kanban-ai` | Project management: Markdown kanban board in `kanban/` | [mattjoyce/kanban-skill](https://github.com/mattjoyce/kanban-skill) `b86a6ec` | Apache-2.0 | |
+| `web-design-guidelines` | UI/UX + accessibility audit of `dubber/web/` against Vercel's Web Interface Guidelines (~100 rules) | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) (2026-10-16) | MIT | Rules vendored as `guidelines.md` so it works offline; pair with `webapp-testing` for hands-on QA |
 | `handoff` | Documentation: hand-off notes between sessions | [mattpocock/skills](https://github.com/mattpocock/skills) `49dd158` | MIT | Invoked manually (`/handoff`) |
 
 ## Project skills (written for Dubber)
