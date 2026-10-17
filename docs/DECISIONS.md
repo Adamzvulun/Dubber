@@ -159,5 +159,12 @@ Newest at the bottom. Format: context → decision → consequences.
 - **Rejected:** front-end-only ETA from the overall progress bar (fixed weights; cached stages make it jump);
   per-stage speed models from video duration (needs the duration plumbed out of the pipeline; the learned shares get
   most of the benefit with far less code).
+- **Follow-up (v0.3.1, same day):** no-cache could not reach copies saved *before* it existed: on a refresh,
+  Chromium browsers re-check only the page and reuse fresh-by-heuristics `styles.css`/`app.js` — Adam saw the new
+  page with the old styles (huge gear, raw `nav.settings`). The page is now served by the app with its files under
+  versioned addresses (`?v=<version>.<newest file time>`, `app.asset_tag`), so a release can never reuse old copies.
+  Reproduced (old `main` with 10-day-old files → new server → refresh) and verified fixed; a simulated next release
+  shows on the first open without a refresh. Updating from ≤ 0.3.0 may need clearing the browser's cached files once
+  (Adam: Ctrl+F5 did not help in Opera GX).
 - **Consequences:** the first dubs on a new PC use the default shares; the estimate improves after a few dubs. Every
   release must bump `__version__` (and `pyproject.toml`).

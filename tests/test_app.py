@@ -352,3 +352,21 @@ def test_version_check_against_a_real_server_port(tmp_path):
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
     assert app.running_version("127.0.0.1", port, timeout=0.5) is None
+
+
+def test_page_links_its_files_under_new_addresses_for_each_release(tmp_path):
+    # Browsers keep the old styles.css / app.js on a refresh (only the page itself is re-checked) when they were
+    # saved before the server sent no-cache — after an update Adam saw the new page with the old styles. Each release
+    # (and each changed file) therefore gets new addresses.
+    from dubber import __version__
+
+    c, _ = client(tmp_path)
+    for path in ("/", "/index.html"):
+        page = c.get(path)
+        assert page.status_code == 200 and page.headers["cache-control"] == "no-cache"
+        assert "__ASSETS__" not in page.text
+        tag = app.asset_tag()
+        for name in ("styles.css", "i18n.js", "app.js"):
+            assert f'/{name}?v={tag}"' in page.text
+        assert tag.startswith(__version__)
+    assert c.get(f"/app.js?v={app.asset_tag()}").status_code == 200

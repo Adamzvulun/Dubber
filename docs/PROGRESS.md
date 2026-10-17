@@ -2,6 +2,24 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-18 — Session 2f: installer "stuck after Obtaining file", hand-off docs
+- Adam: the installer window seems stuck after "Obtaining file:///…". Not reproducible here (the step takes ~3 s; the
+  editable build does not walk `work/`/`.venv`). The next hidden step is pip's build isolation (a temporary env that
+  downloads setuptools, silent in plain output). Both installers now install `pip setuptools wheel` into `.venv`
+  first, install Dubber with `--no-build-isolation`, and write a full `install.log` (git-ignored) to share if it
+  stalls; the window says it can take 10–15 min the first time. Verified in a fresh venv (Linux).
+- Adam's git rule: a new branch only for a new feature; fixes go on the current branch (CONTRIBUTING, CLAUDE.md).
+- STATUS rewritten for the next session; kanban hand-off list refreshed.
+
+## 2026-10-18 — Session 2e: old styles after updating (PR `fix/asset-versions`, v0.3.1)
+- Adam updated to 0.3.0: first the old page opened; after a refresh the page was "broken" — new HTML with the old
+  `styles.css`/`i18n.js` (huge gear, raw `nav.settings`). Reproduced exactly in Chromium (old `main` with 10-day-old
+  files, then the new server, then a refresh): browsers re-check only the page on refresh and reuse saved files.
+- Fix: the app serves `index.html` itself with versioned file addresses (`?v=<version>.<newest file time>`); verified
+  the reproduction is fixed and that a simulated next release appears on the first open without refresh.
+  Adam: Ctrl+F5 didn't help in Opera GX → README.ru says to clear cached files once (Ctrl+Shift+Delete) when
+  updating from ≤ 0.3.0. 90 tests pass.
+
 ## 2026-10-17 — Session 2d: updates always visible + time left (PR `fix/updates-and-eta`, v0.3.0)
 - Adam: after updating to `main` no Settings icon / model menu; wants a time-left timer.
 - Cause (verified): starting the new version while the old window runs left the old server on port 7860 — the new

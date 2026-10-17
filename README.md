@@ -40,7 +40,7 @@ Results go to `output/<video id>/` and appear in the website's library.
 
 ## Updating
 Close the running window, download `main` as a ZIP and extract it **over** the old folder (keeps `work/`, `output/`,
-`.env`, `glossary.txt`), run `scripts\install_windows.bat`, start from the desktop shortcut. The page footer shows the
+`.env`, `glossary.txt`), run `scripts\install_windows.bat` (full pip log: `install.log`), start from the desktop shortcut. The page footer shows the
 version. Starting while an older copy still runs now says "already running" instead of showing the old page.
 
 ## Settings (optional, in a `.env` file next to this README)

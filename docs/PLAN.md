@@ -1,6 +1,6 @@
 # Plan & roadmap
 
-_Last updated: 2026-10-17 (session 2)_ — current state at a glance: `docs/STATUS.md`. Task cards: `kanban/`.
+_Last updated: 2026-10-18 (end of session 2)_ — current state at a glance: `docs/STATUS.md`. Task cards: `kanban/`.
 
 ## Goal
 A Russian-speaking professional (not a developer) pastes a YouTube link into a local web page and gets:
@@ -85,6 +85,8 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [ ] Adam's first real dub with a Claude key (end-to-end check; compare timing with the free path)
 - [x] Updates always visible: no-cache site files, version in the footer, "already running" check (ADR-018)
 - [x] Time left on the job card, learned from this PC's past dubs (ADR-018)
+- [x] Versioned site file addresses so a release never shows old styles (v0.3.1, ADR-018 follow-up)
+- [ ] Installer stall after "Obtaining file:///…": build isolation removed + `install.log` (v0.3.1) — Adam to re-run
 
 ### M4 — Nice to have
 - [ ] Queue of several links / playlists

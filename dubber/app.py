@@ -37,7 +37,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -283,6 +283,17 @@ def _read_meta(folder: Path) -> dict | None:
     return meta
 
 
+def asset_tag() -> str:
+    """Part of the address of the site's files: changes with every release and whenever a file changes.
+
+    A browser that saved styles.css / app.js before the server said no-cache keeps using them on a refresh (only the
+    page itself is re-checked): after an update Adam saw the new page with the old styles. New addresses can't hit
+    those old copies.
+    """
+    newest = max(f.stat().st_mtime_ns for f in WEB_DIR.iterdir() if f.is_file())
+    return f"{__version__}.{newest // 1_000_000_000:x}"
+
+
 class _FreshStaticFiles(StaticFiles):
     """The website's own files, always checked with the server (ETag) so an update is never hidden behind the
     browser's saved copy of the old page."""
@@ -331,6 +342,12 @@ def create_app(
         if req.lang not in languages.LANGUAGES:
             raise HTTPException(422, _detail("Неизвестный язык", "Unknown language"))
         return jobs.submit(url, req.voice, req.background, req.lang).public()
+
+    @app.get("/", include_in_schema=False)
+    @app.get("/index.html", include_in_schema=False)
+    def index() -> HTMLResponse:
+        page = (WEB_DIR / "index.html").read_text(encoding="utf-8").replace("__ASSETS__", asset_tag())
+        return HTMLResponse(page, headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/version")
     def version() -> dict:

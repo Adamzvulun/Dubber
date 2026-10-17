@@ -2,9 +2,10 @@
 
 - **`main` is the stable line.** It always passes CI (`ruff check .` + `pytest`) and is what Adam installs
   (GitHub → Code → Download ZIP, then `scripts\install_windows.bat`). Nobody commits to `main` directly.
-- **One branch per piece of work**, created from the latest `main`:
-  `feat/<short-name>` (new feature), `fix/<short-name>` (bug), `chore/<short-name>` (tooling, docs, cleanup).
-  Claude Code sessions may also work on their session branch (`claude/...`); the same rules apply.
+- **A new branch only for a new feature** (Adam, 2026-10-18), created from the latest `main`: `feat/<short-name>`.
+  Fixes, follow-ups and docs for the work in progress go on **that same branch** (or the Claude session's
+  `claude/...` branch) — not a new branch per fix. When its PR is merged and more fixes come, continue on the same
+  branch name, restarted from the latest `main`.
 - **Small commits with clear messages**: an imperative summary line (≤ 72 chars), then why — not just what.
   Run `.venv/bin/ruff check . && .venv/bin/pytest` before every commit.
 - **Pull request into `main`** for every branch. Fill in the template (summary, how it was verified, docs updated).
