@@ -12,9 +12,9 @@ real dubs. Adam re-dubbed his English+French video: it works, but he finds **tra
 than before** — under investigation (`kanban/translation-timing-regression.md`).
 
 ## Where things are
-- **Branch:** `claude/inspiring-davinci-4qon8o` — Adam starts new sessions from it. The repo's default branch
-  `claude/bold-davinci-qfv627` is **outdated** (stops before the timing, languages and translation work); there is no
-  `main`. Adam installs by downloading this branch's ZIP and running `scripts\install_windows.bat`.
+- **Branch:** **`main`** (created 2026-10-17) is the stable line; new work = a branch + PR that Adam reviews and
+  merges (`CONTRIBUTING.md`); CI runs lint + tests on every PR. Adam installs from `main`'s ZIP and runs
+  `scripts\install_windows.bat`. Files Adam shares come on `uploads/…` branches into `dev-uploads/`.
 - **Code:** `dubber/` (pipeline + `app.py`), `dubber/web/` (site, `i18n.js` = all UI text RU/EN), `tests/` (64 tests,
   offline), `tools/` (stub server, 12-language QA), `scripts/` (installers/launchers). Conventions: `CLAUDE.md`.
 - **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…016), `DESIGN.md`

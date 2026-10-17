@@ -46,7 +46,7 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [x] Option: dub without the original sound in the background
 - [x] Light + dark mode, phone layout; verified in Chromium (incl. real playback with a VP9 copy)
 - [ ] Verify H.264 playback in Chrome/Edge on a real PC
-- [ ] Optional: PR `claude/bold-davinci-qfv627` → `main` (so "Download ZIP" works without picking a branch)
+- [x] `main` branch + PR workflow + CI (lint + tests) + `dev-uploads/` (2026-10-17); Adam sets `main` as default
 
 ### M3 — Quality
 - [x] Smarter timing: merge short segments into sentences before translating (`segments.merge_into_sentences`)
