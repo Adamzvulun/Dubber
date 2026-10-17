@@ -33,7 +33,7 @@ Conclusion: build a small, focused, well-tested tool from the same proven buildi
 | Download | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | De-facto standard. YouTube often blocks **datacenter IPs** — fine on a home PC. Keep yt-dlp updated (`pip install -U yt-dlp`). |
 | Speech→text | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | CTranslate2 Whisper, ~4× faster than openai-whisper, int8 on CPU. Model `small` is a good CPU default; `medium`/`large-v3` with GPU. |
 | Translation | [deep-translator](https://github.com/nidhaloff/deep-translator) Google backend — free default; [Claude API](https://docs.anthropic.com) (`claude-opus-5-5`, opt-in with a key) | LLM translation keeps context across segments and keeps sentences short enough to dub. |
-| Offline translation | [Helsinki-NLP opus-mt-en-ru](https://huggingface.co/Helsinki-NLP/opus-mt-en-ru) via [Xenova ONNX export](https://huggingface.co/Xenova/opus-mt-en-ru) + onnxruntime | Automatic fallback when Google refuses. ~110 MB, no PyTorch. Literal quality; translate one sentence at a time. |
+| Offline translation | [NLLB-200 distilled 1.3B](https://huggingface.co/OpenNMT/nllb-200-distilled-1.3B-ct2-int8) (CTranslate2 int8, CC-BY-NC) | Automatic fallback for **any** language pair when Google refuses (ADR-016); 1.4 GB on first use. Replaced opus-mt-en-ru (English→Russian only). |
 | Russian TTS | [edge-tts](https://github.com/rany2/edge-tts) | Free Microsoft neural voices: `ru-RU-DmitryNeural` (male), `ru-RU-SvetlanaNeural` (female). Needs internet. |
 | Timing | ffmpeg `atempo` | Speed clips up (capped) to fit segment slots. Replaced by Edge TTS `rate` + a steady-pace planner (`timing.py`); `atempo` is now only a ≤1.1× correction. See "Dub timing". |
 | Mixing/mux | [ffmpeg](https://ffmpeg.org) | Duck original audio, overlay Russian, embed soft subtitles (`mov_text`). |
@@ -135,6 +135,50 @@ failure ~1e-6; see `tts.py`.
 5. Optional (Claude key): **length-budgeted translation** — "say this in ≤ N syllables" from the slot length, retry
    if the clip still doesn't fit. Free path: Google/offline output, rate control only.
 6. A **timing report** per video (start offsets, rates used, overflow) saved with the output, so quality is measured.
+
+## Every dub language: translation + timing QA — 2026-10-17
+Adam re-dubbed his English+French video: the French part was "not translated half the time, the other half gibberish".
+
+### Causes found
+1. **Google refuses at random** (robot check / HTTP 429; from this sandbox ~2 of 3 requests, later all). One refusal
+   switched the rest of the video to the **offline English→Russian model**, which turned French into gibberish.
+2. **Mixed batches:** Google detects one language per request, so a French line inside an English batch could come
+   back untranslated and be voiced as French.
+3. **Stale transcripts:** videos transcribed by the forced-English Whisper kept their cache.
+4. Found by this QA: language detection on 20-s pieces mostly hears the piece's start, so English lines after French
+   were labelled French (→ per-region detection with Whisper `base`: 19/19 regions right).
+
+### Fix (ADR-016)
+Line language from Whisper (per speech region) → one-language batches → Google JSON endpoint with retries →
+**NLLB-200 1.3B** (offline, any language pair, CTranslate2 int8, 1.4 GB on first use) when Google stays unavailable →
+quality gate (untranslated or wrong-script line re-sent; else the job stops rather than voicing it). Lines already in
+the dub language are kept. NLLB quirks handled: sentence-by-sentence; Chinese stopping at a comma → forced
+continuation (`min_decoding_length` past the cut) and clause split; stray spaces before punctuation removed.
+
+### QA run: real pipeline, 2 multilingual clips × 12 dub languages (Google blocked here → offline NLLB path)
+Clips: 33 s English+French (bakery), 29 s English+Spanish+German (morning habits); synthetic voices, real Whisper,
+real Edge voices. "Re-heard" = Whisper (target language) listening to the dub vs the intended text.
+
+| Dub language | EN+FR clip: untranslated / re-heard / late lines / rate range | EN+ES+DE clip: untranslated / re-heard / late lines / rate range |
+|---|---|---|
+| ru | 0 / 99% / 0 / 1.15–1.60× | 0 / 93% / 0 / 1.12–1.28× |
+| en | 0 / 100% / 0 / 0.90–1.02× | 0 / 97% / 0 / 0.90–1.01× |
+| he | 0 / 95% / 0 / 1.10–1.50× | 0 / 94% / 0 / 1.24–1.40× |
+| uk | 0 / 97% / 0 / 1.22–1.47× | 0 / 99% / 0 / 1.08–1.25× |
+| es | 0 / 100% / 0 / 0.91–1.13× | 0 / 99% / 0 / 0.95–1.13× |
+| fr | 0 / 100% / 0 / 0.93–1.14× | 0 / 97% / 0 / 0.95–1.15× |
+| de | 0 / 98% / 0 / 1.00–1.24× | 0 / 100% / 0 / 1.05–1.29× |
+| it | 0 / 100% / 0 / 1.01–1.26× | 0 / 99% / 0 / 1.20–1.42× |
+| pt | 0 / 98% / 0 / 1.00–1.24× | 0 / 99% / 0 / 1.14–1.32× |
+| ar | 0 / 100% / 0 / 1.27–1.43× | 0 / 97% / 0 / 1.30–1.47× |
+| zh | 0 / 97% / 0 / 0.90–1.05× | 0 / 100% / 0 / 0.91–1.08× |
+| ja | 0 / 94% / 0 / 1.06–1.22× | 0 / 96% / 0 / 0.97–1.20× |
+
+Meaning, read line by line (all 24 dubs): correct in every language, with these offline-backup slips: Hebrew "flour"
+→ "acid/vinegar" (חומצה/חומץ); Japanese "welcome back" → "seems you're back"; one Arabic word misspelled; the
+speaker's gender isn't known to the translator (a woman speaking can come out masculine in Hebrew). One English line
+was garbled by Whisper itself (two sentences merged), which every translation inherits. Google (primary on Adam's PC)
+could not be exercised end-to-end here (429 on every try) — its client is covered by unit tests.
 
 ## Risks
 - YouTube anti-bot changes → keep yt-dlp updated; cookies-from-browser fallback (see `youtube-downloader` skill references).

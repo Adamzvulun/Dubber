@@ -102,3 +102,14 @@ Newest at the bottom. Format: context → decision → consequences.
   (called at every stage start and continuously in download, Whisper and TTS). No confirmation dialog: everything done
   so far stays in `work/<id>/`, so "Start again" resumes.
 - **Consequences:** a stage without progress calls (model loading, final mux) finishes before the job stops — seconds.
+
+## ADR-016 — Reliable translation for every dub language (2026-10-17)
+- **Context:** Adam: French lines of a mixed video "not translated half the time, the other half gibberish". Causes:
+  random Google refusals switched the rest of the video to the English→Russian-only offline model; mixed-language
+  batches; stale forced-English transcripts.
+- **Decision:** every line carries its spoken language (Whisper `base` detects it per speech region); translation in
+  one-language batches; Google via its JSON endpoint with 2-4-8-16-30 s retries; fallback = NLLB-200 distilled 1.3B
+  (CTranslate2 int8, any pair, CC-BY-NC — fine for this personal tool); quality gate before voicing; lines already in
+  the dub language kept; deep-translator dropped. Caches versioned/content-keyed so old videos are redone.
+- **Consequences:** first offline fallback downloads 1.4 GB; the watch page says when the offline backup translated.
+  NLLB is good but not Google-grade (see RESEARCH "Every dub language"); a Claude key remains the quality option.

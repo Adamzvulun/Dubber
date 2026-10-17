@@ -73,7 +73,9 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [x] 12 dub languages, male/female voice each; language-coded outputs; old library still works
 - [x] RU/EN interface switch; bilingual error messages; RTL transcript
 - [x] QA skill (`web-design-guidelines`) + two QA agents over the whole UX/UI; fixes
-- [ ] Real check on Adam's PC: a non-Russian dub (needs Google from a home connection)
+- [x] Reliable translation for every language: line languages, Google retries, NLLB backup, quality gate (ADR-016)
+- [x] 12-language QA: 2 multilingual clips × 12 dub languages, real pipeline (RESEARCH "Every dub language")
+- [ ] Real check on Adam's PC: re-dub the EN+FR video (Google path from a home connection)
 
 ### M4 — Nice to have
 - [ ] Queue of several links / playlists

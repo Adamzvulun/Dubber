@@ -173,16 +173,31 @@ class NllbBackend:
         self._tok = Tokenizer.from_file(os.path.join(path, "tokenizer.json"))
         self._model = ctranslate2.Translator(path, device="cpu", compute_type="int8")
 
+    def _decode(self, tokens: list[str]) -> str:
+        text = self._tok.decode([self._tok.token_to_id(t) for t in tokens]).strip()
+        return re.sub(r"\s+([.,!?;:…])", r"\1", text)  # NLLB sometimes leaves "word ."
+
+    def _generate(self, texts: list[str], src: str, prefixes=None, min_length: int = 0) -> list[list[str]]:
+        tokens = [[src, *self._tok.encode(t, add_special_tokens=False).tokens, "</s>"] for t in texts]
+        results = self._model.translate_batch(
+            tokens, target_prefix=prefixes or [[self.target.nllb]] * len(texts), beam_size=4, length_penalty=1.5,
+            min_decoding_length=min_length, max_decoding_length=256,
+        )
+        return [r.hypotheses[0][1:] for r in results]  # without the language token
+
     def _run(self, texts: list[str], src: str) -> list[str]:
         if not texts:
             return []
-        tokens = [[src, *self._tok.encode(t, add_special_tokens=False).tokens, "</s>"] for t in texts]
-        results = self._model.translate_batch(
-            tokens, target_prefix=[[self.target.nllb]] * len(texts), beam_size=4, length_penalty=1.5,
-            max_decoding_length=256,
-        )
-        texts = [self._tok.decode([self._tok.token_to_id(t) for t in r.hypotheses[0][1:]]).strip() for r in results]
-        return [re.sub(r"\s+([.,!?;:…])", r"\1", t) for t in texts]  # NLLB sometimes leaves "word ."
+        out = []
+        for text, hyp in zip(texts, self._generate(texts, src), strict=True):
+            translated = self._decode(hyp)
+            if self._looks_cut(text, translated):
+                # Stopped after the first clause (seen for Chinese): make the model continue past the comma.
+                more = self._generate([text], src, [[self.target.nllb, *hyp]], min_length=len(hyp) + 7)[0]
+                if len(more) > len(hyp):
+                    translated = self._decode(more)
+            out.append(translated)
+        return out
 
     def _looks_cut(self, source: str, out: str) -> bool:
         return not out or out.endswith((",", "，", "、")) and not source.rstrip().endswith(",")
@@ -197,7 +212,7 @@ class NllbBackend:
             for sentence in group:
                 text = flat[i]
                 i += 1
-                if self._looks_cut(sentence, text):  # stopped early: translate clause by clause
+                if self._looks_cut(sentence, text):  # still stopped early: translate clause by clause
                     clauses = [c for c in re.split(r"(?<=[,;:])\s+", sentence) if c]
                     joiner = "，" if self.target.code in ("zh", "ja") else " "
                     text = joiner.join(c.rstrip("，,") for c in self._run(clauses, src)) if len(clauses) > 1 else text

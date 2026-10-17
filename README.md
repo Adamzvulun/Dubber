@@ -47,6 +47,7 @@ Results go to `output/<video id>/` and appear in the website's library.
 | `DUBBER_COOKIES` | – | path to a `cookies.txt` exported from your browser, if YouTube says "confirm you're not a bot" |
 | `ANTHROPIC_API_KEY` | – | enables Claude translation (a few cents per video) |
 | `DUBBER_CLAUDE_MODEL` | `claude-opus-5-5` | Claude model used for translation |
+| `DUBBER_TRANSLATOR` | `auto` | `auto` (Google, or Claude with a key; offline NLLB backup), `google`, `claude`, `offline` |
 | `DUBBER_LANG` | `ru` | default dub language (`ru en he uk es fr de it pt ar zh ja`) |
 | `DUBBER_KEEP_BACKGROUND` | `1` | `0` = only the dubbed voice, without the original sound underneath (also a switch on the website) |
 | `DUBBER_MAX_SPEEDUP` | `1.6` | fastest the dub voice may speak (1.6 = 60% faster than natural) to keep the speaker's timing |

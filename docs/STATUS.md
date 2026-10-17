@@ -5,19 +5,19 @@ _Last updated: 2026-10-16 (session 1i: languages, cancel, RU/EN UI, QA). Update 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video in any spoken language (also
 mixed, e.g. English + French) into a dubbed MP4 in one of 12 languages (Russian by default) with subtitles and
-transcripts. It is built for Adam's father, a Russian-speaking professional who learns from foreign videos. It runs on
+transcripts (every language QA-tested: translation, re-listen, timing — RESEARCH "Every dub language"). It is built for Adam's father, a Russian-speaking professional who learns from foreign videos. It runs on
 Adam's Windows PC; Adam reports the dub timing "works great". The UI has a RU/EN switch and a cancel button.
 
 ## Where things are
 - **Branch:** current work is on `claude/inspiring-davinci-4qon8o` (pushed; builds on `claude/bold-davinci-qfv627`).
   **Not merged to `main` yet** — Adam may want a PR so "Download ZIP" on the repo page just works.
-- **Code:** `dubber/` (pipeline stages + `app.py` server), `dubber/web/` (site), `tests/` (62 tests, offline),
+- **Code:** `dubber/` (pipeline stages + `app.py` server), `dubber/web/` (site), `tests/` (64 tests, offline),
   `scripts/` (installers/launchers). Architecture and conventions: `CLAUDE.md`.
-- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history), `DECISIONS.md` (ADRs 001–015), `DESIGN.md` (site design system),
+- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history), `DECISIONS.md` (ADRs 001–016), `DESIGN.md` (site design system),
   `RESEARCH.md` (tools + real-world findings), `SKILLS.md` (installed Claude skills), `README.ru.md` (father's guide).
-- **Data on a user's PC:** `work/<id>/` = cache per video (`source.mp4`, `info.json`, `segments_en_v2.json` (original, any
-  language), `speech_info.json`, `segments_<lang>_v2.json`, `clips_<voice>/`, `dub_track_v3_<voice>.wav`,
-  `timing_v3_<voice>.json`); `output/<id>/` = what the library shows (`dubbed.mp4`, `meta.json`,
+- **Data on a user's PC:** `work/<id>/` = cache per video (`source.mp4`, `info.json`, `segments_src_v3.json` (original, any
+  language, with line languages), `speech_info.json`, `segments_<lang>_v3.json` (+ `.translator`), `clips_<voice>/`,
+  `dub_track_<voice>_<hash>.wav`, `timing_<voice>_<hash>.json`); `output/<id>/` = what the library shows (`dubbed.mp4`, `meta.json`,
   `thumbnail.jpg`, `segments.json`, `timing.json`, `subtitles_*.srt/.vtt`, `transcript_*.txt`). Both are git-ignored.
 
 ## What works (verified by running it)

@@ -10,14 +10,14 @@ description: How the Dubber YouTube→Russian dubbing pipeline works and how to 
 | # | Stage | Module | Cache file in `work/<video-id>/` |
 |---|---|---|---|
 | 1 | Download (yt-dlp or local copy) | `download.py` | `source.mp4` |
-| 2 | Transcribe any language: language per stretch of speech (`language_runs`), each run in its own language, word timestamps → sentence lines (`split_into_units`) | `transcribe.py`, `segments.py` | `audio_16k.wav`, `segments_en_v2.json` (name kept; any language), `speech_info.json` |
-| 3 | Translate → target language (`languages.py`; Google auto-source / Claude; offline en→ru fallback) | `translate.py` | `segments_<lang>_v2.json` |
+| 2 | Transcribe any language: language per stretch of speech (`language_runs`), each run in its own language, word timestamps → sentence lines (`split_into_units`) | `transcribe.py`, `segments.py` | `audio_16k.wav`, `segments_src_v3.json` (with `lang` per line), `speech_info.json` |
+| 3 | Translate → target language: one-language batches, Google (retries) / Claude, NLLB-200 offline backup, quality gate (`Translator`) | `translate.py` | `segments_<lang>_v3.json` (+ `.translator`) |
 | 4 | TTS twice: natural speed (measure) → `timing.plan_rates` → planned Edge `rate` | `tts.py`, `timing.py` | `clips_<voice>/00000_<texthash>[_+35].mp3` (per voice) |
-| 5 | Trim clip silence, place lines at their start, ≤1.1× atempo correction, build track | `align.py` | `dub_track_v3_<voice>.wav`, `timing_v3_<voice>.json` |
+| 5 | Trim clip silence, place lines at their start, ≤1.1× atempo correction, build track | `align.py` | `dub_track_<voice>_<hash>.wav`, `timing_<voice>_<hash>.json` |
 | 6 | Subtitles + final MP4 | `subtitles.py`, `mux.py` | `output/<id>/` (dubbed.mp4, meta.json with `target_lang`/`source_lang(s)`/`files`, thumbnail.jpg, segments.json, `subtitles_<lang>/src.*`, `transcript_<lang>.txt`, `transcript_src_<lang>.txt`) |
 
 **Resume/cache rule:** a stage is skipped if its cache file exists. To redo a stage, delete its file
-and everything after it (e.g. new translation → delete `segments_<lang>_v2.json` and `dub_track_*.wav`; clips are keyed by their text).
+and everything after it (e.g. new translation → delete `segments_<lang>_v3.json`; the track is keyed by the lines' content, clips by their text).
 `Segment.ru` holds the translation in whatever the dub language is (name kept for compatibility).
 
 ## Running
@@ -38,6 +38,9 @@ DUBBER_WHISPER_MODEL=tiny  DUBBER_TRANSLATOR=google  DUBBER_VOICE=ru-RU-Svetlana
   measured 2026-10-16) and always for text without letters ("…", "—", "♪"). `tts.py` skips unspeakable lines, retries
   5×, falls back to the natural-speed clip, leaves one line silent as a last resort, and only fails the job when >20%
   of lines get no audio (= real outage).
+- **Line untranslated / wrong language / gibberish** → check `segments_src_v3.json` `lang` per line (Whisper `base`
+  detection per speech region) and `segments_<lang>_v3.translator` (google / offline). QA harness pattern: dub a
+  clip, Whisper re-listens the track in the target language, back-translate with NLLB (RESEARCH "Every dub language").
 - **Nothing heard** → `ffprobe` the track wav; check `clips/` sizes (0-byte = TTS failed).
 - **Slow** → transcription dominates on CPU; try `DUBBER_WHISPER_MODEL=base`.
 

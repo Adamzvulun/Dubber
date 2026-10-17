@@ -2,6 +2,16 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-17 — Session 1j: every language translated correctly + 12-language QA
+- Adam: in his EN+FR video the French was untranslated or gibberish; all languages must work like the Russian dub.
+- Causes and fix: see ADR-016 and RESEARCH "Every dub language". Line languages (per-region detection), Google JSON
+  client with retries, NLLB-200 1.3B offline backup for any pair, quality gate, versioned caches.
+- QA harness (real Whisper/NLLB/Edge, 2 multilingual clips × 12 languages = 24 dubs): 0 untranslated lines, 0 late
+  lines, dub re-heard by Whisper 93–100%, pace 0.90–1.60×. Bugs it caught and fixed: English after French labelled
+  French (detection), Chinese lines cut at a comma (forced continuation), stray spaces before punctuation; plus a
+  metric bug in the harness itself (difflib autojunk). Google could not be tested live here (429).
+- 64 tests pass.
+
 ## 2026-10-16 — Session 1i: cancel, any language, RU/EN interface, agent QA
 - Adam: dubbing "works great"; asked for a cancel button, any-language dubbing (his video had French in it), and an
   agent QA pass over the UX/UI with a QA skill.

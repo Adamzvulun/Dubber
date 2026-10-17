@@ -18,3 +18,5 @@ languages too; find a QA skill and let an agent go over the whole UX/UI. Plan: `
   two QA agents running. (by @claude)
 - 2026-10-16: QA agents reported ~40 findings; all real ones fixed and re-verified in Chromium (focus, skip link,
   360 px, dark mode, transcript keys, job order). Remaining: real non-Russian dub on Adam's PC (Google). (by @claude)
+- 2026-10-17: Adam: French untranslated/gibberish. Fixed (ADR-016) and QA'd 24 dubs (2 clips × 12 languages):
+  0 untranslated, 0 late, re-heard 93–100%. Waiting for Adam's re-dub on his PC. (by @claude)
