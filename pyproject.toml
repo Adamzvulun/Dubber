@@ -20,11 +20,11 @@ dependencies = [
     "numpy>=1.24",
     "fastapi>=0.110",
     "uvicorn>=0.29",
+    "anthropic>=1.0",  # Claude translation (paid, opt-in: used only when a key is entered in the settings)
 ]
 
 [project.optional-dependencies]
-claude = ["anthropic>=1.0"]
-dev = ["pytest>=8", "ruff>=0.6", "anthropic>=1.0"]
+dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
 dubber = "dubber.cli:main"

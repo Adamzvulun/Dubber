@@ -224,3 +224,58 @@ def test_dub_into_hebrew_from_french(tmp_path, sample_video, monkeypatch):
         capture_output=True, text=True, check=True).stdout)
     tags = [(s["codec_type"], s.get("tags", {}).get("language")) for s in info["streams"] if s["codec_type"] != "video"]
     assert tags == [("audio", "heb"), ("audio", "fre"), ("subtitle", "heb")]
+
+
+class NamedTranslator:
+    """Stands in for translate.Translator: `name` says which engine ended up translating."""
+
+    def __init__(self, name, notes=(), cost=0.0):
+        self.name, self.notes, self.cost_usd, self.calls = name, list(notes), cost, 0
+
+    def translate_texts(self, texts, langs=None, seconds=None):
+        self.calls += 1
+        return [f"Русский {i}" for i, _ in enumerate(texts)]
+
+
+def test_claude_translation_cache_cost_and_fallback(tmp_path, sample_video, monkeypatch):
+    from dubber import translate
+
+    made = []
+
+    def fake_make_backend(choice, model, glossary, target, api_key):
+        made.append((choice, model, glossary, api_key))
+        return engines.pop(0)
+
+    monkeypatch.setattr(translate, "make_backend", fake_make_backend)
+    glossary = tmp_path / "glossary.txt"
+    glossary.write_text("sourdough = закваска", encoding="utf-8")
+    settings = Settings(work_dir=tmp_path / "work", output_dir=tmp_path / "out", claude_key="sk-ant-test",
+                        glossary_file=glossary, translator="auto")
+    run = lambda: pipeline.run(str(sample_video), settings, synth=stub_synth, transcriber=stub_transcriber)  # noqa: E731
+
+    # 1. Claude fails (no credit) and Google translates: saved as a free translation, the reason is kept.
+    engines = [NamedTranslator("google", notes=["claude:credit"])]
+    meta = json.loads((run().folder / "meta.json").read_text(encoding="utf-8"))
+    assert meta["translator"] == "google" and meta["translator_notes"] == ["claude:credit"]
+    assert made[-1] == ("auto", "claude-opus-5-5", "sourdough = закваска", "sk-ant-test")
+
+    # 2. Next run tries Claude again (credit added): its own cache, with model and cost.
+    engines = [NamedTranslator("claude", cost=0.0812)]
+    meta = json.loads((run().folder / "meta.json").read_text(encoding="utf-8"))
+    assert meta["translator"] == "claude" and meta["translator_model"] == "claude-opus-5-5"
+    assert meta["translation_cost_usd"] == 0.0812 and len(made) == 2
+
+    # 3. Same settings: the Claude translation is reused (no new request, no new cost).
+    run()
+    assert len(made) == 2
+
+    # 4. Glossary edited: translated again.
+    glossary.write_text("sourdough = опара", encoding="utf-8")
+    engines = [NamedTranslator("claude", cost=0.05)]
+    run()
+    assert len(made) == 3
+
+    # 5. Without a key the free cache from step 1 is used.
+    settings.claude_key = ""
+    meta = json.loads((run().folder / "meta.json").read_text(encoding="utf-8"))
+    assert meta["translator"] == "google" and len(made) == 3

@@ -65,6 +65,16 @@ LANGUAGES: dict[str, Language] = {
     ]
 }
 
+# Characters per second the dub voice says at its natural speed (estimates from Edge voices, spaces included). Used to
+# ask a translator for lines that fit their time slot (`translate.ClaudeBackend`); 14 when unknown.
+_CPS = {"ru": 14.0, "uk": 14.0, "en": 14.0, "es": 15.0, "fr": 15.0, "it": 15.0, "pt": 15.0, "de": 14.0,
+        "he": 12.0, "ar": 12.0, "zh": 5.0, "ja": 7.0}
+
+
+def chars_per_second(code: str | None) -> float:
+    return _CPS.get((code or "").lower(), 14.0)
+
+
 # Whisper language code (any spoken language) → NLLB-200 code, for the offline translator's source side.
 _NLLB = {code: lang.nllb for code, lang in LANGUAGES.items()} | {
     "pl": "pol_Latn", "nl": "nld_Latn", "tr": "tur_Latn", "ko": "kor_Hang", "hi": "hin_Deva", "sv": "swe_Latn",

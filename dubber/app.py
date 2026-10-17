@@ -10,6 +10,11 @@ API
 - GET  /api/videos, /api/videos/{id}                                → library, one video + its timed transcript
 - DELETE /api/videos/{id}                                           → remove from the library
 - GET  /files/{id}/{name}[?download=1]                               → video, subtitles, transcripts, thumbnail
+- GET  /api/settings, PUT /api/settings {use_claude, model, glossary} → translation settings (saved in .env)
+- POST /api/settings/claude-key {key}, DELETE /api/settings/claude-key → check + save / remove the Claude API key
+
+Requests that change something are refused when they come from another website (Origin check): the server listens
+on this computer only, but a page open in the same browser could otherwise send them.
 """
 
 from __future__ import annotations
@@ -28,14 +33,15 @@ import webbrowser
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import languages, pipeline
-from .config import Settings, load_settings
+from . import languages, pipeline, translate
+from .config import Settings, load_settings, save_env
 from .download import is_url
 
 WEB_DIR = Path(__file__).parent / "web"
@@ -214,6 +220,32 @@ class JobRunner:
                 job.status, job.error, job.error_en = "error", friendly_error(exc), friendly_error(exc, "en")
 
 
+class SettingsUpdate(BaseModel):
+    use_claude: bool | None = None
+    model: str | None = None
+    glossary: str | None = None
+
+
+class KeyRequest(BaseModel):
+    key: str
+
+
+# Rough cost of translating 10 minutes of speech (~1,500 words): ~3k input and ~4k output tokens (thinking included).
+_TEN_MIN_TOKENS = (3_000, 4_000)
+_KEY_ERRORS = {
+    "auth": ("Ключ не подошёл. Проверьте, что он скопирован полностью.",
+             "The key was not accepted. Check that it was copied completely."),
+    "permission": ("У этого ключа нет доступа к Claude. Создайте новый ключ в консоли Anthropic.",
+                   "This key has no access to Claude. Create a new key in the Anthropic console."),
+    "unavailable": ("Не удалось связаться с Anthropic. Проверьте интернет и попробуйте снова.",
+                    "Couldn't reach Anthropic. Check the internet and try again."),
+}
+
+
+def _key_hint(key: str) -> str:
+    return f"…{key[-4:]}" if key else ""
+
+
 class JobRequest(BaseModel):
     url: str
     voice: str = "male"
@@ -238,10 +270,21 @@ def _read_meta(folder: Path) -> dict | None:
     return meta
 
 
-def create_app(settings: Settings | None = None, runner=pipeline.run) -> FastAPI:
+def create_app(
+    settings: Settings | None = None, runner=pipeline.run, check_key: Callable[[str], None] = translate.check_claude_key
+) -> FastAPI:
     settings = settings or load_settings()
     jobs = JobRunner(settings, runner)
     app = FastAPI(title="Дубляж", docs_url=None, redoc_url=None)
+
+    @app.middleware("http")
+    async def same_origin_only(request: Request, call_next):
+        # Browsers send Origin with every cross-site POST/PUT/DELETE; ours come from this very server.
+        origin = request.headers.get("origin")
+        if (request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path.startswith("/api/")
+                and origin is not None and urlsplit(origin).netloc != request.headers.get("host")):
+            return JSONResponse({"detail": _detail("Запрос отклонён.", "Request refused.")}, status_code=403)
+        return await call_next(request)
 
     def folder_for(video_id: str) -> Path:
         if not _ID.match(video_id):
@@ -308,6 +351,61 @@ def create_app(settings: Settings | None = None, runner=pipeline.run) -> FastAPI
     def delete_video(video_id: str) -> dict:
         shutil.rmtree(folder_for(video_id))
         return {"deleted": video_id}
+
+    def settings_view() -> dict:
+        prices = []
+        for model_id, model in translate.CLAUDE_MODELS.items():
+            per10 = (_TEN_MIN_TOKENS[0] * model.input_usd + _TEN_MIN_TOKENS[1] * model.output_usd) / 1e6
+            prices.append({"id": model_id, "label": model.label, "per_10_min_usd": round(per10, 3)})
+        return {
+            "claude": {"key_set": bool(settings.claude_key), "key_hint": _key_hint(settings.claude_key),
+                       "model": settings.claude_model, "models": prices},
+            "use_claude": settings.translator in ("auto", "claude"),
+            "active": translate.uses_claude(settings.translator, settings.claude_key),
+            "glossary": settings.glossary(),
+        }
+
+    @app.get("/api/settings")
+    def get_settings() -> dict:
+        return settings_view()
+
+    @app.put("/api/settings")
+    def update_settings(req: SettingsUpdate) -> dict:
+        updates: dict[str, str | None] = {}
+        if req.model is not None:
+            if req.model not in translate.CLAUDE_MODELS:
+                raise HTTPException(422, _detail("Неизвестная модель", "Unknown model"))
+            settings.claude_model = updates["DUBBER_CLAUDE_MODEL"] = req.model
+        if req.use_claude is not None:
+            settings.translator = updates["DUBBER_TRANSLATOR"] = "auto" if req.use_claude else "google"
+        if updates:
+            save_env(settings.env_file, updates)
+        if req.glossary is not None:
+            if len(req.glossary) > 20_000:
+                raise HTTPException(422, _detail("Глоссарий слишком длинный", "The glossary is too long"))
+            settings.glossary_file.write_text(req.glossary.strip() + "\n", encoding="utf-8")
+        return settings_view()
+
+    @app.post("/api/settings/claude-key")
+    def set_claude_key(req: KeyRequest) -> dict:
+        key = req.key.strip()
+        if not key.startswith("sk-ant-") or len(key) < 20 or any(c.isspace() for c in key):
+            raise HTTPException(422, _detail("Это не похоже на ключ Anthropic: он начинается с sk-ant-",
+                                             "This doesn't look like an Anthropic key: it starts with sk-ant-"))
+        try:
+            check_key(key)
+        except translate.TranslatorUnavailable as exc:
+            ru, en = _KEY_ERRORS.get(exc.code, _KEY_ERRORS["unavailable"])
+            raise HTTPException(422, _detail(ru, en)) from None
+        settings.claude_key = key
+        save_env(settings.env_file, {"ANTHROPIC_API_KEY": key})
+        return settings_view()
+
+    @app.delete("/api/settings/claude-key")
+    def remove_claude_key() -> dict:
+        settings.claude_key = ""
+        save_env(settings.env_file, {"ANTHROPIC_API_KEY": None})
+        return settings_view()
 
     @app.get("/files/{video_id}/{name}")
     def get_file(video_id: str, name: str, download: bool = False) -> FileResponse:

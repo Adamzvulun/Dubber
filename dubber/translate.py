@@ -5,10 +5,11 @@ How a video is translated (`Translator`):
 2. The rest goes to the primary engine in batches of ONE spoken language each (`Segment.lang` from Whisper): a mixed
    batch made Google detect one language and leave the French lines of an English video untranslated.
    - GoogleBackend (free, default): Google's JSON endpoint, patient retries on its robot check / rate limit.
-   - ClaudeBackend (opt-in, ANTHROPIC_API_KEY): context-aware, concise lines for dubbing.
-3. If the primary engine stays unavailable, the rest of the video uses NllbBackend: Meta's NLLB-200 (1.3B, int8,
-   CTranslate2, ~1.4 GB, downloaded on first use), offline, any language pair. It replaced an English→Russian-only
-   model that turned French into gibberish when Google refused.
+   - ClaudeBackend (opt-in, paid; key entered in the website's settings): gets the WHOLE video instead — every line
+     with its language, time slot and a character budget — so its lines fit the dub; follows the user's glossary.
+3. If an engine stays unavailable, the next one takes over (Claude → Google → NLLB). Last in line is NllbBackend:
+   Meta's NLLB-200 (1.3B, int8, CTranslate2, ~1.4 GB, downloaded on first use), offline, any language pair. It
+   replaced an English→Russian-only model that turned French into gibberish when Google refused.
 4. Quality gate: a line whose "translation" is still the original (or not in the dub language's script) is re-sent
    on its own; if it still isn't translated, the job stops — untranslated text is never voiced.
 """
@@ -21,10 +22,12 @@ import os
 import re
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Protocol
 
 from . import languages
 from .segments import Segment
+from .timing import slots
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +41,14 @@ class Backend(Protocol):
 
 
 class TranslatorUnavailable(RuntimeError):
-    """The engine can't be reached or refuses (e.g. Google's robot check); another engine may take over."""
+    """The engine can't be reached or refuses (e.g. Google's robot check); another engine may take over.
+
+    `code` says why, for the watch page: auth / permission / credit / unavailable / refusal ("" = not given).
+    """
+
+    def __init__(self, message: str = "", code: str = ""):
+        super().__init__(message)
+        self.code = code
 
 
 class UntranslatedError(RuntimeError):
@@ -239,51 +249,57 @@ def needs_retry(source: str, out: str, line_lang: str, target: languages.Languag
 
 
 class Translator:
-    """Translate a video's lines: same-language lines kept, one-language batches, fallback, quality gate."""
+    """Translate a video's lines: same-language lines kept, fallback chain, quality gate.
 
-    def __init__(self, target: str, primary, fallback_factory: Callable[[], object] | None = None):
+    `fallbacks` are factories for the engines to use, in order, when the current one becomes unavailable (e.g.
+    Claude → Google → offline NLLB); each is built only if needed. An engine with `translate_video` (Claude) gets the
+    whole video at once with each line's language and time slot; the others get one-language batches.
+    """
+
+    def __init__(self, target: str, primary, fallbacks: Callable[[], object] | list[Callable[[], object]] = ()):
         self.target = languages.get(target)
         self.primary = primary
-        self._fallback_factory = fallback_factory
-        self._fallback = None
-        self.primary_failed = False
+        self._factories = [fallbacks] if callable(fallbacks) else list(fallbacks)
+        self._engines = [primary]
         self.used: set[str] = set()
+        self.notes: list[str] = []  # why an engine was given up, e.g. "claude:credit" (shown on the watch page)
 
     @property
     def name(self) -> str:
         return "+".join(sorted(self.used)) or self.primary.name
 
-    def _engine(self):
-        if not self.primary_failed:
-            return self.primary
-        if self._fallback is None:
-            if self._fallback_factory is None:
-                raise TranslatorUnavailable(f"{self.primary.name} translator unavailable and no fallback")
-            self._fallback = self._fallback_factory()
-        return self._fallback
+    @property
+    def cost_usd(self) -> float:
+        return round(sum(getattr(e, "cost_usd", 0.0) for e in self._engines), 4)
 
-    def _call(self, method: str, *args):
+    def _engine(self):
+        return self._engines[-1]
+
+    def _advance(self) -> bool:
+        """Switch to the next engine for the rest of the video; False when there is none."""
+        level = len(self._engines) - 1
+        if level >= len(self._factories):
+            return False
+        self._engines.append(self._factories[level]())
+        return True
+
+    def _call(self, fn: Callable[[object], object]):
         while True:
             engine = self._engine()
             try:
-                result = getattr(engine, method)(*args)
+                result = fn(engine)
                 self.used.add(engine.name)
                 return result
             except TranslatorUnavailable as exc:
-                if engine is not self.primary:
+                self.notes.append(f"{engine.name}:{exc.code}" if exc.code else engine.name)
+                if not self._advance():
                     raise
-                log.warning("%s unavailable (%s); using the offline translator for the rest", engine.name, exc)
-                self.primary_failed = True
+                log.warning("%s unavailable (%s); using %s for the rest", engine.name, exc, self._engine().name)
 
-    def translate_texts(self, texts: list[str], langs: list[str] | None = None) -> list[str]:
-        langs = list(langs) if langs else [""] * len(texts)
-        out: list[str | None] = [None] * len(texts)
-        todo = []
-        for i, (text, lang) in enumerate(zip(texts, langs, strict=True)):
-            if lang == self.target.code or not any(c.isalpha() for c in text):
-                out[i] = text  # already in the dub language (or nothing to translate)
-            else:
-                todo.append(i)
+    def _translate(self, engine, texts: list[str], langs: list[str], seconds: list[float | None], todo: list[int]):
+        if hasattr(engine, "translate_video"):
+            lines = [{"text": texts[i], "lang": langs[i], "seconds": seconds[i]} for i in todo]
+            return dict(zip(todo, engine.translate_video(lines), strict=True))
         # Consecutive lines of one spoken language form one batch.
         groups: list[list[int]] = []
         for i in todo:
@@ -291,20 +307,38 @@ class Translator:
                 groups[-1].append(i)
             else:
                 groups.append([i])
+        out: dict[int, str] = {}
         for group in groups:
-            result = self._call("translate_group", [texts[i] for i in group], langs[group[0]])
-            for i, line in zip(group, result, strict=True):
+            result = engine.translate_group([texts[i] for i in group], langs[group[0]])
+            out.update(zip(group, result, strict=True))
+        return out
+
+    def translate_texts(
+        self, texts: list[str], langs: list[str] | None = None, seconds: list[float | None] | None = None
+    ) -> list[str]:
+        """`langs`: spoken language per line; `seconds`: time slot per line (lets Claude fit the dub to it)."""
+        langs = list(langs) if langs else [""] * len(texts)
+        seconds = list(seconds) if seconds else [None] * len(texts)
+        out: list[str | None] = [None] * len(texts)
+        todo = []
+        for i, (text, lang) in enumerate(zip(texts, langs, strict=True)):
+            if lang == self.target.code or not any(c.isalpha() for c in text):
+                out[i] = text  # already in the dub language (or nothing to translate)
+            else:
+                todo.append(i)
+        if todo:
+            # Engines are tried in order; a switch redoes the whole video with the next one (one consistent voice).
+            for i, line in self._call(lambda e: self._translate(e, texts, langs, seconds, todo)).items():
                 out[i] = line
 
         # Quality gate: re-send failures alone (explicit source language), then give up loudly.
         for i in todo:
             if needs_retry(texts[i], out[i] or "", langs[i], self.target):
-                out[i] = self._call("translate_one", texts[i], langs[i])
+                out[i] = self._call(lambda e, i=i: e.translate_one(texts[i], langs[i]))
                 if getattr(self._engine(), "detected", "") == self.target.code:
                     langs[i] = self.target.code  # Google: this line is already in the dub language
-                if needs_retry(texts[i], out[i] or "", langs[i], self.target) and self._fallback_factory:
-                    self.primary_failed = True  # one more chance with the other engine
-                    out[i] = self._call("translate_one", texts[i], langs[i])
+                if needs_retry(texts[i], out[i] or "", langs[i], self.target) and self._advance():
+                    out[i] = self._call(lambda e, i=i: e.translate_one(texts[i], langs[i]))  # one more engine
         bad = [texts[i] for i in todo if needs_retry(texts[i], out[i] or "", langs[i], self.target)]
         if bad:
             raise UntranslatedError(f"Could not translate {len(bad)} line(s) into {self.target.name_en}: {bad[:3]}")
@@ -313,45 +347,87 @@ class Translator:
 
 # ---------------------------------------------------------------- Claude (opt-in, paid)
 
-CLAUDE_SYSTEM_PROMPT = """You translate video subtitles into natural spoken {target} for a voice-over.
-The source is usually English but may be any language, or several (translate every line into {target};
-keep a line that is already in {target}).
+@dataclass(frozen=True)
+class ClaudeModel:
+    label: str
+    input_usd: float  # per million input tokens
+    output_usd: float  # per million output tokens (thinking included)
+    fallbacks: bool = True  # supports the server-side refusal fallback
+
+
+# Anthropic API prices, 2026-10 (docs: platform.claude.com pricing). Opus 5.5 is the default.
+CLAUDE_MODELS = {
+    "claude-opus-5-5": ClaudeModel("Opus 5.5", 4.0, 20.0),
+    "claude-sonnet-5-5": ClaudeModel("Sonnet 5.5", 2.0, 10.0),
+    "claude-haiku-5-5": ClaudeModel("Haiku 5.5", 0.10, 0.50, fallbacks=False),
+}
+DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
+
+CLAUDE_SYSTEM_PROMPT = """You translate the speech of a video into natural spoken {target} for a voice-over.
+The speech may be in any language, or several (each line says its language); translate every line into {target}.
 The listener is a {target}-speaking professional learning from this video.
 Rules:
 - Return exactly one {target} line per input line, in the same order (same count).
-- Each translated line will be spoken in the same time slot as the original one, so keep it concise:
-  prefer short, natural wording over literal translation, but never drop meaning.
-- Keep technical terms accurate; keep product names, code and acronyms as in the original.
+- Each line is spoken in the time the speaker took ("seconds"). Keep it within about "max_chars" characters:
+  prefer short, natural spoken wording over a literal translation; shorten the wording, never drop meaning.
+- Keep technical terms accurate; keep names, product names, code and acronyms as in the original.
+- "context_before" holds earlier lines of the same video, for context only: do not translate them.
 - Use the surrounding lines as context, but translate each line on its own row."""
 
 
 class ClaudeBackend:
+    """Claude via the Anthropic API (paid, opt-in with a key). Sees the whole video: every line with its language,
+    its time slot and a character budget, so lines come out in dub length; follows the user's glossary."""
+
     name = "claude"
+    MAX_LINES = 200  # lines per request (with the previous lines as context)
+    CONTEXT_LINES = 12
 
     def __init__(
-        self, model: str = "claude-opus-5-5", client=None, glossary: str = "", target: str = languages.DEFAULT
+        self, model: str = DEFAULT_CLAUDE_MODEL, client=None, glossary: str = "", target: str = languages.DEFAULT,
+        api_key: str | None = None,
     ):
-        if client is None:
+        self._client = client
+        self._api_key = api_key
+        self.model = model if model in CLAUDE_MODELS else DEFAULT_CLAUDE_MODEL
+        self._glossary = glossary.strip()
+        self.target = languages.get(target)
+        self.input_tokens = self.output_tokens = 0
+        self.cost_usd = 0.0
+
+    @property
+    def client(self):
+        if self._client is None:
             import anthropic
 
-            client = anthropic.Anthropic()
-        self._client = client
-        self._model = model
-        self._glossary = glossary
-        self._target = languages.get(target).name_en
+            self._client = anthropic.Anthropic(api_key=self._api_key) if self._api_key else anthropic.Anthropic()
+        return self._client
 
-    def _translate_chunk(self, chunk: list[str]) -> list[str]:
-        numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(chunk))
-        system = CLAUDE_SYSTEM_PROMPT.format(target=self._target)
+    def _system(self) -> str:
+        system = CLAUDE_SYSTEM_PROMPT.format(target=self.target.name_en)
         if self._glossary:
-            system += f"\nGlossary (use these translations):\n{self._glossary}"
-        response = self._client.beta.messages.create(
-            model=self._model,
-            max_tokens=16000,
-            system=system,
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-            output_config={
+            system += ("\nGlossary from the user — always translate these terms this way (one per line, "
+                       f"\"term = translation\"):\n{self._glossary}")
+        return system
+
+    def _budget(self, seconds: float | None) -> int | None:
+        # A little room above the natural pace: the voice may speak up to ~1.2x (timing.plan_rates).
+        return max(8, round(seconds * languages.chars_per_second(self.target.code) * 1.15)) if seconds else None
+
+    def _request(self, lines: list[dict], context: list[str]) -> list[str]:
+        import anthropic
+
+        payload = {
+            "context_before": context,
+            "lines": [{"n": n + 1, "lang": ln.get("lang") or "unknown", "seconds": round(ln["seconds"], 1)
+                       if ln.get("seconds") else None, "max_chars": self._budget(ln.get("seconds")),
+                       "text": ln["text"]} for n, ln in enumerate(lines)],
+        }
+        params = {
+            "model": self.model,
+            "max_tokens": 64000,
+            "system": self._system(),
+            "output_config": {
                 "effort": "low",
                 "format": {
                     "type": "json_schema",
@@ -363,57 +439,123 @@ class ClaudeBackend:
                     },
                 },
             },
-            messages=[{"role": "user", "content": f"Translate these {len(chunk)} lines:\n{numbered}"}],
-        )
+            "messages": [{"role": "user", "content": f"Translate these {len(lines)} lines into "
+                          f"{self.target.name_en}:\n{json.dumps(payload, ensure_ascii=False)}"}],
+        }
+        if CLAUDE_MODELS[self.model].fallbacks:  # a declined request is re-run on a fallback model, same call
+            params.update(betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+        try:
+            with self.client.beta.messages.stream(**params) as stream:
+                response = stream.get_final_message()
+        except anthropic.AuthenticationError as exc:
+            raise TranslatorUnavailable(f"Claude: the API key was not accepted ({exc})", code="auth") from exc
+        except anthropic.PermissionDeniedError as exc:
+            raise TranslatorUnavailable(f"Claude: the key may not use this model ({exc})", code="permission") from exc
+        except anthropic.BadRequestError as exc:
+            if "credit" in str(exc).lower():  # "Your credit balance is too low to access the Anthropic API"
+                raise TranslatorUnavailable(f"Claude: no credit left ({exc})", code="credit") from exc
+            raise
+        except (anthropic.RateLimitError, anthropic.APIConnectionError, anthropic.InternalServerError) as exc:
+            raise TranslatorUnavailable(f"Claude unavailable ({exc})", code="unavailable") from exc
+        except anthropic.APIStatusError as exc:
+            if exc.status_code >= 500:
+                raise TranslatorUnavailable(f"Claude unavailable ({exc})", code="unavailable") from exc
+            raise
+        self._count(response.usage)
         if response.stop_reason == "refusal":
-            raise RuntimeError("Claude declined to translate this text")
+            raise TranslatorUnavailable("Claude declined to translate this text", code="refusal")
         if response.stop_reason == "max_tokens":
-            raise RuntimeError("Claude's translation was cut off (max_tokens)")
+            raise TranslatorUnavailable("Claude's translation was cut off (max_tokens)", code="unavailable")
         text = next(b.text for b in response.content if b.type == "text")
-        lines = [str(t).strip() for t in json.loads(text)["translations"]]
-        if len(lines) != len(chunk):
-            raise ValueError(f"expected {len(chunk)} translations, got {len(lines)}")
-        return lines
-
-    def translate_texts(self, texts: list[str]) -> list[str]:
-        out: list[str] = []
-        for chunk in _chunks(texts, max_chars=6000, max_items=80):
-            try:
-                out.extend(self._translate_chunk(chunk))
-            except ValueError:
-                # Count mismatch: retry in halves, which almost always lines up.
-                half = max(1, len(chunk) // 2)
-                for part in (chunk[:half], chunk[half:]):
-                    if part:
-                        out.extend(self._translate_chunk(part))
+        out = [str(t).strip() for t in json.loads(text)["translations"]]
+        if len(out) != len(lines):
+            raise ValueError(f"expected {len(lines)} translations, got {len(out)}")
         return out
 
+    def _count(self, usage) -> None:
+        if usage is None:
+            return
+        tokens_in = (getattr(usage, "input_tokens", 0) or 0) + (getattr(usage, "cache_read_input_tokens", 0) or 0) \
+            + (getattr(usage, "cache_creation_input_tokens", 0) or 0)
+        tokens_out = getattr(usage, "output_tokens", 0) or 0
+        self.input_tokens += tokens_in
+        self.output_tokens += tokens_out
+        price = CLAUDE_MODELS[self.model]
+        self.cost_usd += (tokens_in * price.input_usd + tokens_out * price.output_usd) / 1e6
+
+    def _chunk(self, lines: list[dict], context: list[str]) -> list[str]:
+        try:
+            return self._request(lines, context)
+        except ValueError:
+            if len(lines) == 1:
+                raise
+            half = len(lines) // 2  # count mismatch: halves almost always line up
+            return self._chunk(lines[:half], context) + self._chunk(
+                lines[half:], [ln["text"] for ln in lines[:half]][-self.CONTEXT_LINES:])
+
+    def translate_video(self, lines: list[dict]) -> list[str]:
+        """lines: [{"text", "lang", "seconds"}] in video order → one translation per line."""
+        out: list[str] = []
+        for start in range(0, len(lines), self.MAX_LINES):
+            context = [ln["text"] for ln in lines[max(0, start - self.CONTEXT_LINES):start]]
+            out.extend(self._chunk(lines[start:start + self.MAX_LINES], context))
+        return out
+
+    def translate_texts(self, texts: list[str]) -> list[str]:
+        return self.translate_video([{"text": t, "lang": "", "seconds": None} for t in texts])
 
     def translate_group(self, lines: list[str], source: str = "") -> list[str]:
-        return self.translate_texts(lines)
+        return self.translate_video([{"text": t, "lang": source, "seconds": None} for t in lines])
 
     def translate_one(self, line: str, source: str) -> str:
-        return self.translate_texts([line])[0]
+        return self.translate_video([{"text": line, "lang": source, "seconds": None}])[0]
+
+
+def check_claude_key(api_key: str, client=None) -> None:
+    """Raise TranslatorUnavailable (code auth / permission / unavailable) unless the key works. Free: lists models."""
+    import anthropic
+
+    try:
+        (client or anthropic.Anthropic(api_key=api_key, max_retries=1, timeout=20)).models.list(limit=1)
+    except anthropic.AuthenticationError as exc:
+        raise TranslatorUnavailable("The API key was not accepted", code="auth") from exc
+    except anthropic.PermissionDeniedError as exc:
+        raise TranslatorUnavailable("The API key has no permission", code="permission") from exc
+    except (anthropic.APIConnectionError, anthropic.APIStatusError) as exc:
+        raise TranslatorUnavailable(f"Couldn't reach Anthropic ({exc})", code="unavailable") from exc
+
+
+def uses_claude(choice: str, api_key: str | None = None) -> bool:
+    """Whether `make_backend(choice, ...)` starts with Claude."""
+    key = api_key if api_key is not None else os.environ.get("ANTHROPIC_API_KEY", "")
+    return choice == "claude" or (choice == "auto" and bool(key))
 
 
 def make_backend(
-    choice: str = "auto", claude_model: str = "claude-opus-5-5", glossary: str = "", target: str = languages.DEFAULT
+    choice: str = "auto", claude_model: str = DEFAULT_CLAUDE_MODEL, glossary: str = "",
+    target: str = languages.DEFAULT, api_key: str | None = None,
 ) -> Translator:
-    """The translator for a dub into `target`: auto = Claude if ANTHROPIC_API_KEY is set, else free Google; both fall
-    back to the offline NLLB model. "offline" = NLLB only."""
-    fallback = lambda: NllbBackend(target=target)  # noqa: E731 — built only if needed (1.4 GB model)
+    """The translator for a dub into `target`.
+
+    auto = Claude if an API key is set, else free Google. Claude falls back to Google, Google to the offline NLLB
+    model. "google" = free only, "offline" = NLLB only.
+    """
+    nllb = lambda: NllbBackend(target=target)  # noqa: E731 — built only if needed (1.4 GB model)
+    google = lambda: GoogleBackend(target=target)  # noqa: E731
     if choice == "offline":
         return Translator(target, NllbBackend(target=target))
-    if choice == "claude" or (choice == "auto" and os.environ.get("ANTHROPIC_API_KEY")):
-        return Translator(target, ClaudeBackend(model=claude_model, glossary=glossary, target=target), fallback)
-    return Translator(target, GoogleBackend(target=target), fallback)
+    if uses_claude(choice, api_key):
+        key = api_key or os.environ.get("ANTHROPIC_API_KEY") or None
+        claude = ClaudeBackend(model=claude_model, glossary=glossary, target=target, api_key=key)
+        return Translator(target, claude, [google, nllb])
+    return Translator(target, google(), [nllb])
 
 
 def translate_segments(segments: list[Segment], backend) -> list[Segment]:
     """Fill `seg.ru` (the dub-language text). `backend` is a Translator, or any object with translate_texts()."""
     texts = [s.text for s in segments]
     if isinstance(backend, Translator):
-        translated = backend.translate_texts(texts, [s.lang for s in segments])
+        translated = backend.translate_texts(texts, [s.lang for s in segments], slots(segments))
     else:
         translated = backend.translate_texts(texts)
     if len(translated) != len(segments):

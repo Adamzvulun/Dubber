@@ -1,8 +1,10 @@
 import json
+import os
 import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from dubber import app
@@ -200,3 +202,79 @@ def test_new_and_legacy_video_files(tmp_path):
     assert c.get("/files/new/transcript_src_he.txt").status_code == 200
     assert c.get("/files/new/subtitles_xx.srt").status_code == 404
     assert c.get("/files/new/segments.json").status_code == 404
+
+
+@pytest.fixture(autouse=True)
+def isolated_environ(monkeypatch):
+    # Saving settings also applies them to os.environ (config.save_env); keep that inside each test.
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+
+
+def settings_client(tmp_path, check_key=None):
+    settings = Settings(work_dir=tmp_path / "w", output_dir=tmp_path / "out", env_file=tmp_path / ".env",
+                        glossary_file=tmp_path / "glossary.txt", claude_key="", translator="auto")
+    (tmp_path / ".env").write_text("# my settings\nDUBBER_PORT=7860\n", encoding="utf-8")
+    application = app.create_app(settings, runner=lambda *a, **k: None, check_key=check_key or (lambda key: None))
+    return TestClient(application), settings
+
+
+def test_claude_key_is_checked_saved_masked_and_removed(tmp_path, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    checked = []
+    c, settings = settings_client(tmp_path, check_key=checked.append)
+    view = c.get("/api/settings").json()
+    assert view["claude"]["key_set"] is False and view["active"] is False and view["use_claude"] is True
+    assert view["claude"]["model"] == "claude-opus-5-5"
+    assert [m["id"] for m in view["claude"]["models"]] == ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]
+
+    key = "sk-ant-api03-" + "x" * 30 + "WXYZ"
+    view = c.post("/api/settings/claude-key", json={"key": f"  {key} "}).json()
+    assert checked == [key] and view["claude"]["key_set"] and view["claude"]["key_hint"] == "…WXYZ"
+    assert view["active"] is True and key not in json.dumps(view)  # never sent back to the browser
+    assert key not in c.get("/api/settings").text
+    env = (tmp_path / ".env").read_text(encoding="utf-8")
+    assert f"ANTHROPIC_API_KEY={key}" in env and "DUBBER_PORT=7860" in env and "# my settings" in env
+    assert settings.claude_key == key
+
+    assert c.delete("/api/settings/claude-key").json()["claude"]["key_set"] is False
+    assert "ANTHROPIC_API_KEY" not in (tmp_path / ".env").read_text(encoding="utf-8")
+    assert settings.claude_key == ""
+
+
+def test_bad_claude_key_is_refused_in_both_languages(tmp_path):
+    from dubber.translate import TranslatorUnavailable
+
+    def refuse(key):
+        raise TranslatorUnavailable("nope", code="auth")
+
+    c, settings = settings_client(tmp_path, check_key=refuse)
+    r = c.post("/api/settings/claude-key", json={"key": "sk-ant-api03-" + "y" * 30})
+    assert r.status_code == 422 and "Ключ не подошёл" in r.json()["detail"]["ru"]
+    assert "not accepted" in r.json()["detail"]["en"] and settings.claude_key == ""
+    assert c.post("/api/settings/claude-key", json={"key": "hello"}).status_code == 422  # not even key-shaped
+    assert "ANTHROPIC_API_KEY" not in (tmp_path / ".env").read_text(encoding="utf-8")
+
+
+def test_translation_settings_and_glossary(tmp_path):
+    c, settings = settings_client(tmp_path)
+    view = c.put("/api/settings", json={"use_claude": False, "model": "claude-sonnet-5-5",
+                                        "glossary": "sourdough = закваска\n"}).json()
+    assert view["use_claude"] is False and view["claude"]["model"] == "claude-sonnet-5-5"
+    assert view["glossary"] == "sourdough = закваска" and settings.glossary() == "sourdough = закваска"
+    assert settings.translator == "google" and settings.claude_model == "claude-sonnet-5-5"
+    env = (tmp_path / ".env").read_text(encoding="utf-8")
+    assert "DUBBER_TRANSLATOR=google" in env and "DUBBER_CLAUDE_MODEL=claude-sonnet-5-5" in env
+    assert c.put("/api/settings", json={"model": "gpt-4"}).status_code == 422
+    assert c.put("/api/settings", json={"use_claude": True}).json()["use_claude"] is True
+
+
+def test_requests_from_other_websites_are_refused(tmp_path):
+    c, settings = settings_client(tmp_path)
+    evil = {"Origin": "https://evil.example"}
+    assert c.post("/api/settings/claude-key", json={"key": "sk-ant-api03-" + "z" * 30}, headers=evil).status_code == 403
+    assert c.put("/api/settings", json={"use_claude": False}, headers=evil).status_code == 403
+    assert c.post("/api/jobs", json={"url": "https://youtu.be/x"}, headers=evil).status_code == 403
+    assert c.get("/api/settings", headers=evil).status_code == 200  # reading is harmless (and the key isn't in it)
+    own = {"Origin": "http://testserver"}
+    assert c.put("/api/settings", json={"use_claude": False}, headers=own).status_code == 200
+    assert settings.claude_key == ""

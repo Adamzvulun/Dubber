@@ -115,6 +115,22 @@ class _Progress:
         return report
 
 
+def _info_file(dub_json: Path) -> Path:
+    return dub_json.with_name(dub_json.stem + ".info.json")
+
+
+def translation_info(dub_json: Path) -> dict:
+    """Which engine translated a cached translation, its cost and why engines were skipped (for meta.json)."""
+    info = {"translator": "", "model": "", "notes": [], "cost_usd": 0.0}
+    try:
+        info |= json.loads(_info_file(dub_json).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        legacy = dub_json.with_suffix(".translator")  # before 2026-10-17: the engine name only
+        if legacy.exists():
+            info["translator"] = legacy.read_text(encoding="utf-8")
+    return info
+
+
 def run(
     source: str,
     settings: Settings,
@@ -168,14 +184,28 @@ def run(
 
     # 3. Translate
     report = p.stage("translate")
-    dub_json = work / f"segments_{target.code}_v3.json"
-    engine_file = work / f"segments_{target.code}_v3.translator"  # which engine translated (shown on the watch page)
+    # The free engines share one cache; a Claude translation has its own, keyed by model and glossary, so adding a
+    # key or editing the glossary translates again. A Claude run that fell back to Google is saved as a free one, so
+    # the next run tries Claude again (e.g. after credit was added).
+    use_claude = translator is None and translate.uses_claude(settings.translator, settings.claude_key)
+    glossary = settings.glossary() if use_claude else ""
+    free_json = work / f"segments_{target.code}_v3.json"
+    tag = hashlib.sha1(f"{settings.claude_model}\n{glossary}".encode()).hexdigest()[:8]
+    claude_json = work / f"segments_{target.code}_v3_claude_{tag}.json"
+    dub_json = claude_json if use_claude else free_json
     if not dub_json.exists():
-        backend = translator or translate.make_backend(settings.translator, settings.claude_model, target=target.code)
+        backend = translator or translate.make_backend(
+            settings.translator, settings.claude_model, glossary, target=target.code, api_key=settings.claude_key)
         translate.translate_segments(segments, backend)
+        name = getattr(backend, "name", "")
+        dub_json = claude_json if name == "claude" else free_json
         save_segments(segments, dub_json)
-        engine_file.write_text(getattr(backend, "name", ""), encoding="utf-8")
+        info = {"translator": name, "notes": getattr(backend, "notes", []),
+                "cost_usd": getattr(backend, "cost_usd", 0.0),
+                "model": settings.claude_model if name == "claude" else ""}
+        _info_file(dub_json).write_text(json.dumps(info), encoding="utf-8")
     segments = load_segments(dub_json)
+    translation = translation_info(dub_json)
     report(1.0)
 
     # 4. Text to speech
@@ -230,7 +260,10 @@ def run(
         "target_lang": target.code,
         "source_lang": source_lang,
         "source_langs": source_langs,
-        "translator": engine_file.read_text(encoding="utf-8") if engine_file.exists() else "",
+        "translator": translation["translator"],
+        "translator_model": translation["model"],
+        "translator_notes": translation["notes"],
+        "translation_cost_usd": translation["cost_usd"],
         "files": {key: path.name for key, path in files.items()},
         "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
