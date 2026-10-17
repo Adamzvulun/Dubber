@@ -164,7 +164,7 @@ Newest at the bottom. Format: context → decision → consequences.
   page with the old styles (huge gear, raw `nav.settings`). The page is now served by the app with its files under
   versioned addresses (`?v=<version>.<newest file time>`, `app.asset_tag`), so a release can never reuse old copies.
   Reproduced (old `main` with 10-day-old files → new server → refresh) and verified fixed; a simulated next release
-  shows on the first open without a refresh. Updating from ≤ 0.3.0 may need one Ctrl+F5 (that old page copy predates
-  the fix).
+  shows on the first open without a refresh. Updating from ≤ 0.3.0 may need clearing the browser's cached files once
+  (Adam: Ctrl+F5 did not help in Opera GX).
 - **Consequences:** the first dubs on a new PC use the default shares; the estimate improves after a few dubs. Every
   release must bump `__version__` (and `pyproject.toml`).

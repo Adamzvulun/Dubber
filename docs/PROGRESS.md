@@ -8,7 +8,8 @@ Newest entries at the top. One entry per working session / milestone.
   files, then the new server, then a refresh): browsers re-check only the page on refresh and reuse saved files.
 - Fix: the app serves `index.html` itself with versioned file addresses (`?v=<version>.<newest file time>`); verified
   the reproduction is fixed and that a simulated next release appears on the first open without refresh.
-  One-time Ctrl+F5 note for updates from ≤ 0.3.0 in README.ru. 90 tests pass.
+  Adam: Ctrl+F5 didn't help in Opera GX → README.ru says to clear cached files once (Ctrl+Shift+Delete) when
+  updating from ≤ 0.3.0. 90 tests pass.
 
 ## 2026-10-17 — Session 2d: updates always visible + time left (PR `fix/updates-and-eta`, v0.3.0)
 - Adam: after updating to `main` no Settings icon / model menu; wants a time-left timer.
