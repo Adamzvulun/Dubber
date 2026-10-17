@@ -1,6 +1,6 @@
 # Plan & roadmap
 
-_Last updated: 2026-10-16_ — current state at a glance: `docs/STATUS.md`. Task cards: `kanban/`.
+_Last updated: 2026-10-17 (session 2)_ — current state at a glance: `docs/STATUS.md`. Task cards: `kanban/`.
 
 ## Goal
 A Russian-speaking professional (not a developer) pastes a YouTube link into a local web page and gets:
@@ -50,7 +50,8 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 
 ### M3 — Quality
 - [x] Smarter timing: merge short segments into sentences before translating (`segments.merge_into_sentences`)
-- [ ] Glossary of domain terms (his work field) passed to the translator
+- [ ] Glossary passed to the translator — general-purpose (the father watches videos on every topic, Adam
+  2026-10-17): the user adds his own terms; no field-specific list
 - [x] Voice choice (male/female) in the UI
 - [ ] Voice speed in the UI
 - [ ] Optional Demucs: keep background music, remove English voice
@@ -75,7 +76,10 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [x] QA skill (`web-design-guidelines`) + two QA agents over the whole UX/UI; fixes
 - [x] Reliable translation for every language: line languages, Google retries, NLLB backup, quality gate (ADR-016)
 - [x] 12-language QA: 2 multilingual clips × 12 dub languages, real pipeline (RESEARCH "Every dub language")
-- [ ] Real check on Adam's PC: re-dub the EN+FR video (Google path from a home connection)
+- [x] Real check on Adam's PC: re-dub the EN+FR video — every line now translated (2026-10-17)
+- [x] Fix: after a re-dub into another language the watch page played the browser's cached old dub
+- [ ] Adam: translation quality and timing feel worse than before the language work — investigate
+  (`kanban/translation-timing-regression.md`)
 
 ### M4 — Nice to have
 - [ ] Queue of several links / playlists
@@ -84,8 +88,9 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [ ] Offline TTS fallback (Silero)
 
 ## Open questions
-- What is the father's work field? (for the glossary)
-- Translation quality: free Google (+ NLLB offline backup) is the default; add a Claude key (~$0.05–0.20 per 10-min
-  video) for context-aware, dub-length lines?
+- ~~Father's work field~~ — every topic, so tools like the glossary must be general-purpose (Adam, 2026-10-17).
+- Claude key for translation: Adam is still deciding (cost + safety). Estimate at 2026-10 prices: ~$0.10 per 10 min of
+  speech on Opus 5.5 ($4/$20 per M tokens), ~$0.05 on Sonnet 5.5, under $0.01 on Haiku 5.5. The key would stay on
+  the PC (env var), with a monthly spend limit set in the Anthropic Console; no payment code in Dubber.
 - Should one video keep several dub languages in the library (today a new language replaces the old dub)?
-- Windows confirmed (Adam's PC).
+- Windows confirmed for Adam's PC and the father's PC (Adam, 2026-10-17).

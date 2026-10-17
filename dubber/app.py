@@ -229,7 +229,10 @@ def _read_meta(folder: Path) -> dict | None:
     if not (folder / "dubbed.mp4").exists():
         return None
     meta["thumbnail"] = f"/files/{folder.name}/thumbnail.jpg"
-    meta["video"] = f"/files/{folder.name}/dubbed.mp4"
+    # The file name stays the same when a video is dubbed again (e.g. into another language): a version in the URL
+    # stops the browser from playing its cached copy of the previous dub.
+    video = (folder / "dubbed.mp4").stat()
+    meta["video"] = f"/files/{folder.name}/dubbed.mp4?v={video.st_mtime_ns:x}{video.st_size:x}"
     if "target_lang" not in meta:  # dubbed before other languages existed: English → Russian, old file names
         meta.update(target_lang="ru", source_lang="en", files=LEGACY_FILES)
     return meta
@@ -317,7 +320,10 @@ def create_app(settings: Settings | None = None, runner=pipeline.run) -> FastAPI
         filename = None
         if download and download_name:
             filename = download_name.format(title=pipeline.safe_name(meta.get("title", video_id)))
-        return FileResponse(folder / name, media_type=media_type, filename=filename)
+        # no-cache = the browser may keep a copy but must check with the server first (ETag), as a re-dub
+        # replaces files under the same names.
+        return FileResponse(folder / name, media_type=media_type, filename=filename,
+                            headers={"Cache-Control": "no-cache"})
 
     app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
     return app

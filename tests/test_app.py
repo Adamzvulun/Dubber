@@ -46,7 +46,7 @@ def test_library_watch_files_and_delete(tmp_path):
 
     videos = c.get("/api/videos").json()
     assert [v["id"] for v in videos] == ["abc_123"]
-    assert videos[0]["video"] == "/files/abc_123/dubbed.mp4"
+    assert videos[0]["video"].startswith("/files/abc_123/dubbed.mp4?v=")
 
     one = c.get("/api/videos/abc_123").json()
     assert one["segments"][0]["ru"] == "Привет"
@@ -61,6 +61,22 @@ def test_library_watch_files_and_delete(tmp_path):
 
     assert c.delete("/api/videos/abc_123").status_code == 200
     assert c.get("/api/videos").json() == []
+
+
+def test_redub_changes_video_url_and_files_are_revalidated(tmp_path):
+    # Dubbing a video into another language rewrites output/<id>/dubbed.mp4. The browser must not keep playing its
+    # cached copy of the previous dub (Adam: Hebrew page, Russian voice).
+    c, settings = client(tmp_path)
+    folder = make_video(settings.output_dir, "abc_123", "Lecture")
+    first = c.get("/api/videos/abc_123").json()["video"]
+    assert first.startswith("/files/abc_123/dubbed.mp4?v=")
+    assert c.get(first).headers["cache-control"] == "no-cache"  # always ask the server whether the file changed
+
+    (folder / "dubbed.mp4").write_bytes(b"1" * 2000)  # the new dub
+    second = c.get("/api/videos/abc_123").json()["video"]
+    assert second != first
+    assert c.get("/api/videos").json()[0]["video"] == second
+    assert c.get(second).content == b"1" * 2000
 
 
 def test_job_runs_with_chosen_voice_and_background(tmp_path):

@@ -1,6 +1,6 @@
 # Status — read this first
 
-_Last updated: 2026-10-17 (end of session 1). Update this page at the end of every session._
+_Last updated: 2026-10-17 (session 2). Update this page at the end of every session._
 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video in **any spoken language** (also
@@ -8,7 +8,8 @@ mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russ
 transcripts. Built for Adam's father, a Russian-speaking professional who learns from foreign videos. It is installed and
 running on **Adam's Windows PC**; Adam says the dub timing "works great". Latest work (2026-10-17): every dub language
 now translates reliably (line languages, Google retries, NLLB offline backup, quality gate) and was QA-tested on 24
-real dubs. **Waiting for Adam** to re-dub his English+French video with that fix.
+real dubs. Adam re-dubbed his English+French video: it works, but he finds **translation quality and timing worse
+than before** — under investigation (`kanban/translation-timing-regression.md`).
 
 ## Where things are
 - **Branch:** `claude/inspiring-davinci-4qon8o` — Adam starts new sessions from it. The repo's default branch
@@ -47,16 +48,15 @@ or Claude (opt-in key); NLLB-200 1.3B offline backup; quality gate → 4. TTS tw
 ## Not verified yet
 1. **Google translation path end-to-end** — Google answers this cloud sandbox with HTTP 429, so the QA ran on the NLLB
    backup. Client logic is unit-tested; Adam's PC (home IP) normally gets Google.
-2. **Adam's re-dub of his English+French video** with the 2026-10-17 fix (the new cache version re-transcribes it).
-3. Fixed Windows desktop shortcut (Cyrillic name) — not re-reported by Adam.
-4. H.264 playback in a real Chrome/Edge (test Chromium lacks H.264; logic verified with a VP9 copy).
+2. Fixed Windows desktop shortcut (Cyrillic name) — not re-reported by Adam.
+3. H.264 playback in a real Chrome/Edge (test Chromium lacks H.264; logic verified with a VP9 copy).
 
 ## Next steps
-1. Ask Adam how the re-dub of the EN+FR video sounds (and the other languages he tries); fix what he reports.
+1. Translation/timing regression Adam reported (session 2): compare his old and new caches, find the cause, fix.
 2. Known offline-backup slips to watch: Hebrew "flour" → "acid/vinegar"; speaker gender unknown to the translator;
    Whisper occasionally merges two sentences. A Claude key (`ANTHROPIC_API_KEY`, opt-in, paid) is the quality option.
 3. Product gaps worth offering: several dub languages of the same video in the library (today one replaces the
-   other); upload a local video file from the website (today: CLI only); glossary for the father's field.
+   other); upload a local video file from the website (today: CLI only); general-purpose glossary (the father watches every topic).
 4. Roadmap items in `PLAN.md` (M3/M4): voice speed control, Demucs (keep music without the original voice), queue.
 
 ## Gotchas for Claude in the cloud sandbox

@@ -2,6 +2,16 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-17 — Session 2: Adam's feedback after the re-dub
+- Adam: the EN+FR video now works, but translation quality and timing feel worse than before; the father will use
+  Dubber for every topic (general glossary, not a field list); his PC is Windows; still deciding on a Claude key.
+- Bug: after dubbing a video into Russian and then into Hebrew, the watch page showed Hebrew text and voice name but
+  played the Russian dub. Cause: `dubbed.mp4` keeps its URL and was served without cache headers, so Chrome reused its
+  copy. Fix: the video URL carries a version (`?v=` from the file's mtime + size) and `/files/` answers
+  `Cache-Control: no-cache`. Reproduced with the old code and verified fixed in Chromium (2-s dub replaced by a
+  4-s one); test `test_redub_changes_video_url_and_files_are_revalidated`. 65 tests pass.
+- Regression investigation opened (`kanban/translation-timing-regression.md`): needs the cache files from Adam's PC.
+
 ## 2026-10-17 — Session 1k: hand-off for the next session
 - Adam will start the next session from `claude/inspiring-davinci-4qon8o` (the default branch is outdated).
 - Rewrote `docs/STATUS.md` (state, how it works, verified, not verified, next steps, gotchas, how to test) and

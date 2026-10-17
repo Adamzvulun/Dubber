@@ -20,3 +20,5 @@ Read `docs/STATUS.md` first. Open items, in order:
 
 ## Narrative
 - 2026-10-17: Created at the end of session 1 as the hand-off list. (by @claude)
+- 2026-10-17: Session 2: item 1 answered (works, but quality/timing worse → `translation-timing-regression.md`);
+  fixed the stale video after a re-dub; work field answered (general glossary). (by @claude)
