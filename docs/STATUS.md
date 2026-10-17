@@ -61,7 +61,7 @@ or Claude (opt-in key); NLLB-200 1.3B offline backup; quality gate → 4. TTS tw
 3. H.264 playback in a real Chrome/Edge (test Chromium lacks H.264; logic verified with a VP9 copy).
 
 ## Next steps
-0. Adam updated to 0.3.0 and saw old styles on the new page (fixed in 0.3.1, ADR-018 follow-up; one Ctrl+F5 needed
+0. Adam updated to 0.3.0 and saw old styles on the new page (fixed in 0.3.1, ADR-018 follow-up; clearing cached files needed
    once). Confirm the footer says 0.3.1 and the settings page looks right.
 1. Translation/timing regression Adam reported (session 2): read his files on the `uploads/…` branch
    (`dev-uploads/`), compare old and new caches, find the cause, fix (`fix/…` branch + PR).
