@@ -36,6 +36,10 @@ or Claude (opt-in key); NLLB-200 1.3B offline backup; quality gate → 4. TTS tw
 (language tags) + subtitles + meta.
 
 ## What works (verified by running it)
+- **Version 0.3.0 (2026-10-17, ADR-018):** version in the page footer and start message; a second start says
+  "already running" instead of showing the old page (verified with the old `main` running); site files no-cache
+  (an edited file shows on a plain reload); **time left** on the job card (learned per PC, verified against a
+  31-s stub job: within ~1–3 s once shown).
 - **Claude translation (2026-10-17, ADR-017):** Settings page (key check + save + mask + remove, model, on/off,
   glossary), Origin check, whole-video requests with time slots and character budgets, fallback chain with reasons,
   cost on the watch page. Verified: 80 tests pass, Chromium (RU/EN, light/dark, 360–1280 px), real SDK call with a
@@ -57,6 +61,8 @@ or Claude (opt-in key); NLLB-200 1.3B offline backup; quality gate → 4. TTS tw
 3. H.264 playback in a real Chrome/Edge (test Chromium lacks H.264; logic verified with a VP9 copy).
 
 ## Next steps
+0. Ask Adam to update (close the old window, extract over the old folder, `install_windows.bat`) and confirm the
+   footer says 0.3.0 and the gear icon is there. If not: which folder the shortcut opens.
 1. Translation/timing regression Adam reported (session 2): read his files on the `uploads/…` branch
    (`dev-uploads/`), compare old and new caches, find the cause, fix (`fix/…` branch + PR).
 2. Adam's first dub with a Claude key: check `meta.json` (translator, cost) and `timing.json` against the free path;

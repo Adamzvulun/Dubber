@@ -164,6 +164,9 @@ main { padding-bottom: 80px; outline: none; }
 .lamp--idle { background: var(--ink-2); animation: none; }
 @keyframes lamp { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 55%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
 .job__time { color: var(--ink-2); font-variant-numeric: tabular-nums; font-size: 15px; }
+.job__clock { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 2px 12px; text-align: right; }
+.job__left { color: var(--ink-2); font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.job__time + .job__left::before { content: "·"; margin-right: 12px; color: var(--line); }
 .job__url { margin-top: 4px; color: var(--ink-2); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar { margin-top: 16px; height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
 .bar__fill { height: 100%; width: 0; background: var(--accent); border-radius: inherit; transition: width .6s ease; }
@@ -268,6 +271,8 @@ main { padding-bottom: 80px; outline: none; }
 .settings__options select { width: 100%; }
 .saved-note { color: var(--ok); font-size: 15px; font-weight: 500; }
 
+.footer { padding: 0 0 28px; color: var(--ink-2); font-size: 13px; }
+
 /* ---------- responsive ---------- */
 @media (max-width: 900px) {
   .watch { grid-template-columns: 1fr; }
@@ -295,6 +300,8 @@ main { padding-bottom: 80px; outline: none; }
   .panel { padding: 18px; }
   .key-form__row { flex-direction: column; }
   .key-form__row input { flex: none; }
+  .job__head { flex-wrap: wrap; row-gap: 4px; }
+  .job__clock { flex-basis: 100%; justify-content: flex-start; text-align: left; }
   .nav { gap: 0; }
   .nav__settings { padding: 7px 8px; }
 }

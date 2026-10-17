@@ -141,3 +141,23 @@ Newest at the bottom. Format: context → decision → consequences.
 - **Consequences:** no real Claude translation could be run in the sandbox (no key); the request shape is unit-tested
   and the real SDK accepted it (401 with a dummy key mapped to "auth"). Adam's first run with a key is the end-to-end
   check. The chars/second table is an estimate to calibrate from real dubs.
+
+## ADR-018 — Updates always visible (no-cache site, version, single instance) and a learned time-left estimate (2026-10-17)
+- **Context:** after updating to `main`, Adam saw no Settings icon although `main` has it. Two ways our code showed
+  an old page: a still-running old server keeps port 7860 (the new one fails, but the browser was opened anyway and
+  showed the old server), and the site's own files were served without `Cache-Control`, so a browser may reuse old
+  copies. Nothing showed which version runs. Adam also asked for a "time left" next to the elapsed timer.
+- **Decision:**
+  - Site files are served with `Cache-Control: no-cache` (revalidated by ETag, 304 when unchanged).
+  - `__version__` (0.3.0) in the page footer, `GET /api/version`, and the start message. On start, if the port
+    already answers, print "already running (version X / old version)", don't open the browser, exit 1. The browser
+    opens only once *this* server answers with *its* version.
+  - Time left (`dubber/eta.py`): per-stage timings of the running job; stage shares = defaults blended (as 2 jobs)
+    with the last 10 finished jobs ≥ 60 s on this PC (`work/stage_times.json`); left = work seconds / share done ×
+    share left; stages finished in < 2 s (cache) are ignored; no estimate before 15 s / 3 % of work. Shown in whole
+    minutes (< 2 min → "under 2 min"), changing at most every 10 s.
+- **Rejected:** front-end-only ETA from the overall progress bar (fixed weights; cached stages make it jump);
+  per-stage speed models from video duration (needs the duration plumbed out of the pipeline; the learned shares get
+  most of the benefit with far less code).
+- **Consequences:** the first dubs on a new PC use the default shares; the estimate improves after a few dubs. Every
+  release must bump `__version__` (and `pyproject.toml`).

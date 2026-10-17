@@ -2,8 +2,9 @@
 
     .venv/bin/python tools/stub_server.py [DATA_DIR] [PORT]        # default: /tmp/dubber-stub 7871
 
-The stand-in walks through all 6 stages (~30 s, a progress report every 0.25 s, so Cancel works) and then reports
-video id "vid". A URL containing "fail" ends with a download error instead (to see the error card).
+The stand-in walks through all 6 stages (~31 s, uneven per stage, a progress report every 0.25 s, so Cancel
+works) and then reports video id "vid". A URL containing "fail" ends with a download error instead (to see
+the error card).
 Put real finished videos into DATA_DIR/out/<id>/ (e.g. copied from output/) to test the library and watch pages.
 Settings are saved in DATA_DIR (never the project's .env); a Claude key ending in "bad" is refused, any other
 key-shaped one is accepted without calling Anthropic.
@@ -23,12 +24,18 @@ from dubber import app, pipeline
 from dubber.config import Settings
 from dubber.translate import TranslatorUnavailable
 
+# Seconds per stage, uneven like a real dub (Whisper is the slow part), so the time-left estimate has work to do.
+STAGE_SECONDS = {"download": 3, "transcribe": 14, "translate": 2, "tts": 7, "align": 2, "mux": 3}
+
 
 def runner(url: str, settings: Settings, progress) -> SimpleNamespace:
-    for _key, label, _weight in pipeline.STAGES:
-        for i in range(20):
-            progress(label, 0.05 * i)
+    done = 0.0
+    for key, label, weight in pipeline.STAGES:
+        steps = STAGE_SECONDS[key] * 4
+        for i in range(steps):
+            progress(label, done + weight * i / steps)
             time.sleep(0.25)
+        done += weight
     if "fail" in url:
         raise RuntimeError("DownloadError: HTTP Error 403")
     return SimpleNamespace(id="vid")

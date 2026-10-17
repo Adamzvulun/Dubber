@@ -280,3 +280,75 @@ def test_requests_from_other_websites_are_refused(tmp_path):
     own = {"Origin": "http://testserver"}
     assert c.put("/api/settings", json={"use_claude": False}, headers=own).status_code == 200
     assert settings.claude_key == ""
+
+
+def test_website_files_are_always_revalidated_and_version_is_served(tmp_path):
+    from dubber import __version__
+
+    c, _ = client(tmp_path)
+    for path in ("/", "/app.js", "/styles.css", "/i18n.js"):
+        r = c.get(path)
+        assert r.status_code == 200 and r.headers["cache-control"] == "no-cache", path
+    etag = c.get("/app.js").headers["etag"]
+    assert c.get("/app.js", headers={"If-None-Match": etag}).status_code == 304  # cheap when nothing changed
+    assert c.get("/api/version").json() == {"version": __version__}
+
+
+def test_running_job_reports_time_left(tmp_path):
+    import threading
+
+    from dubber import pipeline
+
+    clock = SimpleNamespace(now=0.0)
+    step, done = threading.Event(), threading.Event()
+
+    def runner(url, settings, progress):
+        labels = {key: label for key, label, _ in pipeline.STAGES}
+        progress(labels["download"], 0.0)
+        clock.now = 40.0
+        progress(labels["transcribe"], 0.10)  # download (10 % by weight) took 40 s
+        step.set()
+        done.wait(5)
+        return SimpleNamespace(id="vid1")
+
+    settings = Settings(work_dir=tmp_path / "w", output_dir=tmp_path / "out")
+    c = TestClient(app.create_app(settings, runner=runner, clock=lambda: clock.now))
+    job = c.post("/api/jobs", json={"url": "https://youtu.be/x"}).json()
+    assert job["eta_seconds"] is None and "_tracker" not in job
+    assert step.wait(5)
+    job = c.get(f"/api/jobs/{job['id']}").json()
+    # Default shares: download 0.08 took 40 s → 500 s per share; 0.92 left → 460 s.
+    assert job["status"] == "running" and abs(job["eta_seconds"] - 460) <= 1
+    done.set()
+    assert wait_for(c, job["id"], "done")["eta_seconds"] is None
+
+
+def test_second_start_detects_the_program_already_running(monkeypatch, capsys):
+    def answer(body):
+        def fetch(host, port, timeout):
+            if body is None:
+                raise ConnectionRefusedError("nothing listens")
+            return body
+        return fetch
+
+    monkeypatch.setattr(app, "_version_body", answer(None))
+    assert app.running_version("127.0.0.1", 7860) is None
+    monkeypatch.setattr(app, "_version_body", answer(b'{"detail":"Not Found"}'))
+    assert app.running_version("127.0.0.1", 7860) == ""  # an old Dubber without /api/version
+    monkeypatch.setattr(app, "_version_body", answer(b"<html>"))
+    assert app.running_version("127.0.0.1", 7860) == ""  # some other program
+    monkeypatch.setattr(app, "_version_body", answer(b'{"version": "0.3.0"}'))
+    assert app.running_version("127.0.0.1", 7860) == "0.3.0"
+
+    monkeypatch.setattr(app.webbrowser, "open", lambda url: pytest.fail("must not open the old page"))
+    assert app.main() == 1
+    assert "уже запущен (версия 0.3.0)" in capsys.readouterr().out
+
+
+def test_version_check_against_a_real_server_port(tmp_path):
+    import socket
+
+    with socket.socket() as s:  # a free port with nothing listening
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    assert app.running_version("127.0.0.1", port, timeout=0.5) is None
