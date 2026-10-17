@@ -50,10 +50,12 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 - Never commit cookies, API keys, `.env`, `glossary.txt`, `work/`, `output/`, or frames/dubs of third-party videos.
 - Tests that save settings must use a temp `env_file`/`glossary_file` (see `tests/test_app.py`), never the real `.env`.
 - `pkill -f dubber.app` kills your own shell — kill by PID (see STATUS).
+- Every release: bump `__version__` (`dubber/__init__.py`) and `pyproject.toml`; the page links its files by version.
 
 ## Git
-Full rules: `CONTRIBUTING.md`. In short: **`main` is the stable line** — start from the latest `main`, work on one
-branch per piece of work (`feat/…`, `fix/…`, `chore/…`, or the session's `claude/…` branch), never commit to `main`,
+Full rules: `CONTRIBUTING.md`. In short: **`main` is the stable line** — start from the latest `main`; **a new branch
+only for a new feature** (`feat/…`) — fixes and follow-ups to the current work stay on the same branch (or the
+session's `claude/…` branch), never one branch per fix (Adam, 2026-10-18); never commit to `main`,
 open a PR into `main` (template in `.github/`), CI (`ruff` + `pytest`, `.github/workflows/ci.yml`) must be green,
 and **Adam reviews and merges**. Files Adam shares arrive on `uploads/…` branches in `dev-uploads/` (see its README);
 delete them in your next PR after reading. The old `claude/bold-davinci-qfv627` branch is outdated — ignore it.

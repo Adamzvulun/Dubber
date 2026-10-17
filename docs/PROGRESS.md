@@ -2,6 +2,15 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-18 — Session 2f: installer "stuck after Obtaining file", hand-off docs
+- Adam: the installer window seems stuck after "Obtaining file:///…". Not reproducible here (the step takes ~3 s; the
+  editable build does not walk `work/`/`.venv`). The next hidden step is pip's build isolation (a temporary env that
+  downloads setuptools, silent in plain output). Both installers now install `pip setuptools wheel` into `.venv`
+  first, install Dubber with `--no-build-isolation`, and write a full `install.log` (git-ignored) to share if it
+  stalls; the window says it can take 10–15 min the first time. Verified in a fresh venv (Linux).
+- Adam's git rule: a new branch only for a new feature; fixes go on the current branch (CONTRIBUTING, CLAUDE.md).
+- STATUS rewritten for the next session; kanban hand-off list refreshed.
+
 ## 2026-10-18 — Session 2e: old styles after updating (PR `fix/asset-versions`, v0.3.1)
 - Adam updated to 0.3.0: first the old page opened; after a refresh the page was "broken" — new HTML with the old
   `styles.css`/`i18n.js` (huge gear, raw `nav.settings`). Reproduced exactly in Chromium (old `main` with 10-day-old

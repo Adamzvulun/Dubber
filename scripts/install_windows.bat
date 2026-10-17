@@ -29,10 +29,14 @@ if not exist .venv (
   echo Создаю окружение Python...
   py -3 -m venv .venv || goto :error
 )
-echo Устанавливаю и обновляю компоненты (это может занять несколько минут)...
-.venv\Scripts\python -m pip install --upgrade pip >nul
-.venv\Scripts\python -m pip install --upgrade -e . || goto :error
-.venv\Scripts\python -m pip install --upgrade yt-dlp >nul
+echo Устанавливаю и обновляю компоненты. В первый раз это может занять 10-15 минут:
+echo скачивается около 1 ГБ. Строки ниже должны меняться; подробный журнал пишется в файл install.log.
+if exist install.log del install.log
+rem Build tools go into .venv first and Dubber is installed without pip's temporary "build isolation" environment:
+rem that hidden step ran right after "Obtaining file:///..." and could sit there silently (Adam, 2026-10-18).
+.venv\Scripts\python -m pip install --upgrade pip setuptools wheel --log install.log || goto :error
+.venv\Scripts\python -m pip install --upgrade --no-build-isolation --log install.log -e . || goto :error
+.venv\Scripts\python -m pip install --upgrade yt-dlp --log install.log >nul
 
 echo Создаю ярлык «Дубляж видео» на рабочем столе...
 rem Non-ASCII text on the powershell command line arrives as '?', so the shortcut name is built
@@ -55,5 +59,5 @@ exit /b
 
 :error
 echo.
-echo Ошибка установки. Сфотографируйте это окно и отправьте помощнику.
+echo Ошибка установки. Сфотографируйте это окно и отправьте помощнику вместе с файлом install.log.
 pause

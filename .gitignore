@@ -11,3 +11,4 @@ models/
 .gradio/
 cookies*.txt
 glossary.txt
+install.log
