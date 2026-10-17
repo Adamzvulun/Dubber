@@ -2,6 +2,13 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-17 — Session 2b: `main` and a professional git workflow
+- Created `main` (from the session branch, which contains the old default branch). From now on: branch per piece of
+  work → PR into `main` → CI green → Adam reviews and merges (`CONTRIBUTING.md`, PR template).
+- CI: GitHub Actions `ci.yml` (Ubuntu, Python 3.12, ffmpeg, `ruff check .`, `pytest`).
+- `dev-uploads/`: a drop box for files Adam wants Claude to read (uploaded on `uploads/…` branches via the GitHub
+  website); its README lists the cache files needed for the translation/timing regression.
+
 ## 2026-10-17 — Session 2: Adam's feedback after the re-dub
 - Adam: the EN+FR video now works, but translation quality and timing feel worse than before; the father will use
   Dubber for every topic (general glossary, not a field list); his PC is Windows; still deciding on a Claude key.

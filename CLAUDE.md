@@ -50,6 +50,8 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 - `pkill -f dubber.app` kills your own shell — kill by PID (see STATUS).
 
 ## Git
-Develop on the branch given in the session; commit with clear messages; push with `git push -u origin <branch>`.
-Current line of work: `claude/inspiring-davinci-4qon8o` (Adam starts sessions from it). The repo's default branch
-`claude/bold-davinci-qfv627` is outdated (stops before the timing/languages work) — don't build on it.
+Full rules: `CONTRIBUTING.md`. In short: **`main` is the stable line** — start from the latest `main`, work on one
+branch per piece of work (`feat/…`, `fix/…`, `chore/…`, or the session's `claude/…` branch), never commit to `main`,
+open a PR into `main` (template in `.github/`), CI (`ruff` + `pytest`, `.github/workflows/ci.yml`) must be green,
+and **Adam reviews and merges**. Files Adam shares arrive on `uploads/…` branches in `dev-uploads/` (see its README);
+delete them in your next PR after reading. The old `claude/bold-davinci-qfv627` branch is outdated — ignore it.
