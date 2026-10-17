@@ -2,6 +2,14 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-18 — Session 2e: old styles after updating (PR `fix/asset-versions`, v0.3.1)
+- Adam updated to 0.3.0: first the old page opened; after a refresh the page was "broken" — new HTML with the old
+  `styles.css`/`i18n.js` (huge gear, raw `nav.settings`). Reproduced exactly in Chromium (old `main` with 10-day-old
+  files, then the new server, then a refresh): browsers re-check only the page on refresh and reuse saved files.
+- Fix: the app serves `index.html` itself with versioned file addresses (`?v=<version>.<newest file time>`); verified
+  the reproduction is fixed and that a simulated next release appears on the first open without refresh.
+  One-time Ctrl+F5 note for updates from ≤ 0.3.0 in README.ru. 90 tests pass.
+
 ## 2026-10-17 — Session 2d: updates always visible + time left (PR `fix/updates-and-eta`, v0.3.0)
 - Adam: after updating to `main` no Settings icon / model menu; wants a time-left timer.
 - Cause (verified): starting the new version while the old window runs left the old server on port 7860 — the new
