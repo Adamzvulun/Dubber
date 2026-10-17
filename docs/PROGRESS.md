@@ -2,6 +2,14 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-17 — Session 1k: hand-off for the next session
+- Adam will start the next session from `claude/inspiring-davinci-4qon8o` (the default branch is outdated).
+- Rewrote `docs/STATUS.md` (state, how it works, verified, not verified, next steps, gotchas, how to test) and
+  refreshed `CLAUDE.md`; kanban cleaned up (`kanban/next-steps.md` = open items); README.ru notes the offline backup.
+- Moved the session's QA tooling into the repo: `tools/stub_server.py` (website with a stand-in pipeline) and
+  `tools/qa_languages.py` (real dubs of 2 multilingual clips × 12 languages with translation/re-listen/timing checks;
+  verified: trio → es, 0 untranslated, 99 % re-heard, 0 late lines).
+
 ## 2026-10-17 — Session 1j: every language translated correctly + 12-language QA
 - Adam: in his EN+FR video the French was untranslated or gibberish; all languages must work like the Russian dub.
 - Causes and fix: see ADR-016 and RESEARCH "Every dub language". Line languages (per-region detection), Google JSON

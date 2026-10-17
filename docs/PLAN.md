@@ -85,5 +85,7 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 
 ## Open questions
 - What is the father's work field? (for the glossary)
-- Translation quality: stay on free Google (offline fallback is clumsy) or add a Claude key (~$0.05–0.20 per 10-min video)?
-- Which OS does his PC run? (Windows assumed)
+- Translation quality: free Google (+ NLLB offline backup) is the default; add a Claude key (~$0.05–0.20 per 10-min
+  video) for context-aware, dub-length lines?
+- Should one video keep several dub languages in the library (today a new language replaces the old dub)?
+- Windows confirmed (Adam's PC).

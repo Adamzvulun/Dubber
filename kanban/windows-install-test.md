@@ -1,6 +1,6 @@
 ---
 id: 7
-status: doing
+status: done
 priority: High
 blocked_by: [3]
 tags: [m2, install, verification]
@@ -18,3 +18,5 @@ Steps for Adam are in `docs/STATUS.md` / `README.md`; the father's guide is `doc
   installer; waiting for Adam to re-run it and start the site. (by @claude)
 - 2026-10-16: Site runs on Windows; first dub failed downloading Whisper via Hugging Face Xet. Switched to plain
   HTTPS + retries; waiting for Adam's next try. (by @claude)
+- 2026-10-17: Installed and dubbing on Adam's PC. Follow-ups (re-check fixed shortcut, H.264 in real
+  Chrome/Edge) moved to `kanban/next-steps.md`. (by @claude)

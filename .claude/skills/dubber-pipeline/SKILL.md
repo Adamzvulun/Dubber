@@ -1,6 +1,6 @@
 ---
 name: dubber-pipeline
-description: How the Dubber YouTube→Russian dubbing pipeline works and how to run, debug or extend a stage (download, transcribe, translate, tts, align, mux). Use whenever touching code in dubber/ or investigating a bad dub (wrong timing, missing audio, translation problems, download failures).
+description: How the Dubber dubbing pipeline (any spoken language → 12 dub languages, Russian default) works and how to run, debug or extend a stage (download, transcribe, translate, tts, align, mux). Use whenever touching code in dubber/ or investigating a bad dub (wrong timing, missing audio, translation problems, download failures).
 ---
 
 # Dubber pipeline
@@ -39,8 +39,9 @@ DUBBER_WHISPER_MODEL=tiny  DUBBER_TRANSLATOR=google  DUBBER_VOICE=ru-RU-Svetlana
   5×, falls back to the natural-speed clip, leaves one line silent as a last resort, and only fails the job when >20%
   of lines get no audio (= real outage).
 - **Line untranslated / wrong language / gibberish** → check `segments_src_v3.json` `lang` per line (Whisper `base`
-  detection per speech region) and `segments_<lang>_v3.translator` (google / offline). QA harness pattern: dub a
-  clip, Whisper re-listens the track in the target language, back-translate with NLLB (RESEARCH "Every dub language").
+  detection per speech region) and `segments_<lang>_v3.translator` (google / offline). QA: `tools/qa_languages.py OUT --targets <lang>` dubs
+  multilingual test clips and reports untranslated lines, Whisper re-listen, timing and back-translations;
+  `tools/stub_server.py` runs the website with a stand-in pipeline for UI work (see docs/STATUS.md "How to test").
 - **Nothing heard** → `ffprobe` the track wav; check `clips/` sizes (0-byte = TTS failed).
 - **Slow** → transcription dominates on CPU; try `DUBBER_WHISPER_MODEL=base`.
 

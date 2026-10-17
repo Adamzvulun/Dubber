@@ -1,6 +1,6 @@
 ---
 id: 8
-status: doing
+status: done
 priority: High
 blocked_by: []
 tags: [m3.5, timing, quality]
@@ -20,3 +20,4 @@ Free steps implemented (ADR-013); waiting for Adam to re-dub a real video and li
   Test talk: all lines on time, pace 1.40–1.50×, no stretching. (by @claude)
 - 2026-10-16: Adam's re-dub failed with "No audio was received" (Edge random no-audio ~9% + punctuation-only
   lines; 2× requests since the two-pass TTS). Fixed with skips/retries/fallbacks; waiting for his re-try. (by @claude)
+- 2026-10-17: Adam: dubbing "works great". Done; paid Claude length-budget step stays optional (PLAN M3.5). (by @claude)

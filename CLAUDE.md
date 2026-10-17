@@ -2,9 +2,10 @@
 
 > **Start here: [`docs/STATUS.md`](docs/STATUS.md)** — current state, what's verified, next steps, and sandbox gotchas.
 
-Dubber turns an English YouTube video into a **Russian-dubbed** MP4 + Russian subtitles + transcript.
-End user: a Russian-speaking professional (not a developer) who learns from English videos, running it on his own PC
-(Windows likely). The website must look like a modern, professional product — see `docs/DESIGN.md`.
+Dubber turns a YouTube video in **any spoken language** (also mixed, e.g. English + French) into a **dubbed** MP4 in one
+of 12 languages (**Russian by default**) + subtitles + transcripts, with a steady pace that follows the speaker.
+End user: a Russian-speaking professional (not a developer) who learns from foreign videos, running it on his own
+Windows PC. The website (RU/EN interface, cancel button) must look like a modern, professional product — `docs/DESIGN.md`.
 
 ## Golden rules
 1. **The repo is the source of truth.** Every plan, decision and progress note lives in `docs/` and `kanban/`.
@@ -24,11 +25,17 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 .venv/bin/pytest                                               # tests (no network needed)
 .venv/bin/python -m dubber.cli <youtube-url-or-local-file>     # run pipeline
 .venv/bin/python -m dubber.app                                 # the website on http://127.0.0.1:7860
+.venv/bin/python tools/stub_server.py /tmp/stub 7871           # website with a stand-in pipeline (UI work, no network)
+.venv/bin/python tools/qa_languages.py /tmp/qa                 # real dubs of 2 multilingual clips × 12 languages
 ```
 
 ## Layout
-- `dubber/` — pipeline stages (`download`, `transcribe`, `translate`, `tts`, `align`, `mux`, `subtitles`), orchestrated by `pipeline.py`; `cli.py`; `app.py` (FastAPI server + JSON API).
-- `dubber/web/` — the website front-end (plain HTML/CSS/JS, no build step): `index.html`, `styles.css`, `app.js`.
+- `dubber/` — pipeline stages (`download`, `transcribe`, `translate`, `tts`, `align`, `mux`, `subtitles`), orchestrated by
+  `pipeline.py`; `languages.py` (the 12 dub languages: voices, codes), `timing.py` (pace planner), `segments.py`
+  (lines from word timings), `hub.py` (model downloads), `cli.py`, `app.py` (FastAPI server + JSON API, jobs, cancel).
+- `dubber/web/` — the website front-end (plain HTML/CSS/JS, no build step): `index.html`, `styles.css`, `app.js`,
+  `i18n.js` (every UI string in RU + EN — never hard-code text elsewhere).
+- `tools/` — developer tools (not shipped): `stub_server.py`, `qa_languages.py` (see docs/STATUS.md "How to test").
 - `tests/` — unit tests per stage; network stages are mocked.
 - `docs/` — STATUS (start here), PLAN, RESEARCH, DECISIONS, DESIGN, PROGRESS, SKILLS, README.ru.
 - `kanban/` — task cards (see `kanban-ai` skill).
@@ -37,9 +44,12 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 
 ## Gotchas (details in docs/STATUS.md)
 - Cloud sandbox: YouTube and Google Translate block datacenter IPs (use fresh cookies via `DUBBER_COOKIES`, kept
-  outside the repo; translation falls back to the offline model). Headless Chromium can't play H.264.
+  outside the repo; translation falls back to the offline NLLB model, 1.4 GB on first use). Headless Chromium can't
+  play H.264. Test media = local files or `tools/qa_languages.py` clips.
 - Never commit cookies, `work/`, `output/`, or frames/dubs of third-party videos.
 - `pkill -f dubber.app` kills your own shell — kill by PID (see STATUS).
 
 ## Git
 Develop on the branch given in the session; commit with clear messages; push with `git push -u origin <branch>`.
+Current line of work: `claude/inspiring-davinci-4qon8o` (Adam starts sessions from it). The repo's default branch
+`claude/bold-davinci-qfv627` is outdated (stops before the timing/languages work) — don't build on it.
