@@ -181,7 +181,8 @@ class NllbBackend:
             tokens, target_prefix=[[self.target.nllb]] * len(texts), beam_size=4, length_penalty=1.5,
             max_decoding_length=256,
         )
-        return [self._tok.decode([self._tok.token_to_id(t) for t in r.hypotheses[0][1:]]).strip() for r in results]
+        texts = [self._tok.decode([self._tok.token_to_id(t) for t in r.hypotheses[0][1:]]).strip() for r in results]
+        return [re.sub(r"\s+([.,!?;:…])", r"\1", t) for t in texts]  # NLLB sometimes leaves "word ."
 
     def _looks_cut(self, source: str, out: str) -> bool:
         return not out or out.endswith((",", "，", "、")) and not source.rstrip().endswith(",")
