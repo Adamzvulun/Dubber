@@ -1,0 +1,16 @@
+---
+id: 14
+status: doing
+priority: High
+blocked_by: []
+tags: [translation, claude, settings, web]
+---
+
+# Claude translation from the website (key, model, glossary)
+
+Adam: "lets implement the claude key"; key in website settings, default Opus 5.5, general glossary now.
+Design: ADR-017. PR: `feat/claude-translation`.
+
+## Narrative
+- 2026-10-17: Built and verified offline (unit tests, Chromium, real SDK with a dummy key). Waiting for Adam's review
+  and a first real dub with his key (then compare timing with the free path and calibrate chars/second). (by @claude)

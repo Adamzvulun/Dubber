@@ -10,3 +10,4 @@ output/
 models/
 .gradio/
 cookies*.txt
+glossary.txt

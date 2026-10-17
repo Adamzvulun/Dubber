@@ -71,45 +71,149 @@ def test_google_rejects_robot_check_page(monkeypatch):
 
 
 class FakeClaude:
-    """Mimics client.beta.messages.create for the structured-output call."""
+    """Mimics client.beta.messages.stream(...) for the structured-output call: answers "РУ:<text>" per line."""
 
-    def __init__(self, drop_first_time=False):
+    def __init__(self, drop_first_time=False, stop_reason="end_turn", error=None):
         self.requests = []
         self.drop_first_time = drop_first_time
-        self.beta = SimpleNamespace(messages=SimpleNamespace(create=self.create))
+        self.stop_reason = stop_reason
+        self.error = error
+        self.beta = SimpleNamespace(messages=SimpleNamespace(stream=self.stream))
 
-    def create(self, **kwargs):
+    @staticmethod
+    def payload(request):
+        return json.loads(request["messages"][0]["content"].split("\n", 1)[1])
+
+    def stream(self, **kwargs):
         self.requests.append(kwargs)
-        lines = kwargs["messages"][0]["content"].split("\n")[1:]
-        out = [f"RU:{ln.split('. ', 1)[1]}" for ln in lines]
+        if self.error is not None:
+            raise self.error
+        out = [f"РУ:{line['text']}" for line in self.payload(kwargs)["lines"]]
         if self.drop_first_time and len(self.requests) == 1:
             out = out[:-1]
         block = SimpleNamespace(type="text", text=json.dumps({"translations": out}, ensure_ascii=False))
-        return SimpleNamespace(stop_reason="end_turn", content=[block])
+        usage = SimpleNamespace(input_tokens=1000, output_tokens=500, cache_read_input_tokens=0,
+                                cache_creation_input_tokens=0)
+        message = SimpleNamespace(stop_reason=self.stop_reason, content=[block], usage=usage)
+
+        class Stream:
+            def __enter__(self):
+                return SimpleNamespace(get_final_message=lambda: message)
+
+            def __exit__(self, *exc):
+                return False
+
+        return Stream()
 
 
 def test_claude_backend_and_request_shape():
     client = FakeClaude()
     out = ClaudeBackend(model="claude-opus-5-5", client=client).translate_texts(["Hello.", "World."])
-    assert out == ["RU:Hello.", "RU:World."]
+    assert out == ["РУ:Hello.", "РУ:World."]
     req = client.requests[0]
     assert req["model"] == "claude-opus-5-5"
-    assert req["output_config"]["format"]["type"] == "json_schema"
-    assert req["fallbacks"] == "default"
+    assert req["output_config"]["format"]["type"] == "json_schema" and req["output_config"]["effort"] == "low"
+    assert req["fallbacks"] == "default" and req["betas"] == ["server-side-fallback-2026-07-01"]
+
+
+def test_claude_haiku_has_no_server_side_fallback_and_unknown_model_uses_default():
+    client = FakeClaude()
+    ClaudeBackend(model="claude-haiku-5-5", client=client).translate_texts(["Hi"])
+    assert "fallbacks" not in client.requests[0]
+    assert ClaudeBackend(model="gpt-whatever", client=client).model == "claude-opus-5-5"
+
+
+def test_claude_gets_the_whole_video_with_languages_slots_and_budgets():
+    client = FakeClaude()
+    engine = ClaudeBackend(client=client, target="ru", glossary="sourdough = закваска")
+    t = Translator("ru", engine)
+    segs = [Segment(0.0, 2.0, "Hello there friends", lang="en"), Segment(3.0, 5.5, "Je fais du pain", lang="fr"),
+            Segment(6.0, 8.0, "Привет всем", lang="ru"), Segment(8.5, 10.0, "Sourdough is alive", lang="en")]
+    translate_segments(segs, t)
+    assert len(client.requests) == 1  # one request for the whole mixed-language video
+    lines = FakeClaude.payload(client.requests[0])["lines"]
+    assert [ln["lang"] for ln in lines] == ["en", "fr", "en"]  # the Russian line is kept, not sent
+    assert lines[0]["seconds"] == 2.9  # its slot: until shortly before the next line (timing.slots)
+    assert lines[0]["max_chars"] == round(2.85 * 14 * 1.15)
+    assert "sourdough = закваска" in client.requests[0]["system"]
+    assert [s.ru for s in segs] == ["РУ:Hello there friends", "РУ:Je fais du pain", "Привет всем",
+                                    "РУ:Sourdough is alive"]
+    assert t.name == "claude" and t.cost_usd == round((1000 * 4 + 500 * 20) / 1e6, 4)
+
+
+def test_claude_long_video_is_chunked_with_context():
+    client = FakeClaude()
+    engine = ClaudeBackend(client=client)
+    engine.MAX_LINES = 3
+    out = engine.translate_video([{"text": f"Line {i}", "lang": "en", "seconds": 2.0} for i in range(7)])
+    assert out == [f"РУ:Line {i}" for i in range(7)] and len(client.requests) == 3
+    assert FakeClaude.payload(client.requests[1])["context_before"] == ["Line 0", "Line 1", "Line 2"]
 
 
 def test_claude_retries_in_halves_on_count_mismatch():
     client = FakeClaude(drop_first_time=True)
     out = ClaudeBackend(client=client).translate_texts(["a", "b", "c", "d"])
-    assert out == ["RU:a", "RU:b", "RU:c", "RU:d"]
+    assert out == ["РУ:a", "РУ:b", "РУ:c", "РУ:d"]
     assert len(client.requests) == 3
 
 
-def test_claude_refusal_raises():
-    client = FakeClaude()
-    client.beta.messages.create = lambda **kw: SimpleNamespace(stop_reason="refusal", content=[])
-    with pytest.raises(RuntimeError):
-        ClaudeBackend(client=client).translate_texts(["x"])
+def test_claude_refusal_is_unavailable():
+    with pytest.raises(TranslatorUnavailable) as err:
+        ClaudeBackend(client=FakeClaude(stop_reason="refusal")).translate_texts(["x"])
+    assert err.value.code == "refusal"
+
+
+def api_error(cls, status, message):
+    import httpx2
+
+    request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    return cls(message, response=httpx2.Response(status, request=request), body=None)
+
+
+@pytest.mark.parametrize("error,code", [
+    ("auth", "auth"), ("credit", "credit"), ("overloaded", "unavailable"), ("connection", "unavailable"),
+    ("no_model", "permission"),
+])
+def test_claude_errors_fall_back_to_google_with_a_reason(error, code):
+    import anthropic
+
+    errors = {
+        "auth": lambda: api_error(anthropic.AuthenticationError, 401, "invalid x-api-key"),
+        "credit": lambda: api_error(anthropic.BadRequestError, 400,
+                                    "Your credit balance is too low to access the Anthropic API."),
+        "overloaded": lambda: api_error(anthropic.InternalServerError, 529, "Overloaded"),
+        "connection": lambda: anthropic.APIConnectionError(request=None),
+        "no_model": lambda: api_error(anthropic.NotFoundError, 404, "model: claude-opus-5-5"),
+    }
+    google = FakeEngine("google", lambda ln, s: f"Перевод {ln}")
+    t = Translator("ru", ClaudeBackend(client=FakeClaude(error=errors[error]())), [lambda: google, None])
+    assert t.translate_texts(["Hello you all"], ["en"], [2.0]) == ["Перевод Hello you all"]
+    assert t.name == "google" and t.notes == [f"claude:{code}"]
+
+
+def test_claude_other_bad_request_is_a_real_error():
+    import anthropic
+
+    t = Translator("ru", ClaudeBackend(client=FakeClaude(error=api_error(anthropic.BadRequestError, 400, "bad"))),
+                   [lambda: FakeEngine("google", lambda ln, s: ln)])
+    with pytest.raises(anthropic.BadRequestError):
+        t.translate_texts(["Hello you all"], ["en"])
+
+
+def test_check_claude_key():
+    import anthropic
+
+    from dubber.translate import check_claude_key
+
+    ok = SimpleNamespace(models=SimpleNamespace(list=lambda **kw: []))
+    check_claude_key("sk-ant-good", client=ok)
+
+    def refuse(**kw):
+        raise api_error(anthropic.AuthenticationError, 401, "invalid x-api-key")
+
+    with pytest.raises(TranslatorUnavailable) as err:
+        check_claude_key("sk-ant-bad", client=SimpleNamespace(models=SimpleNamespace(list=refuse)))
+    assert err.value.code == "auth"
 
 
 def test_translate_segments_with_plain_backend():
@@ -191,7 +295,11 @@ def test_backend_choice(monkeypatch):
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     t = make_backend("auto", target="he")
-    assert isinstance(t.primary, GoogleBackend) and t.primary.target.code == "he" and t._fallback_factory
+    assert isinstance(t.primary, GoogleBackend) and t.primary.target.code == "he" and len(t._factories) == 1
+    t = make_backend("auto", target="he", api_key="sk-ant-x", claude_model="claude-sonnet-5-5", glossary="a = b")
+    assert isinstance(t.primary, ClaudeBackend) and t.primary.model == "claude-sonnet-5-5"
+    assert len(t._factories) == 2  # → Google → offline
+    assert isinstance(make_backend("google", api_key="sk-ant-x").primary, GoogleBackend)  # "free only"
 
 
 @pytest.mark.network
@@ -205,6 +313,7 @@ def test_claude_prompt_names_the_target_language():
     client = FakeClaude()
     ClaudeBackend(client=client, target="he").translate_texts(["Hello"])
     assert "Hebrew" in client.requests[0]["system"] and "Russian" not in client.requests[0]["system"]
+    assert "Glossary" not in client.requests[0]["system"]
 
 
 def test_gate_accepts_a_line_google_says_is_already_in_the_dub_language():

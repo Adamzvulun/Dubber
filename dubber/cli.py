@@ -15,7 +15,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lang", choices=sorted(languages.LANGUAGES), help="dub language (default: ru)")
     parser.add_argument("--voice", help="male / female, or an edge-tts voice, e.g. ru-RU-SvetlanaNeural")
     parser.add_argument("--whisper-model", help="tiny / base / small / medium / large-v3")
-    parser.add_argument("--translator", choices=["auto", "google", "claude"])
+    parser.add_argument("--translator", choices=["auto", "google", "claude", "offline"])
     args = parser.parse_args(argv)
 
     settings = load_settings()

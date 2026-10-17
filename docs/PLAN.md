@@ -50,8 +50,8 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 
 ### M3 — Quality
 - [x] Smarter timing: merge short segments into sentences before translating (`segments.merge_into_sentences`)
-- [ ] Glossary passed to the translator — general-purpose (the father watches videos on every topic, Adam
-  2026-10-17): the user adds his own terms; no field-specific list
+- [x] Glossary passed to the translator — general-purpose, edited on the Settings page, followed by Claude
+  (ADR-017); the free engines can't follow one reliably
 - [x] Voice choice (male/female) in the UI
 - [ ] Voice speed in the UI
 - [ ] Optional Demucs: keep background music, remove English voice
@@ -63,7 +63,7 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [x] Steady per-video pace + smoothed per-line rate (narrow band)
 - [x] Speed via Edge TTS `rate` (two-pass), `atempo` only as a small last correction
 - [x] Use following pauses before speeding up; minimal push-back
-- [ ] Optional (paid, not now): length-budgeted translation with Claude (syllable budget, retry)
+- [x] Length-budgeted translation with Claude: per-line time slot + character budget (ADR-017)
 - [x] Timing report in `output/<id>/` + tests for the timing planner
 - [x] Trim the silence Edge puts around every clip (found while testing)
 - [ ] Adam re-dubs a real video on his PC and listens
@@ -79,7 +79,10 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [x] Real check on Adam's PC: re-dub the EN+FR video — every line now translated (2026-10-17)
 - [x] Fix: after a re-dub into another language the watch page played the browser's cached old dub
 - [ ] Adam: translation quality and timing feel worse than before the language work — investigate
-  (`kanban/translation-timing-regression.md`)
+  (`kanban/translation-timing-regression.md`; waiting for his files in `dev-uploads/`)
+- [x] Claude translation from the website: key/model/glossary on a Settings page, whole-video context, dub-length
+  lines, fallback chain Claude → Google → offline, cost on the watch page (ADR-017)
+- [ ] Adam's first real dub with a Claude key (end-to-end check; compare timing with the free path)
 
 ### M4 — Nice to have
 - [ ] Queue of several links / playlists
@@ -89,7 +92,7 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 
 ## Open questions
 - ~~Father's work field~~ — every topic, so tools like the glossary must be general-purpose (Adam, 2026-10-17).
-- Claude key for translation: Adam is still deciding (cost + safety). Estimate at 2026-10 prices: ~$0.10 per 10 min of
+- Claude key for translation: built (ADR-017); Adam decides whether to buy credit. Estimate at 2026-10 prices: ~$0.10 per 10 min of
   speech on Opus 5.5 ($4/$20 per M tokens), ~$0.05 on Sonnet 5.5, under $0.01 on Haiku 5.5. The key would stay on
   the PC (env var), with a monthly spend limit set in the Anthropic Console; no payment code in Dubber.
 - Should one video keep several dub languages in the library (today a new language replaces the old dub)?
