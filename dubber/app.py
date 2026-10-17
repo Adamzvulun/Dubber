@@ -5,7 +5,8 @@ Run: `python -m dubber.app` → opens http://127.0.0.1:7860
 API
 - POST /api/jobs {url, voice: "male"|"female", background: bool, lang} → start dubbing (one job at a time)
 - GET  /api/languages                                              → dub languages (code, names, voices)
-- GET  /api/jobs, /api/jobs/{id}                                   → progress
+- GET  /api/jobs, /api/jobs/{id}                                   → progress, elapsed, rough time left (eta.py)
+- GET  /api/version                                                 → {"version"} (shown in the page footer)
 - POST /api/jobs/{id}/cancel                                        → stop a queued or running job
 - GET  /api/videos, /api/videos/{id}                                → library, one video + its timed transcript
 - DELETE /api/videos/{id}                                           → remove from the library
@@ -40,7 +41,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import languages, pipeline, translate
+from . import __version__, eta, languages, pipeline, translate
 from .config import Settings, load_settings, save_env
 from .download import is_url
 
@@ -152,9 +153,15 @@ class Job:
     video_id: str = ""
     created: float = field(default_factory=time.time)
     cancel_requested: bool = False
+    _tracker: eta.Tracker | None = field(default=None, repr=False)  # stage timings → time left
+    _shares: dict = field(default_factory=dict, repr=False)
 
     def public(self) -> dict:
-        return dataclasses.asdict(self)
+        out = {f.name: getattr(self, f.name) for f in dataclasses.fields(self) if not f.name.startswith("_")}
+        running = self.status == "running" and self._tracker is not None
+        left = self._tracker.eta(self._shares) if running else None
+        out["eta_seconds"] = round(left) if left is not None else None
+        return out
 
 
 class JobCancelled(Exception):
@@ -164,9 +171,11 @@ class JobCancelled(Exception):
 class JobRunner:
     """Runs dubbing jobs one after another in a background thread."""
 
-    def __init__(self, settings: Settings, runner=pipeline.run):
+    def __init__(self, settings: Settings, runner=pipeline.run, clock: Callable[[], float] = time.monotonic):
         self.settings = settings
         self.runner = runner
+        self.clock = clock
+        self.history = settings.work_dir / "stage_times.json"  # stage timings of finished dubs on this PC
         self.jobs: dict[str, Job] = {}
         self._queue: queue.Queue[Job] = queue.Queue()
         threading.Thread(target=self._work, daemon=True).start()
@@ -198,6 +207,8 @@ class JobRunner:
             if job.status == "cancelled":
                 continue
             job.status, job.label = "running", "Начинаю"
+            job._tracker = eta.Tracker([(key, weight) for key, _, weight in pipeline.STAGES], self.clock)
+            job._shares = eta.load_shares(self.history)
             settings = dataclasses.replace(
                 self.settings, target_lang=job.lang, voice=languages.voice_for(job.lang, job.voice),
                 keep_background=job.background,
@@ -208,10 +219,12 @@ class JobRunner:
                 if job.cancel_requested:
                     raise JobCancelled()
                 job.stage, job.label, job.progress = STAGE_KEYS.get(label, ""), label, round(fraction, 4)
+                job._tracker.update(job.stage, fraction)
 
             try:
                 result = self.runner(job.url, settings, progress=progress)
                 job.video_id, job.status, job.progress, job.label = result.id, "done", 1.0, "Готово"
+                eta.record(self.history, job._tracker.stage_seconds())
             except Exception as exc:  # shown to the user in Russian
                 if job.cancel_requested:  # yt-dlp may wrap our JobCancelled in its own error
                     job.status, job.label = "cancelled", "Отменено"
@@ -270,11 +283,24 @@ def _read_meta(folder: Path) -> dict | None:
     return meta
 
 
+class _FreshStaticFiles(StaticFiles):
+    """The website's own files, always checked with the server (ETag) so an update is never hidden behind the
+    browser's saved copy of the old page."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def create_app(
-    settings: Settings | None = None, runner=pipeline.run, check_key: Callable[[str], None] = translate.check_claude_key
+    settings: Settings | None = None,
+    runner=pipeline.run,
+    check_key: Callable[[str], None] = translate.check_claude_key,
+    clock: Callable[[], float] = time.monotonic,
 ) -> FastAPI:
     settings = settings or load_settings()
-    jobs = JobRunner(settings, runner)
+    jobs = JobRunner(settings, runner, clock)
     app = FastAPI(title="Дубляж", docs_url=None, redoc_url=None)
 
     @app.middleware("http")
@@ -305,6 +331,10 @@ def create_app(
         if req.lang not in languages.LANGUAGES:
             raise HTTPException(422, _detail("Неизвестный язык", "Unknown language"))
         return jobs.submit(url, req.voice, req.background, req.lang).public()
+
+    @app.get("/api/version")
+    def version() -> dict:
+        return {"version": __version__}
 
     @app.get("/api/languages")
     def list_languages() -> list[dict]:
@@ -423,20 +453,62 @@ def create_app(
         return FileResponse(folder / name, media_type=media_type, filename=filename,
                             headers={"Cache-Control": "no-cache"})
 
-    app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
+    app.mount("/", _FreshStaticFiles(directory=WEB_DIR, html=True), name="web")
     return app
 
 
-def main() -> None:
+def _version_body(host: str, port: int, timeout: float) -> bytes:
+    """GET /api/version straight to this computer (no proxy settings involved); OSError if nothing answers."""
+    import http.client
+
+    conn = http.client.HTTPConnection(host, port, timeout=timeout)
+    try:
+        conn.request("GET", "/api/version")
+        return conn.getresponse().read()
+    finally:
+        conn.close()
+
+
+def running_version(host: str, port: int, timeout: float = 1.5) -> str | None:
+    """None if nothing listens on the port; else the version of the Dubber already running there ("" = unknown:
+    an older Dubber without /api/version, or another program)."""
+    try:
+        body = _version_body(host, port, timeout)
+    except OSError:
+        return None
+    try:
+        return str(json.loads(body)["version"])
+    except (ValueError, KeyError, TypeError):
+        return ""
+
+
+def _open_browser_when_ready(url: str, host: str, port: int) -> None:
+    for _ in range(60):  # up to ~30 s: open the page only once this server answers (never an old one)
+        if running_version(host, port, timeout=0.5) == __version__:
+            webbrowser.open(url)
+            return
+        time.sleep(0.5)
+
+
+def main() -> int:
     import uvicorn
 
     host = os.environ.get("DUBBER_HOST", "127.0.0.1")
     port = int(os.environ.get("DUBBER_PORT", "7860"))
+    url = f"http://{host}:{port}"
+    other = running_version(host, port)
+    if other is not None:
+        # Starting a new version while the old window is still open used to show the OLD page.
+        which = f"версия {other}" if other else "старая версия"
+        print(f"«Дубляж» уже запущен ({which}) на {url}.\n"
+              "Закройте другое чёрное окно «Дубляж» и запустите программу снова.")
+        return 1
     if os.environ.get("DUBBER_NO_BROWSER") is None:
-        threading.Timer(1.5, lambda: webbrowser.open(f"http://{host}:{port}")).start()
-    print(f"«Дубляж» работает: http://{host}:{port}  (не закрывайте это окно)")
+        threading.Thread(target=_open_browser_when_ready, args=(url, host, port), daemon=True).start()
+    print(f"«Дубляж» {__version__} работает: {url}  (не закрывайте это окно)")
     uvicorn.run(create_app(), host=host, port=port, log_level="warning")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

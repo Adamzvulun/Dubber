@@ -13,6 +13,8 @@ const state = {
   submitting: false, dubLang: "ru", firstRoute: true, settings: null, glossaryDirty: false,
 };
 const jobNodes = new Map(); // job id → { node, sig }: cards are patched in place so focus survives polling
+const etaShown = new Map(); // job id → { text, at }: the time-left text changes at most every ETA_HOLD ms
+const ETA_HOLD = 10000;
 
 /* ---------- helpers ---------- */
 async function api(path, options = {}) {
@@ -181,7 +183,9 @@ function jobCard(job) {
     el("span", { class: "job__status" },
       running ? el("span", { class: job.status === "queued" ? "lamp lamp--idle" : "lamp", "aria-hidden": "true" }) : null,
       document.createTextNode(jobStatusText(job))),
-    started ? el("span", { class: "job__time", text: clock(elapsed) }) : null);
+    started ? el("span", { class: "job__clock" },
+      el("span", { class: "job__time", text: clock(elapsed) }),
+      el("span", { class: "job__left", title: t("job.leftHint"), text: etaText(job) })) : null);
 
   const node = el("article", { class: `job job--${job.status}`, "data-job": job.id },
     head, el("p", { class: "job__url", text: `${t("job.into", langName(job.lang || "ru"))} · ${job.url}` }));
@@ -215,8 +219,28 @@ function jobCard(job) {
   return node;
 }
 
+/** "45 мин", "1 ч 20 мин" / "45 min", "1 h 20 min". */
+function duration(minutes) {
+  const h = Math.floor(minutes / 60), m = minutes % 60;
+  return h ? t("time.hm", h, m) : t("time.m", m);
+}
+
+/** Rough time left from the server's estimate (eta.py), steadied so it doesn't flicker between polls. */
+function etaText(job) {
+  let text;
+  if (job.eta_seconds == null) text = t("job.estimating");
+  else if (job.eta_seconds < 120) text = t("job.leftSoon");
+  else text = t("job.left", duration(Math.ceil(job.eta_seconds / 60)));
+  const shown = etaShown.get(job.id), now = Date.now();
+  if (shown && shown.text !== text && shown.lang === uiLang && now - shown.at < ETA_HOLD) return shown.text;
+  if (!shown || shown.text !== text || shown.lang !== uiLang) etaShown.set(job.id, { text, at: now, lang: uiLang });
+  return text;
+}
+
 /** Progress and elapsed time change every second: patch them without rebuilding the card. */
 function updateJobCard(node, job) {
+  const left = $(".job__left", node);
+  if (left) left.textContent = etaText(job);
   const fill = $(".bar__fill", node), bar = $(".bar", node), time = $(".job__time", node);
   if (fill) fill.style.width = `${(job.progress * 100).toFixed(1)}%`;
   if (bar) bar.setAttribute("aria-valuenow", String(Math.round(job.progress * 100)));
@@ -474,6 +498,7 @@ function applyUiLang() {
   renderJobs();
   renderLibrary();
   renderSettings();
+  renderVersion();
   if (state.video) renderWatchDetails();
   else if (!$("#view-settings").hidden) document.title = t("title.settings");
   else if (!$("#view-library").hidden) document.title = t("title.library");
@@ -525,6 +550,10 @@ function renderSettings() {
   const model = claude.models.find((m) => m.id === claude.model);
   $("#model-price").textContent = model ? t("settings.model.price", usd(model.per_10_min_usd)) : "";
   if (!state.glossaryDirty) $("#glossary").value = s.glossary || "";
+}
+
+function renderVersion() {
+  if (state.version) $("#app-version").textContent = t("footer.version", state.version);
 }
 
 function renderTranslatorNote() {
@@ -622,6 +651,7 @@ async function init() {
   window.addEventListener("hashchange", route);
   route();
   if (!state.settings) loadSettings(); // the note under the dub form says which translator is used
+  try { state.version = (await api("/api/version")).version; renderVersion(); } catch (_) {}
   pollJobs();
 }
 

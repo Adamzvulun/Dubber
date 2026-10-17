@@ -83,6 +83,8 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [x] Claude translation from the website: key/model/glossary on a Settings page, whole-video context, dub-length
   lines, fallback chain Claude → Google → offline, cost on the watch page (ADR-017)
 - [ ] Adam's first real dub with a Claude key (end-to-end check; compare timing with the free path)
+- [x] Updates always visible: no-cache site files, version in the footer, "already running" check (ADR-018)
+- [x] Time left on the job card, learned from this PC's past dubs (ADR-018)
 
 ### M4 — Nice to have
 - [ ] Queue of several links / playlists

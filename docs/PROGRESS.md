@@ -2,6 +2,17 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-17 — Session 2d: updates always visible + time left (PR `fix/updates-and-eta`, v0.3.0)
+- Adam: after updating to `main` no Settings icon / model menu; wants a time-left timer.
+- Cause (verified): starting the new version while the old window runs left the old server on port 7860 — the new
+  one failed, the browser opened the old page. Also site files had no cache headers. Fix: start-up check ("already
+  running (version …)", no browser, exit 1; browser opens only when this version answers), `Cache-Control: no-cache`
+  for the site, version 0.3.0 in the footer and `/api/version`, update steps in README.ru.
+- Time left (`dubber/eta.py`): stage timings + stage shares learned from this PC's last 10 dubs; shown as
+  «≈ осталось N мин» next to the elapsed time. Checked against a stub job (estimate within ~1–3 s of the truth),
+  RU/EN, 360 px (timers on their own row on phones).
+- 89 tests pass (1 network test skipped).
+
 ## 2026-10-17 — Session 2c: Claude translation from the website (PR `feat/claude-translation`)
 - Adam chose: key entered on the website, default model Opus 5.5, general-purpose glossary now, he reviews and merges.
 - Settings page (gear in the header): key checked with a free call and saved to `.env` (only `…last4` shown), model
