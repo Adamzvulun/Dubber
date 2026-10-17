@@ -39,15 +39,18 @@ Command line instead of the web page:
 Results go to `output/<video id>/` and appear in the website's library.
 
 ## Settings (optional, in a `.env` file next to this README)
+The website's **Settings** page (gear icon) manages translation: the Claude API key (checked, then saved to `.env`;
+only its last 4 characters are ever shown), the model, Claude on/off, and a glossary (`glossary.txt`, one
+"term = translation" per line, followed by Claude). Both files are git-ignored.
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `DUBBER_WHISPER_MODEL` | `small` | `tiny`/`base` faster, `medium`/`large-v3` more accurate (GPU recommended) |
 | `DUBBER_VOICE` | `ru-RU-DmitryNeural` | or `ru-RU-SvetlanaNeural` |
-| `DUBBER_TRANSLATOR` | `auto` | `google` (free), `offline` (free, on this PC, lower quality), `claude` (best, paid); `auto` = Claude if a key is set, else Google with automatic offline fallback |
+| `DUBBER_TRANSLATOR` | `auto` | `auto` = Claude if a key is set, else free Google; `google` (free only), `claude`, `offline` (NLLB on this PC). Fallback chain: Claude → Google → offline |
+| `ANTHROPIC_API_KEY` | – | enables Claude translation (paid, ~$0.09 per 10 min of speech on Opus 5.5) — normally entered on the website's **Settings** page, which saves it here |
+| `DUBBER_CLAUDE_MODEL` | `claude-opus-5-5` | `claude-opus-5-5`, `claude-sonnet-5-5` or `claude-haiku-5-5` (also on the Settings page) |
 | `DUBBER_COOKIES` | – | path to a `cookies.txt` exported from your browser, if YouTube says "confirm you're not a bot" |
-| `ANTHROPIC_API_KEY` | – | enables Claude translation (a few cents per video) |
-| `DUBBER_CLAUDE_MODEL` | `claude-opus-5-5` | Claude model used for translation |
-| `DUBBER_TRANSLATOR` | `auto` | `auto` (Google, or Claude with a key; offline NLLB backup), `google`, `claude`, `offline` |
 | `DUBBER_LANG` | `ru` | default dub language (`ru en he uk es fr de it pt ar zh ja`) |
 | `DUBBER_KEEP_BACKGROUND` | `1` | `0` = only the dubbed voice, without the original sound underneath (also a switch on the website) |
 | `DUBBER_MAX_SPEEDUP` | `1.6` | fastest the dub voice may speak (1.6 = 60% faster than natural) to keep the speaker's timing |

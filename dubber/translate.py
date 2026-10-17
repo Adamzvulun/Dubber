@@ -449,7 +449,7 @@ class ClaudeBackend:
                 response = stream.get_final_message()
         except anthropic.AuthenticationError as exc:
             raise TranslatorUnavailable(f"Claude: the API key was not accepted ({exc})", code="auth") from exc
-        except anthropic.PermissionDeniedError as exc:
+        except (anthropic.PermissionDeniedError, anthropic.NotFoundError) as exc:
             raise TranslatorUnavailable(f"Claude: the key may not use this model ({exc})", code="permission") from exc
         except anthropic.BadRequestError as exc:
             if "credit" in str(exc).lower():  # "Your credit balance is too low to access the Anthropic API"

@@ -371,6 +371,8 @@ def create_app(
 
     @app.put("/api/settings")
     def update_settings(req: SettingsUpdate) -> dict:
+        if req.glossary is not None and len(req.glossary) > 20_000:  # validate everything before saving anything
+            raise HTTPException(422, _detail("Глоссарий слишком длинный", "The glossary is too long"))
         updates: dict[str, str | None] = {}
         if req.model is not None:
             if req.model not in translate.CLAUDE_MODELS:
@@ -381,8 +383,6 @@ def create_app(
         if updates:
             save_env(settings.env_file, updates)
         if req.glossary is not None:
-            if len(req.glossary) > 20_000:
-                raise HTTPException(422, _detail("Глоссарий слишком длинный", "The glossary is too long"))
             settings.glossary_file.write_text(req.glossary.strip() + "\n", encoding="utf-8")
         return settings_view()
 

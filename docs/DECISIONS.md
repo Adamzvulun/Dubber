@@ -113,3 +113,31 @@ Newest at the bottom. Format: context → decision → consequences.
   the dub language kept; deep-translator dropped. Caches versioned/content-keyed so old videos are redone.
 - **Consequences:** first offline fallback downloads 1.4 GB; the watch page says when the offline backup translated.
   NLLB is good but not Google-grade (see RESEARCH "Every dub language"); a Claude key remains the quality option.
+
+## ADR-017 — Claude translation from the website: key in settings, whole-video context, fallback chain (2026-10-17)
+- **Context:** Adam wants the paid Claude option usable by his father (Windows, not a developer), with a general
+  glossary (any topic). He also reported worse translation and timing after ADR-016; dub-length lines address timing
+  directly. The old Claude path was CLI/env-only, not installed by the Windows installer, failed the whole dub on a
+  bad key, got one-language batches without timing, and shared the free engines' cache.
+- **Decision:**
+  - The key is entered on a **Settings** page, checked with a free `models.list` call, saved to the git-ignored `.env`
+    (`config.save_env`), applied immediately, and never sent back (only `…last4`). Model, Claude on/off
+    (`DUBBER_TRANSLATOR` auto/google) and the glossary (`glossary.txt`) are set there too. Default model Opus 5.5
+    (Adam's choice); Sonnet 5.5 and Haiku 5.5 offered with prices.
+  - Requests that change state are refused when their `Origin` is another website (the server is local, but a page
+    open in the same browser could otherwise post to it).
+  - Claude gets the **whole video** (≤200 lines per request with earlier lines as context): each line's language,
+    time slot (`timing.slots`) and a character budget (slot × the dub language's chars/second × 1.15, estimates in
+    `languages.chars_per_second`); prompt asks for spoken, dub-length lines; structured JSON output; streaming;
+    effort `low`; server-side refusal fallback (not on Haiku).
+  - Errors map to `TranslatorUnavailable(code)` (auth / permission / credit / unavailable / refusal) and the
+    `Translator` moves down an ordered chain **Claude → Google → NLLB**, recording why; the watch page says so.
+  - Cost = usage × price table, stored in `meta.json` and shown on the watch page. Claude translations have their own
+    cache keyed by model + glossary; a run that fell back is cached as free, so Claude is retried next time.
+  - `anthropic` becomes a regular dependency (installer installs it).
+- **Rejected:** storing the key in the browser (would travel with every request and live in browser storage); a
+  Windows credential vault (extra dependency for a single-user PC where `.env` is already the settings file);
+  validating with a real translation call (costs money; credit problems surface at dub time with a clear note).
+- **Consequences:** no real Claude translation could be run in the sandbox (no key); the request shape is unit-tested
+  and the real SDK accepted it (401 with a dummy key mapped to "auth"). Adam's first run with a key is the end-to-end
+  check. The chars/second table is an estimate to calibrate from real dubs.

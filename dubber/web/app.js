@@ -10,7 +10,7 @@ const FALLBACK_LANGS = [{ code: "ru", name_ru: "Русский", name_en: "Russi
 
 const state = {
   jobs: new Map(), pollTimer: null, videos: [], seenDone: new Set(), languages: FALLBACK_LANGS, video: null,
-  submitting: false, dubLang: "ru", firstRoute: true,
+  submitting: false, dubLang: "ru", firstRoute: true, settings: null, glossaryDirty: false,
 };
 const jobNodes = new Map(); // job id → { node, sig }: cards are patched in place so focus survives polling
 
@@ -95,7 +95,12 @@ function route() {
   if (!state.firstRoute) $("#main").focus({ preventScroll: true }); // keyboard/screen-reader users land on the new page
   state.firstRoute = false;
 
-  if (page === "library") {
+  if (page === "settings") {
+    $("#view-settings").hidden = false;
+    $('[data-nav="settings"]').setAttribute("aria-current", "page");
+    document.title = t("title.settings");
+    loadSettings();
+  } else if (page === "library") {
     $("#view-library").hidden = false;
     $('[data-nav="library"]').setAttribute("aria-current", "page");
     document.title = t("title.library");
@@ -342,6 +347,27 @@ async function showVideo(id) {
   renderWatchDetails();
 }
 
+/** "claude-opus-5-5" → "Opus 5.5". */
+function modelLabel(id) {
+  const m = (id || "").match(/^claude-([a-z]+)-(\d+)-(\d+)$/);
+  return m ? `${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}.${m[3]}` : id || "";
+}
+
+function usd(amount) {
+  if (!amount) return "";
+  return amount < 0.01 ? "< $0.01" : `$${amount.toFixed(2)}`;
+}
+
+/** Who translated this video (Claude with its cost, why Claude was skipped, or the offline backup). */
+function translatorLabels(video) {
+  const translator = video.translator || "", out = [];
+  if (translator === "claude") out.push(t("watch.claude", modelLabel(video.translator_model), usd(video.translation_cost_usd)));
+  const claudeNote = (video.translator_notes || []).find((n) => n.startsWith("claude:"));
+  if (claudeNote && translator !== "claude") out.push(t("watch.claudeFailed", t(`reason.${claudeNote.split(":")[1]}`)));
+  if (translator.includes("offline")) out.push(t("watch.offline"));
+  return out;
+}
+
 /** Everything on the watch page that depends on the interface language (re-run when it changes). */
 function renderWatchDetails() {
   const video = state.video;
@@ -354,7 +380,7 @@ function renderWatchDetails() {
   $("#watch-meta").replaceChildren(...[
     video.channel, clock(video.duration), langName(video.target_lang), t("watch.voice", voiceName(video.voice)),
     video.background === false ? t("watch.noBackground") : null,
-    (video.translator || "").includes("offline") ? t("watch.offline") : null, dateLabel(video.created),
+    ...translatorLabels(video), dateLabel(video.created),
   ].filter(Boolean).map((text) => el("span", { text })));
 
   const files = video.files || {};
@@ -447,10 +473,118 @@ function applyUiLang() {
   updateBackgroundHint();
   renderJobs();
   renderLibrary();
+  renderSettings();
   if (state.video) renderWatchDetails();
+  else if (!$("#view-settings").hidden) document.title = t("title.settings");
   else if (!$("#view-library").hidden) document.title = t("title.library");
   else if (!$("#view-home").hidden) document.title = t("title.home");
   else if (!$("#view-missing").hidden) document.title = t("missing.title");
+}
+
+/* ---------- settings ---------- */
+async function loadSettings() {
+  try { state.settings = await api("/api/settings"); } catch (_) { return; }
+  renderSettings();
+}
+
+function announce(text) {
+  $("#settings-status").textContent = "";
+  setTimeout(() => { $("#settings-status").textContent = text; }, 50); // re-announce the same text too
+}
+
+function showKeyError(message) {
+  const box = $("#key-error"), input = $("#claude-key");
+  box.textContent = message;
+  box.hidden = !message;
+  if (message) input.setAttribute("aria-invalid", "true"); else input.removeAttribute("aria-invalid");
+}
+
+/** The settings page and the note under the dub form, from state.settings (re-run when the UI language changes). */
+function renderSettings() {
+  const s = state.settings;
+  renderTranslatorNote();
+  if (!s) return;
+  const claude = s.claude, active = s.active;
+  const badge = $("#claude-badge");
+  badge.textContent = t(!claude.key_set ? "settings.badge.noKey" : active ? "settings.badge.on" : "settings.badge.off");
+  badge.className = `badge${active ? " badge--on" : ""}`;
+  $("#key-current").hidden = !claude.key_set;
+  $("#key-current").textContent = claude.key_set ? t("settings.key.current", claude.key_hint) : "";
+  $("#key-remove").hidden = !claude.key_set;
+
+  const use = $("#use-claude");
+  use.checked = active;
+  use.disabled = !claude.key_set;
+  $("#use-claude-hint").textContent = t(!claude.key_set ? "settings.use.noKey" : active ? "settings.use.on" : "settings.use.off");
+
+  const select = $("#claude-model");
+  select.replaceChildren(...claude.models.map((m) => el("option", {
+    value: m.id, text: t("settings.model.option", m.label, t(`settings.model.${m.id}`)),
+  })));
+  select.value = claude.model;
+  const model = claude.models.find((m) => m.id === claude.model);
+  $("#model-price").textContent = model ? t("settings.model.price", usd(model.per_10_min_usd)) : "";
+  if (!state.glossaryDirty) $("#glossary").value = s.glossary || "";
+}
+
+function renderTranslatorNote() {
+  const s = state.settings, note = $("#translator-note");
+  note.hidden = !s;
+  if (!s) return;
+  $("#translator-note-text").textContent = s.active
+    ? t("form.translator.claude", modelLabel(s.claude.model)) : t("form.translator.free");
+}
+
+async function saveSettings(changes, savedNote) {
+  try {
+    state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify(changes) });
+    renderSettings();
+    announce(t("settings.saved"));
+    if (savedNote) { savedNote.textContent = t("settings.saved"); savedNote.hidden = false; }
+  } catch (err) {
+    announce(err.message);
+    loadSettings(); // show what is really saved
+  }
+}
+
+function initSettings() {
+  $("#key-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = $("#claude-key"), button = $("#key-save"), key = input.value.trim();
+    if (!key) { showKeyError(t("settings.key.empty")); input.focus(); return; }
+    showKeyError("");
+    button.disabled = true;
+    button.textContent = t("settings.key.checking");
+    try {
+      state.settings = await api("/api/settings/claude-key", { method: "POST", body: JSON.stringify({ key }) });
+      input.value = "";
+      renderSettings();
+      announce(t("settings.key.saved"));
+    } catch (err) {
+      showKeyError(err.message);
+      input.focus();
+    } finally {
+      button.disabled = false;
+      button.textContent = t("settings.key.save");
+    }
+  });
+  $("#claude-key").addEventListener("input", () => { if (!$("#key-error").hidden) showKeyError(""); });
+  $("#key-remove").addEventListener("click", async () => {
+    if (!confirm(t("settings.key.confirmRemove"))) return;
+    try {
+      state.settings = await api("/api/settings/claude-key", { method: "DELETE" });
+      renderSettings();
+      announce(t("settings.key.removed"));
+      $("#claude-key").focus();
+    } catch (err) { announce(err.message); }
+  });
+  $("#use-claude").addEventListener("change", (e) => saveSettings({ use_claude: e.target.checked }));
+  $("#claude-model").addEventListener("change", (e) => saveSettings({ model: e.target.value }));
+  $("#glossary").addEventListener("input", () => { state.glossaryDirty = true; $("#glossary-saved").hidden = true; });
+  $("#glossary-save").addEventListener("click", async () => {
+    await saveSettings({ glossary: $("#glossary").value }, $("#glossary-saved"));
+    state.glossaryDirty = false;
+  });
 }
 
 /* ---------- init ---------- */
@@ -482,10 +616,12 @@ async function init() {
   showEn.addEventListener("change", () => { applyEn(); try { localStorage.setItem("dubber.showEn", showEn.checked ? "1" : "0"); } catch (_) {} });
   applyEn();
 
+  initSettings();
   applyUiLang(); // interface language first, before waiting for the server (no flash of the other language)
   try { state.languages = await api("/api/languages"); fillLanguageSelect(); renderLibrary(); } catch (_) {}
   window.addEventListener("hashchange", route);
   route();
+  if (!state.settings) loadSettings(); // the note under the dub form says which translator is used
   pollJobs();
 }
 

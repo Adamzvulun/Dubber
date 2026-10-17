@@ -172,6 +172,7 @@ def api_error(cls, status, message):
 
 @pytest.mark.parametrize("error,code", [
     ("auth", "auth"), ("credit", "credit"), ("overloaded", "unavailable"), ("connection", "unavailable"),
+    ("no_model", "permission"),
 ])
 def test_claude_errors_fall_back_to_google_with_a_reason(error, code):
     import anthropic
@@ -182,6 +183,7 @@ def test_claude_errors_fall_back_to_google_with_a_reason(error, code):
                                     "Your credit balance is too low to access the Anthropic API."),
         "overloaded": lambda: api_error(anthropic.InternalServerError, 529, "Overloaded"),
         "connection": lambda: anthropic.APIConnectionError(request=None),
+        "no_model": lambda: api_error(anthropic.NotFoundError, 404, "model: claude-opus-5-5"),
     }
     google = FakeEngine("google", lambda ln, s: f"Перевод {ln}")
     t = Translator("ru", ClaudeBackend(client=FakeClaude(error=errors[error]())), [lambda: google, None])

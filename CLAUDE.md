@@ -32,7 +32,8 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 ## Layout
 - `dubber/` — pipeline stages (`download`, `transcribe`, `translate`, `tts`, `align`, `mux`, `subtitles`), orchestrated by
   `pipeline.py`; `languages.py` (the 12 dub languages: voices, codes), `timing.py` (pace planner), `segments.py`
-  (lines from word timings), `hub.py` (model downloads), `cli.py`, `app.py` (FastAPI server + JSON API, jobs, cancel).
+  (lines from word timings), `hub.py` (model downloads), `cli.py`, `app.py` (FastAPI server + JSON API, jobs, cancel,
+  settings: Claude key/model/glossary saved to `.env` + `glossary.txt`), `config.py` (settings, `save_env`).
 - `dubber/web/` — the website front-end (plain HTML/CSS/JS, no build step): `index.html`, `styles.css`, `app.js`,
   `i18n.js` (every UI string in RU + EN — never hard-code text elsewhere).
 - `tools/` — developer tools (not shipped): `stub_server.py`, `qa_languages.py` (see docs/STATUS.md "How to test").
@@ -46,7 +47,8 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 - Cloud sandbox: YouTube and Google Translate block datacenter IPs (use fresh cookies via `DUBBER_COOKIES`, kept
   outside the repo; translation falls back to the offline NLLB model, 1.4 GB on first use). Headless Chromium can't
   play H.264. Test media = local files or `tools/qa_languages.py` clips.
-- Never commit cookies, `work/`, `output/`, or frames/dubs of third-party videos.
+- Never commit cookies, API keys, `.env`, `glossary.txt`, `work/`, `output/`, or frames/dubs of third-party videos.
+- Tests that save settings must use a temp `env_file`/`glossary_file` (see `tests/test_app.py`), never the real `.env`.
 - `pkill -f dubber.app` kills your own shell — kill by PID (see STATUS).
 
 ## Git

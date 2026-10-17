@@ -2,6 +2,18 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-17 — Session 2c: Claude translation from the website (PR `feat/claude-translation`)
+- Adam chose: key entered on the website, default model Opus 5.5, general-purpose glossary now, he reviews and merges.
+- Settings page (gear in the header): key checked with a free call and saved to `.env` (only `…last4` shown), model
+  with price, Claude on/off, glossary. Origin check on state-changing API requests.
+- Claude gets the whole video with each line's language, time slot and character budget → dub-length lines; streams;
+  errors (bad key, no credit, overload, refusal) fall back Claude → Google → offline with the reason on the watch
+  page; cost per video in `meta.json`. Own cache per model + glossary. `anthropic` installed by default.
+- Verified: 80 tests pass (1 network test skipped); Chromium flows in RU/EN, light/dark, 360/390/600/1280 px (no overflow; fixed a cut-off header,
+  a collapsed key field and a truncated model menu on the way); real SDK with a dummy key → "key not accepted".
+  Not run with a real key yet.
+- Also: the stub server keeps its settings in its data folder (never the project's `.env`).
+
 ## 2026-10-17 — Session 2b: `main` and a professional git workflow
 - Created `main` (from the session branch, which contains the old default branch). From now on: branch per piece of
   work → PR into `main` → CI green → Adam reviews and merges (`CONTRIBUTING.md`, PR template).

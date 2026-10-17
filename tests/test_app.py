@@ -265,6 +265,8 @@ def test_translation_settings_and_glossary(tmp_path):
     env = (tmp_path / ".env").read_text(encoding="utf-8")
     assert "DUBBER_TRANSLATOR=google" in env and "DUBBER_CLAUDE_MODEL=claude-sonnet-5-5" in env
     assert c.put("/api/settings", json={"model": "gpt-4"}).status_code == 422
+    r = c.put("/api/settings", json={"use_claude": True, "glossary": "x" * 20_001})
+    assert r.status_code == 422 and settings.translator == "google"  # nothing saved when part of it is invalid
     assert c.put("/api/settings", json={"use_claude": True}).json()["use_claude"] is True
 
 

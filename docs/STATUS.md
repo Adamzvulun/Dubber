@@ -15,7 +15,7 @@ than before** — under investigation (`kanban/translation-timing-regression.md`
 - **Branch:** **`main`** (created 2026-10-17) is the stable line; new work = a branch + PR that Adam reviews and
   merges (`CONTRIBUTING.md`); CI runs lint + tests on every PR. Adam installs from `main`'s ZIP and runs
   `scripts\install_windows.bat`. Files Adam shares come on `uploads/…` branches into `dev-uploads/`.
-- **Code:** `dubber/` (pipeline + `app.py`), `dubber/web/` (site, `i18n.js` = all UI text RU/EN), `tests/` (64 tests,
+- **Code:** `dubber/` (pipeline + `app.py`, settings API), `dubber/web/` (site, `i18n.js` = all UI text RU/EN), `tests/` (64 tests,
   offline), `tools/` (stub server, 12-language QA), `scripts/` (installers/launchers). Conventions: `CLAUDE.md`.
 - **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…016), `DESIGN.md`
   (design system), `RESEARCH.md` (tools, timing research, 12-language QA results), `SKILLS.md`, `README.ru.md`
@@ -36,6 +36,10 @@ or Claude (opt-in key); NLLB-200 1.3B offline backup; quality gate → 4. TTS tw
 (language tags) + subtitles + meta.
 
 ## What works (verified by running it)
+- **Claude translation (2026-10-17, ADR-017):** Settings page (key check + save + mask + remove, model, on/off,
+  glossary), Origin check, whole-video requests with time slots and character budgets, fallback chain with reasons,
+  cost on the watch page. Verified: 80 tests pass, Chromium (RU/EN, light/dark, 360–1280 px), real SDK call with a
+  dummy key (→ "key not accepted"). **Not yet run with a real key** (none in the sandbox).
 - Website: RU/EN interface, dub-language select, male/female voice, background switch, live job card with 6 steps,
   cancel (resume later), error cards with Russian/English messages, library, watch page with synced bilingual
   transcript (RTL for Hebrew/Arabic, keyboard-accessible), downloads, delete, dark mode, 360 px phones. Two QA agents
@@ -46,13 +50,17 @@ or Claude (opt-in key); NLLB-200 1.3B offline backup; quality gate → 4. TTS tw
 - Real YouTube runs (session 1b/1c): two TED-Ed videos, CLI and website.
 
 ## Not verified yet
+0. **A real Claude translation** (needs Adam's key): quality, cost, and whether timing beats the free path.
 1. **Google translation path end-to-end** — Google answers this cloud sandbox with HTTP 429, so the QA ran on the NLLB
    backup. Client logic is unit-tested; Adam's PC (home IP) normally gets Google.
 2. Fixed Windows desktop shortcut (Cyrillic name) — not re-reported by Adam.
 3. H.264 playback in a real Chrome/Edge (test Chromium lacks H.264; logic verified with a VP9 copy).
 
 ## Next steps
-1. Translation/timing regression Adam reported (session 2): compare his old and new caches, find the cause, fix.
+1. Translation/timing regression Adam reported (session 2): read his files on the `uploads/…` branch
+   (`dev-uploads/`), compare old and new caches, find the cause, fix (`fix/…` branch + PR).
+2. Adam's first dub with a Claude key: check `meta.json` (translator, cost) and `timing.json` against the free path;
+   calibrate `languages.chars_per_second` if lines run long.
 2. Known offline-backup slips to watch: Hebrew "flour" → "acid/vinegar"; speaker gender unknown to the translator;
    Whisper occasionally merges two sentences. A Claude key (`ANTHROPIC_API_KEY`, opt-in, paid) is the quality option.
 3. Product gaps worth offering: several dub languages of the same video in the library (today one replaces the
