@@ -16,6 +16,7 @@ API
 - GET  /files/{id}/{name}[?download=1]                               → video, subtitles, transcripts, thumbnail
 - GET  /api/settings, PUT /api/settings {use_claude, model, glossary} → translation settings (saved in .env)
 - POST /api/settings/claude-key {key}, DELETE /api/settings/claude-key → check + save / remove the Claude API key
+- GET  /api/storage, DELETE /api/storage/cache[/{video_id}]        → disk space; clear a video's (or all) cache
 - GET  /api/update                                                  → {current, latest, available, enabled}
 - POST /api/update                                                  → install the newest `main` and restart (update.py)
 
@@ -327,6 +328,26 @@ def _read_meta(folder: Path) -> dict | None:
     return meta
 
 
+def folder_size(path: Path) -> int:
+    """Bytes in a folder (0 if it doesn't exist); files that vanish meanwhile are skipped."""
+    total = 0
+    for item in path.rglob("*") if path.is_dir() else ():
+        with contextlib.suppress(OSError):
+            if item.is_file():
+                total += item.stat().st_size
+    return total
+
+
+def models_size() -> int:
+    """The speech-recognition / translation models downloaded from Hugging Face (shared by all videos)."""
+    try:
+        from huggingface_hub import constants
+
+        return folder_size(Path(constants.HF_HUB_CACHE))
+    except Exception:
+        return 0
+
+
 def asset_tag() -> str:
     """Part of the address of the site's files: changes with every release and whenever a file changes.
 
@@ -551,6 +572,57 @@ def create_app(
             "active": translate.uses_claude(settings.translator, settings.claude_key),
             "glossary": settings.glossary(),
         }
+
+    def busy_jobs() -> bool:
+        return any(j.status in ("queued", "running") for j in jobs.jobs.values())
+
+    def refuse_while_dubbing() -> None:
+        if busy_jobs():  # a running dub reads and writes its cache
+            raise HTTPException(409, _detail("Дождитесь окончания озвучки, потом очистите кэш.",
+                                             "Wait until the dub is finished, then clear the cache."))
+
+    @app.get("/api/storage")
+    def storage() -> dict:
+        work = settings.work_dir
+        library: dict[str, list[dict]] = {}
+        for meta in list_videos():
+            library.setdefault(meta["video_id"], []).append(meta)
+        videos = []
+        for folder in sorted(work.iterdir()) if work.is_dir() else ():
+            if not folder.is_dir() or folder.name == "uploads" or not _ID.match(folder.name):
+                continue
+            dubs = library.get(folder.name, [])
+            title = dubs[0]["title"] if dubs else ""
+            if not title:
+                with contextlib.suppress(OSError, ValueError, KeyError):
+                    title = json.loads((folder / "info.json").read_text(encoding="utf-8"))["title"]
+            videos.append({"video_id": folder.name, "title": title or folder.name, "cache": folder_size(folder),
+                           "library": sum(folder_size(settings.output_dir / d["id"]) for d in dubs),
+                           "dubs": len(dubs)})
+        videos.sort(key=lambda v: v["cache"], reverse=True)
+        return {"cache": sum(v["cache"] for v in videos) + folder_size(work / "uploads"),
+                "uploads": folder_size(work / "uploads"), "library": folder_size(settings.output_dir),
+                "models": models_size(), "videos": videos}
+
+    @app.delete("/api/storage/cache/{video_id}")
+    def clear_cache(video_id: str) -> dict:
+        folder = settings.work_dir / video_id
+        if not _ID.match(video_id) or video_id == "uploads" or not folder.is_dir():
+            raise HTTPException(404)
+        refuse_while_dubbing()
+        freed = folder_size(folder)
+        shutil.rmtree(folder, ignore_errors=True)
+        return {"freed": freed}
+
+    @app.delete("/api/storage/cache")
+    def clear_all_cache() -> dict:
+        refuse_while_dubbing()
+        freed = 0
+        for folder in settings.work_dir.iterdir() if settings.work_dir.is_dir() else ():
+            if folder.is_dir():  # files here (stage_times.json) are this PC's settings, not cache
+                freed += folder_size(folder)
+                shutil.rmtree(folder, ignore_errors=True)
+        return {"freed": freed}
 
     @app.get("/api/settings")
     def get_settings() -> dict:

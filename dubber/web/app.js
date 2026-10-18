@@ -103,6 +103,7 @@ function route() {
     $('[data-nav="settings"]').setAttribute("aria-current", "page");
     document.title = t("title.settings");
     loadSettings();
+    loadStorage();
   } else if (page === "library") {
     $("#view-library").hidden = false;
     $('[data-nav="library"]').setAttribute("aria-current", "page");
@@ -669,6 +670,7 @@ function applyUiLang() {
   renderSettings();
   renderVersion();
   renderUpdate();
+  renderStorage();
   if (state.video) renderWatchDetails();
   else if (!$("#view-settings").hidden) document.title = t("title.settings");
   else if (!$("#view-library").hidden) document.title = t("title.library");
@@ -677,6 +679,48 @@ function applyUiLang() {
 }
 
 /* ---------- settings ---------- */
+/* ---------- disk space (Settings page) ---------- */
+/** 1536 → "1,5 КБ" / "1.5 KB". */
+function sizeLabel(bytes) {
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes || 0, unit = 0;
+  while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
+  const digits = unit === 0 || value >= 100 ? 0 : 1;
+  return t("size", value.toLocaleString(uiLang === "ru" ? "ru-RU" : "en-GB", { maximumFractionDigits: digits }), units[unit]);
+}
+
+async function loadStorage() {
+  try { state.storage = await api("/api/storage"); } catch (_) { state.storage = null; }
+  renderStorage();
+}
+
+function renderStorage() {
+  const s = state.storage;
+  if (!s) return;
+  const stat = (label, bytes) => el("div", {}, el("dt", { text: label }), el("dd", { text: sizeLabel(bytes) }));
+  $("#storage-totals").replaceChildren(stat(t("storage.cache"), s.cache), stat(t("storage.library"), s.library),
+    s.models ? stat(t("storage.models"), s.models) : ""); // models: downloaded on the first dub
+  $("#storage-clear-all").hidden = !s.cache;
+  $("#storage-list").replaceChildren(...s.videos.map((v) => el("li", {},
+    el("span", { class: "storage-list__name", text: v.title, title: v.title }),
+    el("span", { class: "storage-list__size", text: [sizeLabel(v.cache), v.dubs ? t("storage.inLibrary", v.dubs) : null]
+      .filter(Boolean).join(" · ") }),
+    el("button", { class: "btn btn--quiet", type: "button", text: t("storage.clear"), "aria-label": t("storage.clearAria", v.title),
+      onclick: () => clearCache(`/api/storage/cache/${encodeURIComponent(v.video_id)}`) }))));
+  if (!s.videos.length && !s.cache) $("#storage-list").append(el("li", { class: "muted", text: t("storage.empty") }));
+}
+
+async function clearCache(path, confirmText) {
+  if (confirmText && !confirm(confirmText)) return;
+  const note = $("#storage-note");
+  try {
+    const { freed } = await api(path, { method: "DELETE" });
+    note.textContent = t("storage.freed", sizeLabel(freed));
+  } catch (e) { note.textContent = e.message; }
+  note.hidden = false;
+  loadStorage();
+}
+
 async function loadSettings() {
   try { state.settings = await api("/api/settings"); } catch (_) { return; }
   renderSettings();
@@ -783,6 +827,8 @@ async function saveSettings(changes, savedNote) {
 }
 
 function initSettings() {
+  $("#storage-clear-all").addEventListener("click", () =>
+    clearCache("/api/storage/cache", t("storage.confirmAll", sizeLabel(state.storage?.cache))));
   $("#key-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const input = $("#claude-key"), button = $("#key-save"), key = input.value.trim();
