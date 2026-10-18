@@ -100,8 +100,18 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [x] The program updates itself from `main` at start and with a button on the site (v0.5.0, ADR-024)
 - [x] Full QA pass (3 agents): updater safe to fail, UI/copy fixes (v0.5.1)
 
+### M8 — Session 5 (Adam, 2026-10-18)
+- [x] One-click Windows start: `Start Dubber.cmd`, desktop shortcut with the program's icon, `?` bug fixed (ADR-025)
+- [x] Windows install tested in CI on real Windows (`windows-install.yml`)
+- [x] Upload a video file from the website (ADR-026)
+- [x] Several links at once; YouTube playlists (ADR-026)
+- [x] Library: one card per video + search (ADR-027)
+- [x] Disk space on the Settings page + clear cache (ADR-027)
+- [x] "What's new" after an update (ADR-027)
+- [ ] First run on a clean PC (winget Python + ffmpeg) — Adam
+
 ### M4 — Nice to have
-- [ ] Queue of several links / playlists
+- [x] Queue of several links / playlists (v0.6.0)
 - [ ] Telegram bot front-end
 - [ ] ElevenLabs dubbing backend (paid, keeps original voice)
 - [ ] Offline TTS fallback (Silero)

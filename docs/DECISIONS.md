@@ -261,3 +261,32 @@ Newest at the bottom. Format: context → decision → consequences.
   the installed `pyproject.toml`, "pending" while installing) reruns pip until it succeeded — so any failed update
   leaves the old version and is retried on the next start.
 
+## ADR-025 — One-click Windows start: "Start Dubber.cmd" + a PowerShell script, Unicode shortcut (2026-10-18)
+- **Context:** Adam: the installer still printed question marks and never created the shortcut; the user should
+  click one icon that installs what's missing, creates a desktop shortcut with the program's own icon, and starts.
+- **Cause (reproduced on Windows in CI):** Russian text inside `.bat` files depends on the console code page, and
+  `WScript.Shell` saves shortcuts in the PC's ANSI code page — on non-Russian Windows the name «Дубляж видео» became
+  `?????? ?????` and saving failed (the same message Adam saw).
+- **Decision:** `Start Dubber.cmd` (ASCII only, one line) runs `scripts/windows/dubber.ps1` (UTF-8 with BOM, so
+  Windows PowerShell 5.1 reads the Russian text). Every run: Python/ffmpeg via winget if missing, with PATH re-read so
+  it continues in the same window; components once (`.venv/dubber-installed`; an existing working install is
+  recognised); yt-dlp refreshed every 3 days; desktop + Start menu shortcut written through `IShellLinkW` (Unicode)
+  with `dubber/assets/dubber.ico` (the site's logo, `tools/make_icon.py`); then the program. The old `.bat` files call
+  the same script; files from the ZIP are unblocked. ASCII file name on purpose: Windows' ZIP extractor can garble
+  non-ASCII names. CI job `windows-install.yml` installs, reads the shortcut back and starts via the `.cmd`.
+- **Rejected:** fixing the `.bat` (code pages differ per PC); a compiled installer (.exe/MSI — signing, build step).
+
+## ADR-026 — Upload a file; several links and playlists (2026-10-18)
+- **Decision:** `POST /api/upload?name=` streams the raw body (no new dependency — FastAPI forms need
+  python-multipart) to `work/uploads/<sha1-12>/<name>` with a fixed mtime, so the same file again gets the same
+  `local_video_id` and reuses the cache; a job gets `{file}` (validated token, never a raw path); the upload is
+  removed after a finished dub. The link field is a textarea: one job per link. Playlists via yt-dlp flat extraction
+  (`download.playlist_entries`, max 200): a playlist page queues all; a video inside a playlist asks every time
+  (Adam's choice); YouTube mixes (`list=RD…`) count as single videos.
+
+## ADR-027 — Disk space, "What's new", grouped library (2026-10-18)
+- **Decision:** `/api/storage` sizes `work/` per video, uploads, `output/`, the HF model cache; clearing a video's
+  or all cache is refused while a dub is queued/running (the library doesn't use `work/`). `dubber/changelog.json`
+  holds each release's user-facing changes (RU+EN, a test requires the current version); the page shows them once
+  after an update (localStorage `dubber.seenVersion`, nothing on a first visit). The library groups dubs per
+  `video_id` client-side (tag per language; the card opens the newest dub) with a search box.

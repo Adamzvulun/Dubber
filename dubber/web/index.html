@@ -40,6 +40,13 @@
       <p class="update__text" id="update-text" role="status"></p>
       <button class="btn btn--primary" type="button" id="update-btn" data-i18n="update.button">Обновить</button>
     </div>
+    <section class="news" id="news" aria-labelledby="news-title" hidden>
+      <div class="news__head">
+        <h2 id="news-title"></h2>
+        <button class="btn btn--quiet" type="button" id="news-close" data-i18n="news.close">Понятно</button>
+      </div>
+      <div id="news-list"></div>
+    </section>
     <!-- Home -->
     <section id="view-home" class="view" hidden>
       <div class="hero">
@@ -52,12 +59,38 @@
         <div class="composer__row">
           <div class="field">
             <svg class="field__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            <input id="url" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
-                   placeholder="https://www.youtube.com/watch?v=…" required aria-describedby="form-error">
+            <textarea id="url" name="url" rows="1" inputmode="url" autocomplete="off" spellcheck="false"
+                   placeholder="https://www.youtube.com/watch?v=…" required aria-describedby="url-hint form-error"></textarea>
           </div>
           <button class="btn btn--primary btn--lg" type="submit" id="submit" data-i18n="form.submit">Озвучить</button>
         </div>
+        <div class="composer__alt">
+          <span class="muted" id="url-hint" data-i18n="form.manyHint">Можно вставить несколько ссылок или плейлист — по одной в строке.</span>
+          <span class="composer__file">
+            <span class="muted" data-i18n="form.or">или</span>
+            <button class="link-button" type="button" id="pick-file" data-i18n="form.pickFile">выберите видеофайл на компьютере</button>
+            <input type="file" id="file" accept="video/*,.mkv,.ts" hidden>
+          </span>
+        </div>
         <p class="composer__error" id="form-error" role="alert" hidden></p>
+        <div class="upload" id="upload" hidden>
+          <div class="upload__head">
+            <span class="upload__name" id="upload-name"></span>
+            <span class="upload__pct" id="upload-pct"></span>
+            <button class="btn btn--quiet" type="button" id="upload-cancel" data-i18n="btn.cancel">Отменить</button>
+          </div>
+          <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="upload-bar"
+               data-i18n-aria="upload.progress" aria-label="Загрузка файла"><div class="bar__fill" id="upload-fill"></div></div>
+        </div>
+        <div class="choice" id="playlist-choice" role="group" aria-labelledby="playlist-text" hidden>
+          <p id="playlist-text"></p>
+          <div class="choice__buttons">
+            <button class="btn btn--primary" type="button" id="playlist-one" data-i18n="playlist.one">Только это видео</button>
+            <button class="btn" type="button" id="playlist-all"></button>
+            <button class="btn btn--quiet" type="button" id="playlist-cancel" data-i18n="btn.cancel">Отменить</button>
+          </div>
+        </div>
+        <p class="drop-hint" aria-hidden="true" data-i18n="form.drop">Отпустите файл, чтобы озвучить его</p>
 
         <div class="composer__options">
           <div class="select-field">
@@ -120,6 +153,11 @@
       <div class="section-head section-head--page">
         <h1 data-i18n="library.title">Библиотека</h1>
         <p class="muted" id="library-count"></p>
+      </div>
+      <div class="search" id="library-search-box" hidden>
+        <svg class="search__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m20 20-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <input type="search" id="library-search" autocomplete="off" spellcheck="false"
+          data-i18n-placeholder="library.search" data-i18n-aria="library.search" placeholder="Поиск по названию или каналу…" aria-label="Поиск по названию или каналу…">
       </div>
       <div id="library" class="grid"></div>
     </section>
@@ -218,6 +256,17 @@
             <span class="saved-note" id="glossary-saved" hidden></span>
           </div>
         </section>
+
+        <section class="panel" aria-labelledby="storage-title">
+          <div class="panel__head">
+            <h2 id="storage-title" tabindex="-1" data-i18n="storage.title">Место на диске</h2>
+            <button class="btn" type="button" id="storage-clear-all" data-i18n="storage.clearAll" hidden>Очистить весь кэш</button>
+          </div>
+          <p class="panel__lead" data-i18n="storage.about"></p>
+          <dl class="stats" id="storage-totals"></dl>
+          <ul class="storage-list" id="storage-list"></ul>
+          <p class="saved-note" id="storage-note" role="status" hidden></p>
+        </section>
       </div>
     </section>
 
@@ -237,6 +286,7 @@
       <span class="card__body">
         <span class="card__title"></span>
         <span class="card__meta"></span>
+        <span class="card__tags"></span>
       </span>
     </a>
   </template>

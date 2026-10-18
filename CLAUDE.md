@@ -54,7 +54,10 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 - `pkill -f dubber.app` kills your own shell — kill by PID (see STATUS).
 - Every release: bump `__version__` (`dubber/__init__.py`) and `pyproject.toml`; the page links its files by version,
   and the PCs update themselves only when `main` has a **higher** version (`dubber/update.py`, ADR-024).
-  Merging into `main` ships to the PCs on their next start.
+  Merging into `main` ships to the PCs on their next start. Add the release's user-facing changes (RU + EN) to
+  `dubber/changelog.json` — the page shows them once after the update (a test checks the current version is there).
+- Windows start: `Start Dubber.cmd` → `scripts/windows/dubber.ps1` (UTF-8 **with BOM**; keep Russian text out of
+  `.bat`/`.cmd`; shortcuts via IShellLinkW, not WScript.Shell — ADR-025). CI job `windows-install.yml` tests it.
 
 ## Git
 Full rules: `CONTRIBUTING.md`. In short: **`main` is the stable line** — start from the latest `main`; **a new branch

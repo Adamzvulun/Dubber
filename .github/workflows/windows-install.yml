@@ -1,0 +1,72 @@
+name: Windows install
+
+# The one-click Windows start (Start Dubber.cmd -> scripts/windows/dubber.ps1) on a real Windows machine:
+# components installed, desktop shortcut with the program's icon, program answering.
+on:
+  pull_request:
+    paths:
+      - "Start Dubber.cmd"
+      - "scripts/**"
+      - "dubber/assets/**"
+      - "dubber/app.py"
+      - "pyproject.toml"
+      - ".github/workflows/windows-install.yml"
+  workflow_dispatch:
+
+jobs:
+  install:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: ffmpeg
+        run: choco install ffmpeg -y --no-progress
+      - name: Install (Windows PowerShell 5.1, like a user's PC)
+        shell: powershell
+        run: |
+          Remove-Item .git -Recurse -Force   # a user's folder is a ZIP, not a git checkout
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dubber.ps1 -NoStart
+          if ($LASTEXITCODE -ne 0) { throw "dubber.ps1 failed: $LASTEXITCODE" }
+          if (-not (Test-Path .venv\dubber-installed)) { throw "install stamp missing" }
+          # the shortcut must really exist, not just a warning in the output
+          # GitHub saves this step without a BOM, so PowerShell 5.1 would misread Cyrillic typed here
+          $name = (-join [char[]](0x0414,0x0443,0x0431,0x043B,0x044F,0x0436,0x20,0x0432,0x0438,0x0434,0x0435,0x043E)) + '.lnk'
+          if (-not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Desktop')) $name))) { throw "no shortcut" }
+          if (Test-Path install.log) { Get-Content install.log -Tail 5 }
+          # a PC installed by an older version (no stamp yet) must not reinstall everything
+          Remove-Item .venv\dubber-installed, install.log -ErrorAction SilentlyContinue
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dubber.ps1 -NoStart
+          if (-not (Test-Path .venv\dubber-installed)) { throw "existing install not recognised" }
+          if (Test-Path install.log) { throw "reinstalled although the program was installed" }
+      - name: Desktop shortcut with the icon
+        shell: powershell
+        run: |
+          $desktop = [Environment]::GetFolderPath('Desktop')
+          $name = (-join [char[]](0x0414,0x0443,0x0431,0x043B,0x044F,0x0436,0x20,0x0432,0x0438,0x0434,0x0435,0x043E)) + '.lnk'
+          $lnk = Get-ChildItem $desktop -Filter *.lnk | Where-Object { $_.Name -eq $name }
+          if (-not $lnk) { Get-ChildItem $desktop; throw "shortcut not found" }
+          # WScript.Shell can't open a Cyrillic path on this English Windows: read a copy with a plain name
+          Copy-Item -LiteralPath $lnk.FullName "$env:TEMP\check.lnk" -Force
+          $s = (New-Object -ComObject WScript.Shell).CreateShortcut("$env:TEMP\check.lnk")
+          "Target: $($s.TargetPath) $($s.Arguments)"; "Icon: $($s.IconLocation)"; "Dir: $($s.WorkingDirectory)"
+          if ($s.IconLocation -notlike '*dubber\assets\dubber.ico,0') { throw "wrong icon" }
+          $start = Join-Path ([Environment]::GetFolderPath('Programs')) $lnk.Name
+          if (-not (Test-Path -LiteralPath $start)) { throw "Start menu shortcut missing" }
+          if (-not (Test-Path ($s.IconLocation -replace ',0$', ''))) { throw "icon file missing" }
+          if ($s.Arguments -notlike '*scripts\windows\dubber.ps1*') { throw "wrong target" }
+      - name: Start Dubber.cmd starts the program
+        shell: powershell
+        run: |
+          $env:DUBBER_NO_BROWSER = '1'
+          $env:DUBBER_AUTO_UPDATE = '0'   # test this version, not whatever main has
+          $p = Start-Process cmd -ArgumentList '/c', '"Start Dubber.cmd"' -PassThru -WindowStyle Hidden
+          for ($i = 0; $i -lt 90; $i++) {
+            try { $v = Invoke-RestMethod http://127.0.0.1:7860/api/version -TimeoutSec 2; "Running: $($v.version)"; break }
+            catch { Start-Sleep 2 }
+          }
+          if (-not $v) { throw "the program did not answer" }
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*dubber.app*' } |
+            ForEach-Object { Stop-Process -Id $_.ProcessId -Force }

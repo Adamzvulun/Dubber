@@ -18,5 +18,7 @@ The repository is the project's memory. Before committing, walk this list:
 7. **User-facing docs** — `README.md` (dev, English) and `docs/README.ru.md` (end user, Russian) if behaviour,
    install steps or the UI changed.
 8. **`CLAUDE.md`** — if commands, layout or working rules changed.
+9. **Release** — bump `__version__` + `pyproject.toml` and add the version's user-facing changes (RU + EN) to
+   `dubber/changelog.json` (the site shows them once after the update; `tests/test_changelog.py` checks it).
 
 Keep entries short and factual. Never claim something works unless it was run (see `verification-before-completion`).

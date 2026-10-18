@@ -2,6 +2,27 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-18 — Session 5: one-click Windows start, upload, playlists, disk space, "What's new" (v0.6.0)
+- Adam merged PR #8. Asked: fix the installer (question marks, no shortcut) so one click installs, creates a desktop
+  shortcut with a dedicated icon and starts; then ideas 1 (upload), 2 (several links/playlists), 4 (What's new),
+  5 (disk space), 8 (grouped library + search).
+- **Windows start (ADR-025):** new CI job on `windows-latest` reproduced Adam's exact error ("Unable to save shortcut
+  …?????? ?????.lnk"): WScript.Shell saves in the ANSI code page. Now `Start Dubber.cmd` (ASCII) runs
+  `scripts/windows/dubber.ps1` (UTF-8 BOM, Russian text shows correctly), shortcut via IShellLinkW with
+  `dubber/assets/dubber.ico` (site logo). CI green: install, existing install recognised, shortcuts + icon read
+  back, the `.cmd` starts the program.
+- **Upload / several links / playlists (ADR-026), grouped library + search, disk space, What's new (ADR-027)** —
+  each tested in Chromium on the stub server (RU/EN, 360/1280 px); 9 new server tests (127 total).
+- Found on the way: Playwright `setInputFiles` with a non-ASCII path fires no change event (tool quirk); the disk-space
+  panel overflowed 360 px (fixed); old installs would have reinstalled everything (now recognised).
+- **QA agent pass** over the new features, fixed: the same uploaded file dubbed twice (the first finished job deleted
+  the file the second needed); users coming from 0.5.x would never see "What's new" (no stored version → now
+  detected by their other settings / library); upload box overflowing 360 px and an invisible progress track; drop
+  overlay under the form's controls; a file dropped outside the form opened in the tab; disk-space refusals shown in
+  green; uploads counted in the cache without a row (now «Загруженные файлы…», clearable); duplicate links queued
+  twice; playlists over 10 videos queue only after asking; Esc closes the playlist question, which also follows a
+  RU/EN switch; big uploads no longer block the server while written.
+
 ## 2026-10-18 — Session 4c: trim personal details, full QA pass (v0.5.1)
 - Adam: 0.5.0 works. Asked to trim the personal details about the end user (current files only; "Adam" stays as
   maintainer), to run the QA agents again over everything, and for ideas.
