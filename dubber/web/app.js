@@ -122,15 +122,43 @@ function route() {
 }
 
 /* ---------- library ---------- */
-function card(video) {
+/** One card per video (its dubs newest first): opens the newest dub; the watch page switches between them. */
+function card(dubs) {
+  const video = dubs[0];
   const node = $("#tpl-card").content.firstElementChild.cloneNode(true);
   node.href = `#/watch/${encodeURIComponent(video.id)}`;
   if (video.thumbnail) $("img", node).src = video.thumbnail;
   $(".card__duration", node).textContent = clock(video.duration);
   $(".card__title", node).textContent = video.title;
-  $(".card__meta", node).textContent = [video.channel, dubLabel(video), dateLabel(video.created)]
-    .filter(Boolean).join(" · ");
+  if (dubs.length === 1) {
+    $(".card__meta", node).textContent = [video.channel, dubLabel(video), dateLabel(video.created)]
+      .filter(Boolean).join(" · ");
+  } else { // several dubs: one tag per language; its dubs (voice, sound) on hover and for screen readers
+    $(".card__meta", node).textContent = [video.channel, t("card.dubs", dubs.length), dateLabel(video.created)]
+      .filter(Boolean).join(" · ");
+    const byLang = new Map();
+    for (const dub of dubs) byLang.set(dub.target_lang, [...(byLang.get(dub.target_lang) || []), dubLabel(dub)]);
+    $(".card__tags", node).replaceChildren(...[...byLang].map(([lang, labels]) => el("span", {
+      class: "tag", title: labels.join("\n"), "aria-label": labels.join("; "), text: lang.toUpperCase(),
+    })));
+  }
   return node;
+}
+
+/** The library's dubs grouped per video, newest first (the API sends dubs newest first). */
+function videoGroups() {
+  const groups = new Map();
+  for (const dub of state.videos) {
+    const key = dub.video_id || dub.id;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(dub);
+  }
+  return [...groups.values()];
+}
+
+/** Lower case, "ё" = "е": what the search compares. */
+function searchable(text) {
+  return (text || "").toLocaleLowerCase().replace(/ё/g, "е");
 }
 
 /** What tells dubs of one video apart: language, voice, and the sound choices (e.g. "Русский · Дмитрий · без фона"). */
@@ -145,19 +173,24 @@ async function loadLibrary() {
 }
 
 function renderLibrary() {
-  const recent = $("#recent"), all = $("#library");
-  recent.replaceChildren(...state.videos.slice(0, 6).map(card));
-  if (!state.videos.length) recent.append(el("p", { class: "empty-note", text: t("recent.empty") }));
-  $("#all-link").hidden = state.videos.length <= 6;
+  const recent = $("#recent"), all = $("#library"), groups = videoGroups();
+  recent.replaceChildren(...groups.slice(0, 6).map(card));
+  if (!groups.length) recent.append(el("p", { class: "empty-note", text: t("recent.empty") }));
+  $("#all-link").hidden = groups.length <= 6;
 
-  all.replaceChildren(...state.videos.map(card));
-  if (!state.videos.length) {
+  const query = searchable($("#library-search").value.trim());
+  const shown = query ? groups.filter((dubs) => searchable(`${dubs[0].title} ${dubs[0].channel}`).includes(query)) : groups;
+  $("#library-search-box").hidden = groups.length < 2 && !query; // nothing to search in one video
+  all.replaceChildren(...shown.map(card));
+  if (!groups.length) {
     all.append(el("div", { class: "empty-note" },
       el("p", { text: t("library.empty") }),
       el("p", {}, el("a", { class: "link", href: "#/", text: t("library.first") }))));
+  } else if (!shown.length) {
+    all.append(el("p", { class: "empty-note", text: t("library.noMatch") }));
   }
-  const n = state.videos.length;
-  $("#library-count").textContent = n ? t("library.count", n) : "";
+  $("#library-count").textContent = !groups.length ? "" : query ? t("library.found", shown.length, groups.length)
+    : t("library.count", groups.length);
 }
 
 /* ---------- dubbing jobs ---------- */
@@ -696,6 +729,7 @@ async function init() {
   $("#url").addEventListener("input", () => { if (!$("#form-error").hidden) showFormError(""); });
   // The skip link must not change the hash (that is the router's job): just move focus to the content.
   $(".skip").addEventListener("click", (e) => { e.preventDefault(); $("#main").focus(); });
+  $("#library-search").addEventListener("input", renderLibrary);
   $("#background").addEventListener("change", updateBackgroundHint);
   $("#remove-voice").addEventListener("change", updateBackgroundHint);
   document.querySelectorAll("[data-ui-lang]").forEach((b) => b.addEventListener("click", () => {

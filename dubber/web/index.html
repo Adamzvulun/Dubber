@@ -121,6 +121,11 @@
         <h1 data-i18n="library.title">Библиотека</h1>
         <p class="muted" id="library-count"></p>
       </div>
+      <div class="search" id="library-search-box" hidden>
+        <svg class="search__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m20 20-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <input type="search" id="library-search" autocomplete="off" spellcheck="false"
+          data-i18n-placeholder="library.search" data-i18n-aria="library.search" placeholder="Поиск по названию или каналу…" aria-label="Поиск по названию или каналу…">
+      </div>
       <div id="library" class="grid"></div>
     </section>
 
@@ -237,6 +242,7 @@
       <span class="card__body">
         <span class="card__title"></span>
         <span class="card__meta"></span>
+        <span class="card__tags"></span>
       </span>
     </a>
   </template>

@@ -202,6 +202,16 @@ main.wrap { padding-bottom: 80px; }
 .card__body { padding: 12px 2px 0; display: grid; gap: 4px; }
 .card__title { font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card__meta { color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
+.card__tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.card__tags:empty { display: none; }
+.tag { padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; }
+
+.search { position: relative; max-width: 480px; margin-bottom: 22px; }
+.search[hidden] { display: none; }
+.search__icon { position: absolute; left: 14px; top: 50%; width: 20px; height: 20px; transform: translateY(-50%); color: var(--ink-2); pointer-events: none; }
+.search input { width: 100%; height: 46px; padding: 0 14px 0 42px; border: 1px solid var(--line); border-radius: var(--r-control);
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; }
+.search input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent); }
 .empty-note { grid-column: 1 / -1; padding: 40px 24px; border: 1px dashed var(--line); border-radius: var(--r-card); color: var(--ink-2); text-align: center; }
 
 /* ---------- watch ---------- */
