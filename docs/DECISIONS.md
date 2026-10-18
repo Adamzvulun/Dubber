@@ -275,6 +275,10 @@ Newest at the bottom. Format: context → decision → consequences.
   the same script; files from the ZIP are unblocked. ASCII file name on purpose: Windows' ZIP extractor can garble
   non-ASCII names. CI job `windows-install.yml` installs, reads the shortcut back and starts via the `.cmd`.
 - **Rejected:** fixing the `.bat` (code pages differ per PC); a compiled installer (.exe/MSI — signing, build step).
+- **Follow-up (0.6.1, Adam's screenshot):** the window title was right but every Russian line — Python's too — showed
+  `?`: the console used "Raster Fonts", which only has the system language's letters. The script now switches a raster
+  font to Consolas (`SetCurrentConsoleFontEx`) before printing; a TrueType font the user chose is kept. CI can't render
+  a console, so it only checks the helper compiles and runs in PowerShell 5.1.
 
 ## ADR-026 — Upload a file; several links and playlists (2026-10-18)
 - **Decision:** `POST /api/upload?name=` streams the raw body (no new dependency — FastAPI forms need

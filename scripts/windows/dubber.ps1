@@ -4,12 +4,89 @@
 # This file is UTF-8 with BOM: Windows PowerShell 5.1 then reads the Russian text correctly. Keep Russian text out of
 # .bat/.cmd files: cmd shows it as question marks on many PCs (that was the old installer's problem).
 param(
-    [switch]$NoStart  # install + shortcut only, never wait for Enter (used by the Windows test in CI)
+    [switch]$NoStart,  # install + shortcut only, never wait for Enter (used by the Windows test in CI)
+    [switch]$ShortcutOnly  # only the shortcuts, silently: asked by the program when it started without this script
 )
 
 $ErrorActionPreference = 'Stop'
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
 try { $Host.UI.RawUI.WindowTitle = 'Дубляж видео' } catch {}
+
+# Small helpers from Windows itself, compiled once at start: the window's font, and shortcuts written through the
+# Unicode interface. The usual WScript.Shell saves names and paths in the
+# PC's old ANSI code page: a Russian shortcut name became "?????? ?????" on non-Russian Windows (Adam's PC, CI).
+$NativeCode = @"
+using System;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+using System.Text;
+namespace DubberSetup {
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")] class CShellLink {}
+    [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214F9-0000-0000-C000-000000000046")]
+    interface IShellLinkW {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int max, IntPtr data, int flags);
+        void GetIDList(out IntPtr idl);
+        void SetIDList(IntPtr idl);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder name, int max);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder dir, int max);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string dir);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder args, int max);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string args);
+        void GetHotkey(out short key);
+        void SetHotkey(short key);
+        void GetShowCmd(out int cmd);
+        void SetShowCmd(int cmd);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int max, out int index);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string path, int index);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string path, int reserved);
+        void Resolve(IntPtr hwnd, int flags);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string file);
+    }
+    // The window's font. Old console windows often use "Raster Fonts", which only has the letters of the PC's own
+    // language: on Hebrew or English Windows every Russian letter showed as "?" (Adam's screenshot, 0.6.0).
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct FontInfo {
+        public uint Size; public uint Index; public short Width; public short Height; public int Family; public int Weight;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string Face;
+    }
+    public static class ConsoleFont {
+        [DllImport("kernel32.dll")] static extern IntPtr GetStdHandle(int handle);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool GetCurrentConsoleFontEx(IntPtr output, bool max, ref FontInfo font);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool SetCurrentConsoleFontEx(IntPtr output, bool max, ref FontInfo font);
+        // Switches a raster font to Consolas (has Cyrillic); a TrueType font the user chose stays. True if changed.
+        public static bool UseCyrillicFont() {
+            IntPtr output = GetStdHandle(-11);
+            FontInfo font = new FontInfo();
+            font.Size = (uint)Marshal.SizeOf(font);
+            if (!GetCurrentConsoleFontEx(output, false, ref font) || (font.Family & 4) != 0) return false;  // 4 = TrueType
+            font.Face = "Consolas";
+            font.Family = 54;  // TrueType, fixed width, modern
+            font.Weight = 400;
+            font.Width = 0;
+            if (font.Height < 16) font.Height = 16;
+            return SetCurrentConsoleFontEx(output, false, ref font);
+        }
+    }
+    public static class Shortcut {
+        public static void Save(string lnk, string target, string args, string dir, string icon, string description) {
+            IShellLinkW link = (IShellLinkW)new CShellLink();
+            link.SetPath(target);
+            link.SetArguments(args);
+            link.SetWorkingDirectory(dir);
+            link.SetIconLocation(icon, 0);
+            link.SetDescription(description);
+            ((IPersistFile)link).Save(lnk, true);
+        }
+    }
+}
+"@
+$Native = $false
+try {
+    Add-Type -TypeDefinition $NativeCode
+    $Native = $true
+    [void][DubberSetup.ConsoleFont]::UseCyrillicFont()  # before the first Russian line
+} catch {}
 
 $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)  # scripts\windows -> the program folder
 Set-Location -LiteralPath $Root
@@ -62,49 +139,6 @@ function Install-WithWinget([string]$Id, [string]$Name) {
     Update-PathFromSystem
 }
 
-# Windows' own shortcut maker through its Unicode interface. The usual WScript.Shell saves names and paths in the
-# PC's old ANSI code page: a Russian shortcut name became "?????? ?????" on non-Russian Windows (Adam's PC, CI).
-$ShortcutCode = @"
-using System;
-using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
-using System.Text;
-namespace DubberSetup {
-    [ComImport, Guid("00021401-0000-0000-C000-000000000046")] class CShellLink {}
-    [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214F9-0000-0000-C000-000000000046")]
-    interface IShellLinkW {
-        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int max, IntPtr data, int flags);
-        void GetIDList(out IntPtr idl);
-        void SetIDList(IntPtr idl);
-        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder name, int max);
-        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
-        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder dir, int max);
-        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string dir);
-        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder args, int max);
-        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string args);
-        void GetHotkey(out short key);
-        void SetHotkey(short key);
-        void GetShowCmd(out int cmd);
-        void SetShowCmd(int cmd);
-        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int max, out int index);
-        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string path, int index);
-        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string path, int reserved);
-        void Resolve(IntPtr hwnd, int flags);
-        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string file);
-    }
-    public static class Shortcut {
-        public static void Save(string lnk, string target, string args, string dir, string icon, string description) {
-            IShellLinkW link = (IShellLinkW)new CShellLink();
-            link.SetPath(target);
-            link.SetArguments(args);
-            link.SetWorkingDirectory(dir);
-            link.SetIconLocation(icon, 0);
-            link.SetDescription(description);
-            ((IPersistFile)link).Save(lnk, true);
-        }
-    }
-}
-"@
 
 function Install-Shortcut([string]$Folder) {
     if (-not $Folder -or -not (Test-Path -LiteralPath $Folder)) { return }
@@ -115,6 +149,15 @@ function Install-Shortcut([string]$Folder) {
         $Root,
         (Join-Path $Root 'dubber\assets\dubber.ico'),
         'Дубляж видео: озвучка видео на русском и других языках')
+}
+
+if ($ShortcutOnly) {
+    if (-not $Native) { exit 1 }
+    try {
+        Install-Shortcut ([Environment]::GetFolderPath('Desktop'))
+        Install-Shortcut ([Environment]::GetFolderPath('Programs'))
+    } catch { exit 1 }
+    exit 0
 }
 
 Say '=== Дубляж видео ==='
@@ -177,7 +220,7 @@ if (-not (Test-Path -LiteralPath $Fresh) -or (Get-Item -LiteralPath $Fresh).Last
 
 # 4. Desktop and Start menu shortcuts with the program's icon (renewed every time: the folder may have moved)
 try {
-    Add-Type -TypeDefinition $ShortcutCode
+    if (-not $Native) { throw 'Windows helper not available' }
     Install-Shortcut ([Environment]::GetFolderPath('Desktop'))
     Install-Shortcut ([Environment]::GetFolderPath('Programs'))
 } catch {
@@ -187,6 +230,7 @@ try {
 if ($NoStart) { exit 0 }
 
 # 5. Start (the program opens the page in the browser and updates itself when a new version is out)
+$env:DUBBER_LAUNCHER = '1'  # the shortcuts are done: the program needn't make them
 & $VenvPython -m dubber.app
 if ($LASTEXITCODE -ne 0) {
     [void](Read-Host 'Нажмите Enter, чтобы закрыть окно')

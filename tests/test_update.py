@@ -241,3 +241,11 @@ def test_only_one_update_at_a_time_and_no_new_dub_meanwhile(tmp_path):
     assert r.status_code == 409 and "обнов" in r.json()["detail"]["ru"]
     release.set()
     first.join(5)
+
+
+def test_shortcut_made_when_started_without_the_launcher(tmp_path):
+    # The self-update restarts only the program: on Windows it then creates the desktop shortcut itself.
+    command = app.shortcut_command(environ={}, platform="win32")
+    assert command[-2].endswith("dubber.ps1") and command[-1] == "-ShortcutOnly"
+    assert app.shortcut_command(environ={"DUBBER_LAUNCHER": "1"}, platform="win32") is None  # the launcher did it
+    assert app.shortcut_command(environ={}, platform="linux") is None
