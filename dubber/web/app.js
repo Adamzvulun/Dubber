@@ -670,6 +670,7 @@ function applyUiLang() {
   renderSettings();
   renderVersion();
   renderUpdate();
+  renderNews();
   renderStorage();
   if (state.video) renderWatchDetails();
   else if (!$("#view-settings").hidden) document.title = t("title.settings");
@@ -768,6 +769,40 @@ function renderSettings() {
 
 function renderVersion() {
   if (state.version) $("#app-version").textContent = t("footer.version", state.version);
+}
+
+/* ---------- "What's new" once after an update (dubber/changelog.json) ---------- */
+/** "0.10.1" > "0.9.3" */
+function newerVersion(a, b) {
+  const pa = String(a).split(".").map(Number), pb = String(b).split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  return false;
+}
+
+async function checkNews() {
+  let seen = null;
+  try { seen = localStorage.getItem("dubber.seenVersion"); } catch (_) { return; }
+  if (!seen) { markNewsSeen(); return; } // first visit ever: nothing is "new"
+  if (!newerVersion(state.version, seen)) return;
+  let log = [];
+  try { log = await api("/api/changelog"); } catch (_) { return; }
+  state.news = log.filter((entry) => newerVersion(entry.version, seen) && !newerVersion(entry.version, state.version));
+  renderNews();
+}
+
+function markNewsSeen() {
+  try { localStorage.setItem("dubber.seenVersion", state.version); } catch (_) {}
+}
+
+function renderNews() {
+  const box = $("#news"), news = state.news || [];
+  box.hidden = !news.length;
+  if (!news.length) return;
+  $("#news-title").textContent = t("news.title", news[0].version);
+  $("#news-list").replaceChildren(...news.flatMap((entry, i) => [
+    i ? el("h3", { text: t("news.version", entry.version) }) : null,
+    el("ul", {}, ...(entry[uiLang] || entry.ru).map((line) => el("li", { text: line }))),
+  ].filter(Boolean)));
 }
 
 /* ---------- new version (the program also updates itself at start, see dubber/update.py) ---------- */
@@ -915,7 +950,8 @@ async function init() {
   window.addEventListener("hashchange", route);
   route();
   if (!state.settings) loadSettings(); // the note under the dub form says which translator is used
-  try { state.version = (await api("/api/version")).version; renderVersion(); } catch (_) {}
+  try { state.version = (await api("/api/version")).version; renderVersion(); checkNews(); } catch (_) {}
+  $("#news-close").addEventListener("click", () => { state.news = []; renderNews(); markNewsSeen(); });
   $("#update-btn").addEventListener("click", installUpdate);
   checkUpdate();
   setInterval(checkUpdate, 60 * 60 * 1000); // the server asks GitHub at most once an hour

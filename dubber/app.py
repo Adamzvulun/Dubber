@@ -17,6 +17,7 @@ API
 - GET  /api/settings, PUT /api/settings {use_claude, model, glossary} → translation settings (saved in .env)
 - POST /api/settings/claude-key {key}, DELETE /api/settings/claude-key → check + save / remove the Claude API key
 - GET  /api/storage, DELETE /api/storage/cache[/{video_id}]        → disk space; clear a video's (or all) cache
+- GET  /api/changelog                                               → [{version, ru, en}] newest first ("What's new")
 - GET  /api/update                                                  → {current, latest, available, enabled}
 - POST /api/update                                                  → install the newest `main` and restart (update.py)
 
@@ -510,6 +511,12 @@ def create_app(
         if restart:  # after this answer has been sent: the server stops, main() starts the new version
             threading.Timer(0.5, restart).start()
         return {"installed": installed, "restarting": restart is not None}
+
+    @app.get("/api/changelog")
+    def changelog() -> list[dict]:
+        log = json.loads((Path(__file__).with_name("changelog.json")).read_text(encoding="utf-8"))
+        return [{"version": v, **notes} for v, notes in
+                sorted(log.items(), key=lambda item: update.version_tuple(item[0]), reverse=True)]
 
     @app.get("/api/languages")
     def list_languages() -> list[dict]:

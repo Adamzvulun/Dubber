@@ -315,6 +315,13 @@ main.wrap { padding-bottom: 80px; }
   margin-top: 20px; padding: 14px 18px; border-radius: var(--r-card); background: var(--accent-soft); }
 .update[hidden] { display: none; }
 .update__text { font-size: 15px; }
+.news { margin-top: 20px; padding: 18px 20px; border-radius: var(--r-card); background: var(--surface);
+  border: 1px solid var(--line); box-shadow: var(--shadow); display: grid; gap: 10px; }
+.news[hidden] { display: none; }
+.news__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.news__head h2 { font-size: 18px; }
+.news h3 { font-size: 14px; color: var(--ink-2); font-weight: 600; margin: 10px 0 0; }
+.news ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 15px; }
 
 .footer { padding-top: 32px; padding-bottom: 28px; color: var(--ink-2); font-size: 13px; }
 
