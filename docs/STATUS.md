@@ -1,20 +1,16 @@
 # Status — read this first
 
-_Last updated: 2026-10-18 (session 4c). Update this page at the end of every session._
+_Last updated: 2026-10-18 (session 5). Update this page at the end of every session._
 
 ## In one paragraph
-Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video in **any spoken language** (also
-mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by default) with subtitles and
-transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-It runs on **Adam's Windows PC**. Current version **0.5.1** (shown in the page footer). Session 4c: personal details trimmed from the docs and a
-full three-agent QA pass (updater made safe to fail, 15 UI/copy fixes — PROGRESS). Session 4 (Adam merged
-PR #6, dub quality OK): each dub of a video is now its own library entry (ADR-022); Hugging Face Spaces hosting was
-researched — not now, YouTube blocks its servers (ADR-023); and **the program now updates itself from `main`** at
-start and with an «Обновить» button (ADR-024) — merging is shipping. Session 3 (Adam: 0.3.1
-installs fine): measured the Hebrew voice (plain Edge is the best free option; his "iter" was the spelling ייתר →
-spelling notes for Claude), fixed two transcription bugs found on real speech (stray language guesses, lost first
-words at language switches), improved the Claude request, and added an optional **voice removal** switch (Demucs,
-music stays). **Open:** Adam listens to a v0.4.0 Hebrew dub and an English dub with Claude.
+Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video **or a video file** in **any
+spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
+default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
+Current version **0.6.0** (page footer). The PCs **update themselves from `main`** (ADR-024): merging is shipping.
+Session 5: one-click Windows start (`Start Dubber.cmd` → install + desktop shortcut with its own icon + start; the
+old `?` / missing-shortcut bug reproduced and fixed on real Windows in CI, ADR-025), file upload, several links and
+playlists (ADR-026), grouped library with search, disk space page, "What's new" after updates (ADR-027).
+Earlier: per-dub library entries + self-update (session 4), voice removal and transcription fixes (session 3).
 
 ## Where things are
 - **Git:** `main` = stable and **shipped**: from 0.5.0 the PCs update themselves from `main` (needs the repo
@@ -24,13 +20,16 @@ music stays). **Open:** Adam listens to a v0.4.0 Hebrew dub and an English dub w
   Details: `CONTRIBUTING.md`. Files Adam shares arrive on `uploads/…` branches in `dev-uploads/`.
 - **Code:** `dubber/` (pipeline stages, `app.py` = server/API/jobs/settings, `eta.py` = time left, `config.py` =
   settings + `save_env`, `separate.py` = voice removal), `dubber/web/` (site; `i18n.js` = all UI text RU/EN),
-  `tests/` (100 tests, offline), `tools/` (stub server, 12-language QA, Hebrew voice QA), `scripts/`
-  (installers/launchers). Conventions: `CLAUDE.md`.
-- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…018), `DESIGN.md`
+  `update.py` = self-update, `changelog.json` = "What's new", `assets/` = logo + Windows icon), `tests/` (127 tests,
+  offline), `tools/` (stub server, 12-language QA, Hebrew voice QA, `make_icon.py`), `Start Dubber.cmd` +
+  `scripts/windows/dubber.ps1` (Windows start, ADR-025), `scripts/` (old launchers, macOS/Linux). Conventions:
+  `CLAUDE.md`.
+- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…027), `DESIGN.md`
   (design system), `RESEARCH.md` (tools, timing research, 12-language QA), `SKILLS.md`, `README.ru.md` (user's
   guide: install, update, Claude key, troubleshooting). Task cards: `kanban/` (hand-off list: `kanban/next-steps.md`).
 - **Data on a user's PC (git-ignored):** `.env` (settings saved by the website, incl. the Claude key),
-  `glossary.txt`, `install.log` (last installer run), `work/<id>/` = cache per video (`source.mp4`, `info.json`,
+  `glossary.txt`, `install.log` (last installer run), `.venv/dubber-installed` (components installed),
+  `work/uploads/<sha>/<name>` = uploaded videos until dubbed, `work/<id>/` = cache per video (`source.mp4`, `info.json`,
   `segments_src_v3.json` = what was said with each line's language, `speech_info.json`, `segments_<lang>_v3.json` (free
   engines) / `segments_<lang>_v3_claude_<hash>.json` + `.info.json` (engine, cost, notes), `clips_<voice>/`,
   `dub_track_<voice>_<hash>.wav`, `timing_<voice>_<hash>.json`, `background_htdemucs.wav` = original without the
@@ -53,6 +52,11 @@ offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 original voice; the voice-free background goes under the dub, ducked while it speaks.
 
 ## What works (verified by running it)
+- **0.6.0 — one-click Windows start (ADR-025):** CI on `windows-latest` (Windows PowerShell 5.1): fresh install,
+  existing install recognised without reinstalling, desktop + Start menu «Дубляж видео» shortcuts with the icon
+  read back, `Start Dubber.cmd` starts the program and it answers. Russian text shows correctly in the window.
+- **0.6.0 — upload, several links, playlists, grouped library + search, disk space, "What's new"**: tested in
+  Chromium on the stub server (RU/EN, 360/1280 px; playlists faked — YouTube is blocked here) + unit tests.
 - **0.5.0 — self-update (ADR-024):** rehearsed with a fake GitHub on localhost: update at start (data kept, new
   version started) and with the button in Chromium (page reloads on the new version). Not yet seen against the
   real GitHub (repo still private when built) or on Windows.
@@ -84,17 +88,18 @@ original voice; the voice-free background goes under the dub, ducked while it sp
    with Claude re-translates once (new prompt version) — check quality and `meta.json` cost.
 2. Voice removal speed and quality on Adam's PC and on real videos (music, noise, several speakers).
 3. **Google translation end-to-end** (Google answers this sandbox with HTTP 429; Adam's PC normally gets Google).
-4. H.264 playback in a real Chrome/Edge; the fixed desktop shortcut (Cyrillic name) — not re-reported by Adam.
+4. H.264 playback in a real Chrome/Edge.
+5. **First run on a clean PC** (winget installing Python + ffmpeg): CI had both preinstalled. Real YouTube playlists
+   (flat extraction) — only mocked here. A large upload (GBs) — only small files tested.
 
 ## Next steps (in order)
-1. **Adam makes the repo public** (GitHub → Settings → General → Danger Zone → Change visibility), then updates each
-   PC to 0.5.0 by hand one last time; the next merge with a higher version should arrive by itself (check the
-   footer). Check: dub one video into two languages → two cards. Then listens: a Hebrew dub (is the pronunciation acceptable now that Claude spells for
-   the voice?), an English dub with Claude (translation), one dub with «Убрать голос диктора».
-2. If Hebrew misspellings also come from the free path (Google/offline), add a spelling fix there (PLAN M7).
-3. Product ideas to offer: upload a local file from the website (also the key to cloud hosting, ADR-023);
-   voice speed control; queue (PLAN M3/M4).
-4. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;
+1. **Adam merges PR #9** → both PCs update to 0.6.0 by themselves; the old shortcut (→ `start_windows.bat`) now runs
+   the new script once, which replaces it with the «Дубляж видео» shortcut with the icon. Check: icon on the desktop,
+   "What's new" card, upload a file, a playlist link.
+2. Is the repo public? Self-update needs it (ADR-024).
+3. Still open from session 3: listen to a Hebrew dub and an English Claude dub; voice removal on real videos.
+4. Ideas not yet chosen: voice speed control; Hebrew spelling fix on the free path; offline TTS fallback (Silero).
+5. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;
    speaker gender unknown to the translator; offline-backup slips (Hebrew "flour" → "acid/vinegar").
 
 ## Gotchas for Claude in the cloud sandbox
@@ -120,7 +125,14 @@ original voice; the voice-free background goes under the dub, ducked while it sp
   put their frames in `docs/images/` (current screenshots show only synthetic test clips).
 
 ## How to test
-Every release: bump `__version__` in `dubber/__init__.py` and `pyproject.toml` (shown in the footer).
+Every release: bump `__version__` in `dubber/__init__.py` and `pyproject.toml` (shown in the footer) and add its
+changes to `dubber/changelog.json`.
+
+Windows start (`scripts/windows/dubber.ps1`): no Windows here — parse-check with PowerShell 7 for Linux (download the
+`powershell-7.x-linux-x64.tar.gz` release into the scratchpad, then
+`pwsh -c '[System.Management.Automation.Language.Parser]::ParseFile(...)'`); the real test is the `Windows install`
+CI job on the PR (read its log with the GitHub tools). Keep the `.ps1` UTF-8 with BOM. Icon: render
+`dubber/assets/logo.svg` to PNGs (Chromium) and pack with `tools/make_icon.py`.
 
 ```bash
 .venv/bin/ruff check . && .venv/bin/pytest                    # offline checks (must pass before every commit)

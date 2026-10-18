@@ -24,7 +24,9 @@ Details and tool research: [`docs/RESEARCH.md`](docs/RESEARCH.md). Why each choi
 ## Install
 Needs **Python 3.10+**, **ffmpeg** and an internet connection.
 
-**Windows:** double-click `scripts\install_windows.bat` once, then `scripts\start_windows.bat` every time.
+**Windows:** double-click **`Start Dubber.cmd`**. The first run installs Python and ffmpeg (winget) and the
+components (10–15 min, log in `install.log`), puts a «Дубляж видео» shortcut with the program's icon on the desktop
+and in the Start menu, and starts the program; later runs just start it (`scripts/windows/dubber.ps1`).
 
 **macOS / Linux:**
 ```bash
@@ -37,12 +39,14 @@ Command line instead of the web page:
 .venv/bin/python -m dubber.cli "https://www.youtube.com/watch?v=VIDEO_ID"            # → Russian
 .venv/bin/python -m dubber.cli --lang he --voice female "https://youtu.be/VIDEO_ID"   # → Hebrew, female voice
 ```
-Results go to `output/<video id>/` and appear in the website's library.
+Results go to `output/<video id>--<lang>-<hash>/` (one folder per dub) and appear in the website's library. The
+website also takes several links at once, YouTube playlists, and video files from this computer.
 
 ## Updating
-Close the running window, download `main` as a ZIP and extract it **over** the old folder (keeps `work/`, `output/`,
-`.env`, `glossary.txt`), run `scripts\install_windows.bat` (full pip log: `install.log`), start from the desktop shortcut. The page footer shows the
-version. Starting while an older copy still runs now says "already running" instead of showing the old page.
+Automatic since 0.5.0: at start (and with the site's «Установить обновление» button) the program installs a newer
+`main` from GitHub, keeping `work/`, `output/`, `.env` and `glossary.txt` (`dubber/update.py`, ADR-024); after an
+update the page shows "What's new" once (`dubber/changelog.json`). By hand: extract the `main` ZIP over the folder and
+double-click `Start Dubber.cmd`. The page footer shows the version.
 
 ## Settings (optional, in a `.env` file next to this README)
 The website's **Settings** page (gear icon) manages translation: the Claude API key (checked, then saved to `.env`;

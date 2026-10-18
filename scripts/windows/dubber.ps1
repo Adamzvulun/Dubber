@@ -144,6 +144,11 @@ if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
 }
 
 # 3. The program's components (once; later versions install their own when the program updates itself)
+if (-not (Test-Path -LiteralPath $Stamp) -and (Test-Path -LiteralPath $VenvPython)) {
+    # Installed by an older version (before this script existed): nothing to install if the program imports.
+    & $VenvPython -c "import dubber.app" 2>$null
+    if ($LASTEXITCODE -eq 0) { Set-Content -LiteralPath $Stamp -Value (Get-Date -Format s) -Encoding ASCII }
+}
 if (-not (Test-Path -LiteralPath $Stamp)) {
     Say 'Устанавливаю компоненты программы. В первый раз это 10–15 минут: скачивается около 1 ГБ.'
     Say 'Строки ниже должны меняться. Не закрывайте окно.'
@@ -160,6 +165,14 @@ if (-not (Test-Path -LiteralPath $Stamp)) {
     & $VenvPython -m pip install --upgrade yt-dlp --log $Log | Out-Null
     Set-Content -LiteralPath $Stamp -Value (Get-Date -Format s) -Encoding ASCII
     Say 'Компоненты установлены.'
+}
+
+# YouTube changes often and a fresh downloader (yt-dlp) fixes most "couldn't download" errors: refresh it every few days.
+$Fresh = Join-Path $Root '.venv\yt-dlp-checked'
+if (-not (Test-Path -LiteralPath $Fresh) -or (Get-Item -LiteralPath $Fresh).LastWriteTime -lt (Get-Date).AddDays(-3)) {
+    Say 'Проверяю обновление загрузчика видео…'
+    & $VenvPython -m pip install -q --upgrade --disable-pip-version-check yt-dlp 2>$null
+    if ($LASTEXITCODE -eq 0) { Set-Content -LiteralPath $Fresh -Value (Get-Date -Format s) -Encoding ASCII }
 }
 
 # 4. Desktop and Start menu shortcuts with the program's icon (renewed every time: the folder may have moved)
