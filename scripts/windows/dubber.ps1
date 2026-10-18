@@ -62,16 +62,59 @@ function Install-WithWinget([string]$Id, [string]$Name) {
     Update-PathFromSystem
 }
 
+# Windows' own shortcut maker through its Unicode interface. The usual WScript.Shell saves names and paths in the
+# PC's old ANSI code page: a Russian shortcut name became "?????? ?????" on non-Russian Windows (Adam's PC, CI).
+$ShortcutCode = @"
+using System;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+using System.Text;
+namespace DubberSetup {
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")] class CShellLink {}
+    [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214F9-0000-0000-C000-000000000046")]
+    interface IShellLinkW {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int max, IntPtr data, int flags);
+        void GetIDList(out IntPtr idl);
+        void SetIDList(IntPtr idl);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder name, int max);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder dir, int max);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string dir);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder args, int max);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string args);
+        void GetHotkey(out short key);
+        void SetHotkey(short key);
+        void GetShowCmd(out int cmd);
+        void SetShowCmd(int cmd);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int max, out int index);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string path, int index);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string path, int reserved);
+        void Resolve(IntPtr hwnd, int flags);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string file);
+    }
+    public static class Shortcut {
+        public static void Save(string lnk, string target, string args, string dir, string icon, string description) {
+            IShellLinkW link = (IShellLinkW)new CShellLink();
+            link.SetPath(target);
+            link.SetArguments(args);
+            link.SetWorkingDirectory(dir);
+            link.SetIconLocation(icon, 0);
+            link.SetDescription(description);
+            ((IPersistFile)link).Save(lnk, true);
+        }
+    }
+}
+"@
+
 function Install-Shortcut([string]$Folder) {
     if (-not $Folder -or -not (Test-Path -LiteralPath $Folder)) { return }
-    $shell = New-Object -ComObject WScript.Shell
-    $link = $shell.CreateShortcut((Join-Path $Folder 'Дубляж видео.lnk'))
-    $link.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $link.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
-    $link.WorkingDirectory = $Root
-    $link.IconLocation = (Join-Path $Root 'dubber\assets\dubber.ico') + ',0'
-    $link.Description = 'Дубляж видео: озвучка видео на русском и других языках'
-    $link.Save()
+    [DubberSetup.Shortcut]::Save(
+        (Join-Path $Folder 'Дубляж видео.lnk'),
+        (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'),
+        "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"",
+        $Root,
+        (Join-Path $Root 'dubber\assets\dubber.ico'),
+        'Дубляж видео: озвучка видео на русском и других языках')
 }
 
 Say '=== Дубляж видео ==='
@@ -121,6 +164,7 @@ if (-not (Test-Path -LiteralPath $Stamp)) {
 
 # 4. Desktop and Start menu shortcuts with the program's icon (renewed every time: the folder may have moved)
 try {
+    Add-Type -TypeDefinition $ShortcutCode
     Install-Shortcut ([Environment]::GetFolderPath('Desktop'))
     Install-Shortcut ([Environment]::GetFolderPath('Programs'))
 } catch {

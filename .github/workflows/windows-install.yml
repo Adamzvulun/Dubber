@@ -31,6 +31,9 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dubber.ps1 -NoStart
           if ($LASTEXITCODE -ne 0) { throw "dubber.ps1 failed: $LASTEXITCODE" }
           if (-not (Test-Path .venv\dubber-installed)) { throw "install stamp missing" }
+          # the shortcut must really exist, not just a warning in the output
+          $name = [string][char]0x0414 + 'убляж видео.lnk'
+          if (-not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Desktop')) $name))) { throw "no shortcut" }
           if (Test-Path install.log) { Get-Content install.log -Tail 5 }
       - name: Desktop shortcut with the icon
         shell: powershell
@@ -38,9 +41,13 @@ jobs:
           $desktop = [Environment]::GetFolderPath('Desktop')
           $lnk = Get-ChildItem $desktop -Filter *.lnk | Where-Object { $_.Name -eq ([string][char]0x0414 + 'убляж видео.lnk') }
           if (-not $lnk) { Get-ChildItem $desktop; throw "shortcut not found" }
-          $s = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk.FullName)
+          # WScript.Shell can't open a Cyrillic path on this English Windows: read a copy with a plain name
+          Copy-Item -LiteralPath $lnk.FullName "$env:TEMP\check.lnk" -Force
+          $s = (New-Object -ComObject WScript.Shell).CreateShortcut("$env:TEMP\check.lnk")
           "Target: $($s.TargetPath) $($s.Arguments)"; "Icon: $($s.IconLocation)"; "Dir: $($s.WorkingDirectory)"
           if ($s.IconLocation -notlike '*dubber\assets\dubber.ico,0') { throw "wrong icon" }
+          $start = Join-Path ([Environment]::GetFolderPath('Programs')) $lnk.Name
+          if (-not (Test-Path -LiteralPath $start)) { throw "Start menu shortcut missing" }
           if (-not (Test-Path ($s.IconLocation -replace ',0$', ''))) { throw "icon file missing" }
           if ($s.Arguments -notlike '*scripts\windows\dubber.ps1*') { throw "wrong target" }
       - name: Start Dubber.cmd starts the program
