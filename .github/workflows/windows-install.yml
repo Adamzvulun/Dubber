@@ -1,0 +1,58 @@
+name: Windows install
+
+# The one-click Windows start (Start Dubber.cmd -> scripts/windows/dubber.ps1) on a real Windows machine:
+# components installed, desktop shortcut with the program's icon, program answering.
+on:
+  pull_request:
+    paths:
+      - "Start Dubber.cmd"
+      - "scripts/**"
+      - "dubber/assets/**"
+      - "dubber/app.py"
+      - "pyproject.toml"
+      - ".github/workflows/windows-install.yml"
+  workflow_dispatch:
+
+jobs:
+  install:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: ffmpeg
+        run: choco install ffmpeg -y --no-progress
+      - name: Install (Windows PowerShell 5.1, like a user's PC)
+        shell: powershell
+        run: |
+          Remove-Item .git -Recurse -Force   # a user's folder is a ZIP, not a git checkout
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dubber.ps1 -NoStart
+          if ($LASTEXITCODE -ne 0) { throw "dubber.ps1 failed: $LASTEXITCODE" }
+          if (-not (Test-Path .venv\dubber-installed)) { throw "install stamp missing" }
+          if (Test-Path install.log) { Get-Content install.log -Tail 5 }
+      - name: Desktop shortcut with the icon
+        shell: powershell
+        run: |
+          $desktop = [Environment]::GetFolderPath('Desktop')
+          $lnk = Get-ChildItem $desktop -Filter *.lnk | Where-Object { $_.Name -eq ([string][char]0x0414 + 'убляж видео.lnk') }
+          if (-not $lnk) { Get-ChildItem $desktop; throw "shortcut not found" }
+          $s = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk.FullName)
+          "Target: $($s.TargetPath) $($s.Arguments)"; "Icon: $($s.IconLocation)"; "Dir: $($s.WorkingDirectory)"
+          if ($s.IconLocation -notlike '*dubber\assets\dubber.ico,0') { throw "wrong icon" }
+          if (-not (Test-Path ($s.IconLocation -replace ',0$', ''))) { throw "icon file missing" }
+          if ($s.Arguments -notlike '*scripts\windows\dubber.ps1*') { throw "wrong target" }
+      - name: Start Dubber.cmd starts the program
+        shell: powershell
+        run: |
+          $env:DUBBER_NO_BROWSER = '1'
+          $env:DUBBER_AUTO_UPDATE = '0'   # test this version, not whatever main has
+          $p = Start-Process cmd -ArgumentList '/c', '"Start Dubber.cmd"' -PassThru -WindowStyle Hidden
+          for ($i = 0; $i -lt 90; $i++) {
+            try { $v = Invoke-RestMethod http://127.0.0.1:7860/api/version -TimeoutSec 2; "Running: $($v.version)"; break }
+            catch { Start-Sleep 2 }
+          }
+          if (-not $v) { throw "the program did not answer" }
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*dubber.app*' } |
+            ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
