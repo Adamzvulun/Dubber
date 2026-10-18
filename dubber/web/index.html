@@ -36,6 +36,10 @@
   </header>
 
   <main id="main" class="wrap" tabindex="-1">
+    <div class="update" id="update" role="status" hidden>
+      <p class="update__text" id="update-text"></p>
+      <button class="btn btn--primary" type="button" id="update-btn" data-i18n="update.button">Обновить</button>
+    </div>
     <!-- Home -->
     <section id="view-home" class="view" hidden>
       <div class="hero">
@@ -136,6 +140,10 @@
           <div class="downloads">
             <span class="downloads__label" data-i18n="watch.download">Скачать</span>
             <div class="downloads__list" id="downloads"></div>
+          </div>
+          <div class="downloads" id="other-dubs" hidden>
+            <span class="downloads__label" data-i18n="watch.otherDubs">Другие озвучки этого видео</span>
+            <div class="downloads__list" id="other-dubs-list"></div>
           </div>
         </div>
         <aside class="transcript" aria-labelledby="transcript-title">

@@ -1,19 +1,23 @@
 # Status — read this first
 
-_Last updated: 2026-10-18 (session 3). Update this page at the end of every session._
+_Last updated: 2026-10-18 (session 4). Update this page at the end of every session._
 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video in **any spoken language** (also
 mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by default) with subtitles and
 transcripts. Built for Adam's father, a Russian-speaking professional (Windows PC, watches videos on every topic).
-It runs on **Adam's Windows PC**. Current version **0.4.0** (shown in the page footer). Session 3 (Adam: 0.3.1
+It runs on **Adam's Windows PC**. Current version **0.5.0** (shown in the page footer). Session 4 (Adam merged
+PR #6, dub quality OK): each dub of a video is now its own library entry (ADR-022); Hugging Face Spaces hosting was
+researched — not now, YouTube blocks its servers (ADR-023); and **the program now updates itself from `main`** at
+start and with an «Обновить» button (ADR-024) — merging is shipping. Session 3 (Adam: 0.3.1
 installs fine): measured the Hebrew voice (plain Edge is the best free option; his "iter" was the spelling ייתר →
 spelling notes for Claude), fixed two transcription bugs found on real speech (stray language guesses, lost first
 words at language switches), improved the Claude request, and added an optional **voice removal** switch (Demucs,
 music stays). **Open:** Adam listens to a v0.4.0 Hebrew dub and an English dub with Claude.
 
 ## Where things are
-- **Git:** `main` = stable; Adam installs from its ZIP. Work happens on a branch + PR into `main`; CI (lint + tests)
+- **Git:** `main` = stable and **shipped**: from 0.5.0 the PCs update themselves from `main` (needs the repo
+  public; one last manual ZIP update to reach 0.5.0). Every release must bump the version. Work happens on a branch + PR into `main`; CI (lint + tests)
   must be green; **Adam reviews and merges**. **Branch rule (Adam, 2026-10-18): a new branch only for a new feature;
   fixes and follow-ups to the current work go on the same branch** (this session: `claude/inspiring-davinci-4qon8o`).
   Details: `CONTRIBUTING.md`. Files Adam shares arrive on `uploads/…` branches in `dev-uploads/`.
@@ -32,7 +36,9 @@ music stays). **Open:** Adam listens to a v0.4.0 Hebrew dub and an English dub w
   voice, only when that switch was on), `work/stage_times.json` (stage timings of the last
   10 dubs, for the time-left estimate); `output/<id>/` = what the library shows (`dubbed.mp4`, `meta.json` with
   languages/files/translator/cost, `thumbnail.jpg`, `segments.json`, `timing.json`, subtitles, transcripts).
-  One video = one library entry: dubbing it into another language replaces the previous dub.
+  One **dub** = one library entry: `output/<video-id>--<lang>-<hash>/` (hash of language, voice, background,
+  voice removal; `pipeline.dub_id`); redoing the same choices replaces it. Folders from before 0.4.1 are named
+  `output/<video-id>/` and still work.
 
 ## How it works (one line per stage — details in the `dubber-pipeline` skill)
 1. Download (yt-dlp + deno) → 2. Transcribe: Whisper `base` detects the language of every speech region, Whisper
@@ -46,6 +52,12 @@ offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 original voice; the voice-free background goes under the dub, ducked while it speaks.
 
 ## What works (verified by running it)
+- **0.5.0 — self-update (ADR-024):** rehearsed with a fake GitHub on localhost: update at start (data kept, new
+  version started) and with the button in Chromium (page reloads on the new version). Not yet seen against the
+  real GitHub (repo still private when built) or on Windows.
+- **0.4.1 — one library entry per dub (ADR-022):** two pipeline runs of one clip (ru, en) give two folders with
+  the right audio each; in Chromium each card plays its own dub and «Другие озвучки этого видео» switches between
+  them (RU desktop, EN 360 px dark).
 - **0.4.0 — voice removal (ADR-020):** switch «Убрать голос диктора» (off by default), CLI `--remove-voice`; on a
   test mix no words remain in the background and the music level is unchanged; end-to-end dub verified (Russian
   voice + music, original track intact); ≈ +5 min per 10-min video on 4 cores. UI checked RU/EN, 360 px, dark.
@@ -74,10 +86,12 @@ original voice; the voice-free background goes under the dub, ducked while it sp
 4. H.264 playback in a real Chrome/Edge; the fixed desktop shortcut (Cyrillic name) — not re-reported by Adam.
 
 ## Next steps (in order)
-1. **Adam updates to 0.4.0** and listens: a Hebrew dub (is the pronunciation acceptable now that Claude spells for
+1. **Adam makes the repo public** (GitHub → Settings → General → Danger Zone → Change visibility), then updates each
+   PC to 0.5.0 by hand one last time; the next merge with a higher version should arrive by itself (check the
+   footer). Check: dub one video into two languages → two cards. Then listens: a Hebrew dub (is the pronunciation acceptable now that Claude spells for
    the voice?), an English dub with Claude (translation), one dub with «Убрать голос диктора».
 2. If Hebrew misspellings also come from the free path (Google/offline), add a spelling fix there (PLAN M7).
-3. Product ideas to offer: several dub languages of one video in the library; upload a local file from the website;
+3. Product ideas to offer: upload a local file from the website (also the key to cloud hosting, ADR-023);
    voice speed control; queue (PLAN M3/M4).
 4. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;
    speaker gender unknown to the translator; offline-backup slips (Hebrew "flour" → "acid/vinegar").
@@ -118,6 +132,10 @@ DUBBER_NETWORK_TESTS=1 .venv/bin/pytest -m network            # real NLLB model 
 
 # Translation + timing QA on real dubs (Edge voices, Whisper, NLLB): results.json + table.md
 .venv/bin/python tools/qa_languages.py /tmp/qa --clips mixed,trio --targets ru,he   # all 12 if --targets omitted
+
+# self-update rehearsal without GitHub: serve DIR/main/dubber/__init__.py + DIR/main.zip (GitHub-style ZIP with one
+# top folder) over http, then start an install folder (not a git checkout) with DUBBER_UPDATE_SOURCE=http://… set
+# (the stub server shows the banner with STUB_UPDATE=9.9.9)
 
 # full pipeline: local file or YouTube URL (needs cookies in the cloud)
 .venv/bin/python -m dubber.cli --lang he --voice female /path/to/video.mp4

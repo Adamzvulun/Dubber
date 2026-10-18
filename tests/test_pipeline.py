@@ -325,3 +325,32 @@ def test_claude_translation_cache_cost_and_fallback(tmp_path, sample_video, monk
     settings.claude_key = ""
     meta = json.loads((run().folder / "meta.json").read_text(encoding="utf-8"))
     assert meta["translator"] == "google" and len(made) == 4
+
+
+def test_each_dub_of_a_video_keeps_its_own_library_entry(tmp_path, sample_video):
+    # Adam dubbed one video twice (other language and voice); both library cards played the newest dub.
+    def dub(**choices):
+        settings = Settings(work_dir=tmp_path / "work", output_dir=tmp_path / "out", **choices)
+        return pipeline.run(str(sample_video), settings, translator=StubTranslator(), synth=stub_synth,
+                            transcriber=stub_transcriber)
+
+    ru = dub()
+    en = dub(target_lang="en", voice="female")
+    assert ru.id != en.id and ru.folder != en.folder and ru.video_id == en.video_id
+    for result, lang in ((ru, "ru"), (en, "en")):
+        meta = json.loads((result.folder / "meta.json").read_text(encoding="utf-8"))
+        assert meta["id"] == result.id and meta["video_id"] == ru.video_id and meta["target_lang"] == lang
+        assert result.video.exists() and result.folder.name == result.id
+    assert dub().id == ru.id  # the same choices again replace that dub
+    assert sorted(p.name for p in (tmp_path / "out").iterdir()) == sorted([ru.id, en.id])
+
+
+def test_dub_id_is_a_safe_name_that_changes_with_every_choice():
+    import re
+
+    base = dict(video_id="dQw4w9WgXcQ", lang="ru", voice="ru-RU-DmitryNeural", background=True, remove_voice=False)
+    one = pipeline.dub_id(**base)
+    assert one == pipeline.dub_id(**base) and one.startswith("dQw4w9WgXcQ--ru-")
+    assert re.fullmatch(r"[A-Za-z0-9_-]{1,64}", pipeline.dub_id(**{**base, "video_id": "local-0123456789ab"}))
+    changed = [dict(lang="en"), dict(voice="ru-RU-SvetlanaNeural"), dict(background=False), dict(remove_voice=True)]
+    assert len({one, *(pipeline.dub_id(**{**base, **c}) for c in changed)}) == 5

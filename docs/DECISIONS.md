@@ -215,3 +215,46 @@ Newest at the bottom. Format: context → decision → consequences.
 - **Consequences:** mixed EN+FR word errors 0.199 → 0.153 (English part 0.272 → 0.171); Hebrew regions all Hebrew.
   The Claude changes are unit-tested only — no key in the sandbox; Adam's next dub with a key is the real check.
   Cached Claude translations are redone once (cost of one translation per video).
+
+## ADR-022 — One library entry per dub, not per video (2026-10-18)
+- **Context:** Adam dubbed one video twice (another language and voice): both cards opened the newest dub, because
+  every dub of a video was written into the same `output/<video-id>/` folder.
+- **Decision:** each dub gets its own folder `output/<video-id>--<lang>-<hash6>/` (`pipeline.dub_id`; the hash covers
+  language, voice, background and voice-removal). Redoing a dub with the **same** choices replaces it (Adam's choice:
+  no duplicates, e.g. after adding a Claude key). `meta.json` keeps `id` (= folder) and `video_id`; the watch page
+  lists the video's other dubs (`siblings` in `/api/videos/<id>`); library cards show language · voice. The
+  `work/<video-id>/` cache is shared, so another language reuses download and transcription. Folders from before
+  0.4.1 keep working as they are (`video_id` defaults to the folder name); no migration.
+- **Rejected:** one card per video with a language picker inside (more UI, and deleting one dub gets fiddly); a new
+  entry on every run (duplicates to clean up by hand).
+
+## ADR-023 — Hosting on Hugging Face Spaces: researched, not adopted for now (2026-10-18)
+- **Context:** Adam asked whether Hugging Face Spaces could host Dubber (no install on the father's PC, open from
+  anywhere). Details and sources: `RESEARCH.md` → "Hosting on Hugging Face Spaces".
+- **Decision:** stay on the home PC for now. The app itself would run on a Docker Space unchanged, but: YouTube
+  blocks Hugging Face's datacenter addresses (the main input fails — the same block we hit in the cloud sandbox),
+  a Docker Space needs HF PRO ($9/month), the free 2 vCPU is slower than the PC, the disk is wiped on restart (a
+  paid Storage Bucket is needed for the library), and a public URL would let anyone spend the Claude key (needs a
+  private Space + HF login, or our own login page).
+- **Revisit when:** the website can take an uploaded video file (then YouTube isn't needed on the server), or a
+  reliable YouTube path from a server exists. A "Duplicate this Space" demo for others is possible then too.
+
+## ADR-024 — The program updates itself from `main` (2026-10-18)
+- **Context:** Adam was tired of downloading the newest ZIP by hand after every merge (the real reason he looked at
+  hosting, ADR-023). He chose to make the repository public and to update both automatically and with a button.
+- **Decision:** `dubber/update.py`. At start, `app.main()` reads `__version__` from `main`
+  (raw.githubusercontent.com); if it is higher, it downloads `main` as a ZIP (codeload.github.com), checks it is a
+  Dubber, replaces the program files one by one (`.partial` + rename) and starts the new version. The site asks at
+  most once an hour and shows «Вышла новая версия — Обновить»; the button installs, the server restarts itself and the
+  page reloads on the new version. Rules: the user's data (`.env`, `glossary.txt`, `work/`, `output/`, `models/`,
+  `.venv/`, `install.log`) is never written; files dropped from `main` are removed (`.dubber-files` lists what the
+  last update installed); `pip install -e .` only when `pyproject.toml` changed; yt-dlp refreshed every update; no
+  internet / GitHub down → the current version starts as usual; refused while a dub runs; off in a git checkout and
+  with `DUBBER_AUTO_UPDATE=0`. `start_windows.bat` keeps the start and `pause` on one line (cmd reads a running .bat
+  line by line). Rehearsal without GitHub: `DUBBER_UPDATE_SOURCE`.
+- **Rejected:** `git pull` (needs Git installed on the PCs and a clone instead of the ZIP folder); a private repo with
+  a read-only token on each PC (expires, one more secret); a Windows scheduled task (updates files while the program
+  runs).
+- **Consequences:** a merge into `main` reaches the PCs on their next start, so `main` must stay releasable and every
+  release must bump the version. Each in-session update leaves the old process waiting for the new one (a few MB).
+

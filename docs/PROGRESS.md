@@ -2,6 +2,25 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-18 — Session 4b: the program updates itself (v0.5.0)
+- Adam: the hosting question was really "stop downloading the ZIP after every merge". He will make the repo public
+  and wants updates both at start and with a button.
+- `dubber/update.py` + start-up update + `/api/update` + banner «Обновить» (ADR-024). Rehearsed with a fake GitHub
+  on localhost and a separate install folder: 0.5.0 → 0.5.1 at start (Claude key and library kept, new version
+  started), 0.5.1 → 0.5.2 with the button in Chromium (page reloaded on the new version). 11 new tests.
+  Checked the whole git history before going public: no keys, tokens or e-mails.
+
+## 2026-10-18 — Session 4: separate dubs in the library, Hugging Face hosting research (v0.4.1)
+- Adam merged PR #6 and confirmed the dub quality. Asked: two dubs of one video both played the newest one; and
+  research Hugging Face Spaces as hosting.
+- **Library (ADR-022):** every dub has its own `output/<video-id>--<lang>-<hash>/` folder; the same choices again
+  replace that dub; cards show language · voice; the watch page lists "Другие озвучки этого видео". Old library
+  folders keep working. Verified: two real pipeline runs of one clip (ru, en) → two folders with the right audio
+  language each (ffprobe); in Chromium (RU desktop, EN 360 px dark) each card plays its own file and the switcher
+  goes to the other dub. 4 new tests.
+- **Hosting (ADR-023, RESEARCH.md):** Spaces can run our app in Docker, but needs PRO ($9/month), a paid bucket for
+  the library, and YouTube blocks its servers → not now; revisit with video-file upload.
+
 ## 2026-10-18 — Session 3: Hebrew voice, translation quality, voice removal (v0.4.0)
 - Adam: 0.3.1 installs and runs (installer no longer stalls). Asked: Hebrew dub mispronounces, translation still
   off sometimes even with Opus, and voice removal (Demucs), off by default. Free only; test without his input.

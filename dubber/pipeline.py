@@ -47,7 +47,7 @@ def stages(remove_voice: bool = False) -> list[tuple[str, str, float]]:
 
 @dataclass
 class Result:
-    id: str
+    id: str  # this dub (= its folder in output/)
     title: str
     video: Path
     dub_srt: Path  # subtitles in the dub language
@@ -55,6 +55,16 @@ class Result:
     transcript: Path
     bilingual: Path
     folder: Path
+    video_id: str = ""  # the video (= its folder in work/); several dubs can share it
+
+
+def dub_id(video_id: str, lang: str, voice: str, background: bool, remove_voice: bool) -> str:
+    """Name of one dub's folder in output/: each set of choices of a video is its own library entry.
+
+    The same choices again give the same name, so redoing a dub replaces it instead of adding a duplicate.
+    """
+    choices = hashlib.sha1(f"{lang}|{voice}|{background}|{remove_voice}".encode()).hexdigest()[:6]
+    return f"{video_id}--{lang}-{choices}"
 
 
 def safe_name(title: str, max_len: int = 80) -> str:
@@ -256,9 +266,10 @@ def run(
             background_audio = (separator or separate.separate_background)(
                 video, work / "background_htdemucs.wav", progress=report)
 
-    # 7. Subtitles + final video, all in output/<id>/ (what the website's library reads)
+    # 7. Subtitles + final video, all in output/<dub id>/ (what the website's library reads)
     report = p.stage("mux")
-    folder = settings.output_dir / video_id
+    dub = dub_id(video_id, target.code, voice, settings.keep_background, background_audio is not None)
+    folder = settings.output_dir / dub
     files = subtitles.write_all(segments, folder, title, target=target.code, source=source_lang)
     out_video = folder / "dubbed.mp4"
     partial = folder / "dubbed.partial.mp4"  # never serve a half-written file
@@ -275,7 +286,8 @@ def run(
     save_segments(segments, folder / "segments.json")
     shutil.copyfile(timing_json, folder / "timing.json")
     meta = {
-        "id": video_id,
+        "id": dub,
+        "video_id": video_id,
         "title": title,
         "channel": source_info["channel"],
         "source": source if is_url(source) else "",
@@ -297,7 +309,7 @@ def run(
     report(1.0)
 
     return Result(
-        id=video_id,
+        id=dub,
         title=title,
         video=out_video,
         dub_srt=files["dub_srt"],
@@ -305,5 +317,6 @@ def run(
         transcript=files["transcript"],
         bilingual=files["bilingual"],
         folder=folder,
+        video_id=video_id,
     )
 

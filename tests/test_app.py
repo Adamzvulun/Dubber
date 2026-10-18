@@ -66,7 +66,7 @@ def test_library_watch_files_and_delete(tmp_path):
 
 
 def test_redub_changes_video_url_and_files_are_revalidated(tmp_path):
-    # Dubbing a video into another language rewrites output/<id>/dubbed.mp4. The browser must not keep playing its
+    # Redoing a dub with the same choices rewrites output/<id>/dubbed.mp4. The browser must not keep playing its
     # cached copy of the previous dub (Adam: Hebrew page, Russian voice).
     c, settings = client(tmp_path)
     folder = make_video(settings.output_dir, "abc_123", "Lecture")
@@ -79,6 +79,28 @@ def test_redub_changes_video_url_and_files_are_revalidated(tmp_path):
     assert second != first
     assert c.get("/api/videos").json()[0]["video"] == second
     assert c.get(second).content == b"1" * 2000
+
+
+def test_two_dubs_of_one_video_are_separate_entries_with_links_to_each_other(tmp_path):
+    c, settings = client(tmp_path)
+    def dub(folder_name, **changes):
+        folder = make_video(settings.output_dir, folder_name, "Lecture")
+        meta = json.loads((folder / "meta.json").read_text(encoding="utf-8")) | changes
+        (folder / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+
+    dub("vid--ru-aaaaaa", video_id="vid", target_lang="ru", created="2026-10-17T10:00:00")
+    dub("vid--en-bbbbbb", video_id="vid", target_lang="en", created="2026-10-18T10:00:00")
+    dub("other")  # dubbed before 0.4.1: folder = video id, no "video_id"
+
+    assert [v["id"] for v in c.get("/api/videos").json()] == ["vid--en-bbbbbb", "vid--ru-aaaaaa", "other"]
+    ru = c.get("/api/videos/vid--ru-aaaaaa").json()
+    assert ru["target_lang"] == "ru" and ru["video"].startswith("/files/vid--ru-aaaaaa/dubbed.mp4")
+    assert [(s["id"], s["target_lang"]) for s in ru["siblings"]] == [("vid--en-bbbbbb", "en")]
+    legacy = c.get("/api/videos/other").json()
+    assert legacy["video_id"] == "other" and legacy["siblings"] == []
+
+    assert c.delete("/api/videos/vid--en-bbbbbb").status_code == 200
+    assert c.get("/api/videos/vid--ru-aaaaaa").json()["siblings"] == []
 
 
 def test_job_runs_with_chosen_voice_and_background(tmp_path):

@@ -8,11 +8,13 @@ ends with a download error instead (to see the error card).
 Put real finished videos into DATA_DIR/out/<id>/ (e.g. copied from output/) to test the library and watch pages.
 Settings are saved in DATA_DIR (never the project's .env); a Claude key ending in "bad" is refused, any other
 key-shaped one is accepted without calling Anthropic.
+STUB_UPDATE=9.9.9 makes the site offer an update to that version (installing it takes 2 s and changes nothing).
 Kill it by PID, never with `pkill -f` (that kills your own shell).
 """
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -46,13 +48,27 @@ def check_key(key: str) -> None:
         raise TranslatorUnavailable("stub: refused", code="auth")
 
 
+class StubUpdater:
+    """Pretends `main` has version STUB_UPDATE (unset: no update)."""
+
+    def enabled(self) -> bool:
+        return True
+
+    def latest(self, timeout: float = 5.0) -> str | None:
+        return os.environ.get("STUB_UPDATE")
+
+    def install(self, timeout: float = 120.0) -> str:
+        time.sleep(2)
+        return os.environ["STUB_UPDATE"]
+
+
 def main() -> None:
     data = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/dubber-stub")
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 7871
     settings = Settings(work_dir=data / "w", output_dir=data / "out", env_file=data / ".env",
                         glossary_file=data / "glossary.txt", claude_key="", translator="auto")
     print(f"Stub Dubber on http://127.0.0.1:{port} (library: {settings.output_dir})", flush=True)
-    site = app.create_app(settings, runner=runner, check_key=check_key)
+    site = app.create_app(settings, runner=runner, check_key=check_key, updater=StubUpdater())
     uvicorn.run(site, host="127.0.0.1", port=port, log_level="warning")
 
 
