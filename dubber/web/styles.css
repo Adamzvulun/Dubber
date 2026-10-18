@@ -271,7 +271,7 @@ main { padding-bottom: 80px; outline: none; }
 .settings__options select { width: 100%; }
 .saved-note { color: var(--ok); font-size: 15px; font-weight: 500; }
 
-.footer { padding: 0 0 28px; color: var(--ink-2); font-size: 13px; }
+.footer { padding: 32px 0 28px; color: var(--ink-2); font-size: 13px; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 900px) {

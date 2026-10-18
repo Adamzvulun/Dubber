@@ -1,12 +1,14 @@
 # Status — read this first
 
-_Last updated: 2026-10-18 (session 3). Update this page at the end of every session._
+_Last updated: 2026-10-18 (session 4). Update this page at the end of every session._
 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video in **any spoken language** (also
 mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by default) with subtitles and
 transcripts. Built for Adam's father, a Russian-speaking professional (Windows PC, watches videos on every topic).
-It runs on **Adam's Windows PC**. Current version **0.4.0** (shown in the page footer). Session 3 (Adam: 0.3.1
+It runs on **Adam's Windows PC**. Current version **0.4.1** (shown in the page footer). Session 4 (Adam merged
+PR #6, dub quality OK): each dub of a video is now its own library entry (ADR-022), and Hugging Face Spaces hosting
+was researched — not now, YouTube blocks its servers (ADR-023). Session 3 (Adam: 0.3.1
 installs fine): measured the Hebrew voice (plain Edge is the best free option; his "iter" was the spelling ייתר →
 spelling notes for Claude), fixed two transcription bugs found on real speech (stray language guesses, lost first
 words at language switches), improved the Claude request, and added an optional **voice removal** switch (Demucs,
@@ -32,7 +34,9 @@ music stays). **Open:** Adam listens to a v0.4.0 Hebrew dub and an English dub w
   voice, only when that switch was on), `work/stage_times.json` (stage timings of the last
   10 dubs, for the time-left estimate); `output/<id>/` = what the library shows (`dubbed.mp4`, `meta.json` with
   languages/files/translator/cost, `thumbnail.jpg`, `segments.json`, `timing.json`, subtitles, transcripts).
-  One video = one library entry: dubbing it into another language replaces the previous dub.
+  One **dub** = one library entry: `output/<video-id>--<lang>-<hash>/` (hash of language, voice, background,
+  voice removal; `pipeline.dub_id`); redoing the same choices replaces it. Folders from before 0.4.1 are named
+  `output/<video-id>/` and still work.
 
 ## How it works (one line per stage — details in the `dubber-pipeline` skill)
 1. Download (yt-dlp + deno) → 2. Transcribe: Whisper `base` detects the language of every speech region, Whisper
@@ -46,6 +50,9 @@ offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 original voice; the voice-free background goes under the dub, ducked while it speaks.
 
 ## What works (verified by running it)
+- **0.4.1 — one library entry per dub (ADR-022):** two pipeline runs of one clip (ru, en) give two folders with
+  the right audio each; in Chromium each card plays its own dub and «Другие озвучки этого видео» switches between
+  them (RU desktop, EN 360 px dark).
 - **0.4.0 — voice removal (ADR-020):** switch «Убрать голос диктора» (off by default), CLI `--remove-voice`; on a
   test mix no words remain in the background and the music level is unchanged; end-to-end dub verified (Russian
   voice + music, original track intact); ≈ +5 min per 10-min video on 4 cores. UI checked RU/EN, 360 px, dark.
@@ -74,10 +81,10 @@ original voice; the voice-free background goes under the dub, ducked while it sp
 4. H.264 playback in a real Chrome/Edge; the fixed desktop shortcut (Cyrillic name) — not re-reported by Adam.
 
 ## Next steps (in order)
-1. **Adam updates to 0.4.0** and listens: a Hebrew dub (is the pronunciation acceptable now that Claude spells for
+1. **Adam updates to 0.4.1** (check: dub one video into two languages → two cards) and listens: a Hebrew dub (is the pronunciation acceptable now that Claude spells for
    the voice?), an English dub with Claude (translation), one dub with «Убрать голос диктора».
 2. If Hebrew misspellings also come from the free path (Google/offline), add a spelling fix there (PLAN M7).
-3. Product ideas to offer: several dub languages of one video in the library; upload a local file from the website;
+3. Product ideas to offer: upload a local file from the website (also the key to cloud hosting, ADR-023);
    voice speed control; queue (PLAN M3/M4).
 4. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;
    speaker gender unknown to the translator; offline-backup slips (Hebrew "flour" → "acid/vinegar").

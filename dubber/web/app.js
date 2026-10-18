@@ -127,8 +127,9 @@ function card(video) {
   if (video.thumbnail) $("img", node).src = video.thumbnail;
   $(".card__duration", node).textContent = clock(video.duration);
   $(".card__title", node).textContent = video.title;
-  $(".card__meta", node).textContent = [video.channel, langName(video.target_lang), dateLabel(video.created)]
-    .filter(Boolean).join(" · ");
+  // Several dubs of one video differ by language, voice and sound: show all three.
+  $(".card__meta", node).textContent = [video.channel, langName(video.target_lang), voiceName(video.voice),
+    video.remove_voice ? t("card.noVoice") : null, dateLabel(video.created)].filter(Boolean).join(" · ");
   return node;
 }
 
@@ -410,6 +411,14 @@ function renderWatchDetails() {
     video.remove_voice ? t("watch.noVoice") : null,
     ...translatorLabels(video), dateLabel(video.created),
   ].filter(Boolean).map((text) => el("span", { text })));
+
+  // Other dubs of this video (another language or voice): each is its own library entry.
+  const siblings = video.siblings || [];
+  $("#other-dubs").hidden = !siblings.length;
+  $("#other-dubs-list").replaceChildren(...siblings.map((s) => el("a", {
+    class: "btn", href: `#/watch/${encodeURIComponent(s.id)}`,
+    text: [langName(s.target_lang), voiceName(s.voice), s.remove_voice ? t("card.noVoice") : null].filter(Boolean).join(" · "),
+  })));
 
   const files = video.files || {};
   const file = (name) => `/files/${video.id}/${name}?download=1`;

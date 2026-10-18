@@ -280,9 +280,11 @@ def _read_meta(folder: Path) -> dict | None:
         return None
     if not (folder / "dubbed.mp4").exists():
         return None
+    meta["id"] = folder.name
+    meta.setdefault("video_id", folder.name)  # dubbed before 0.4.1: one folder per video, named after it
     meta["thumbnail"] = f"/files/{folder.name}/thumbnail.jpg"
-    # The file name stays the same when a video is dubbed again (e.g. into another language): a version in the URL
-    # stops the browser from playing its cached copy of the previous dub.
+    # The file name stays the same when a dub is redone with the same choices: a version in the URL stops the
+    # browser from playing its cached copy of the previous one.
     video = (folder / "dubbed.mp4").stat()
     meta["video"] = f"/files/{folder.name}/dubbed.mp4?v={video.st_mtime_ns:x}{video.st_size:x}"
     if "target_lang" not in meta:  # dubbed before other languages existed: English → Russian, old file names
@@ -399,6 +401,9 @@ def create_app(
             raise HTTPException(404)
         segments_file = folder / "segments.json"
         meta["segments"] = json.loads(segments_file.read_text(encoding="utf-8")) if segments_file.exists() else []
+        # Other dubs of the same video (another language or voice), for the watch page's switcher.
+        meta["siblings"] = [{k: m.get(k) for k in ("id", "target_lang", "voice", "background", "remove_voice")}
+                            for m in list_videos() if m["video_id"] == meta["video_id"] and m["id"] != meta["id"]]
         return meta
 
     @app.delete("/api/videos/{video_id}")

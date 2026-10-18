@@ -231,6 +231,36 @@ makes errors of its own, so only the comparison between candidates matters. Scri
 - End-to-end CLI dub (`--remove-voice`, offline translator): Russian track = Russian voice + music, no English left
   (Whisper forced to English only re-translates the Russian); original English track and Russian subtitles intact.
 
+## Hosting on Hugging Face Spaces — research 2026-10-18 (ADR-023)
+Question (Adam): could Dubber run as a Hugging Face Space instead of on the home PC?
+
+| Topic | What Spaces offers (official docs, Oct 2026) | What it means for Dubber |
+|---|---|---|
+| Price | Gradio/Docker Spaces **require a PRO plan ($9/month)** to create; free accounts only get 2 ZeroGPU Gradio Spaces. CPU Basic hardware itself has no hourly fee | ~$9/month minimum |
+| Hardware | CPU Basic 2 vCPU / 16 GB RAM / 50 GB disk; CPU Upgrade 8 vCPU / 32 GB at $0.03/h; T4 GPU $0.40/h | 2 vCPU: Whisper `small` + Demucs slower than the PC (≈ 0.5–1× real time and more) |
+| GPU for free | ZeroGPU: **Gradio SDK only**, daily per-visitor quota (~minutes) | would need a Gradio rewrite of our UI (we left Gradio, ADR-010) — no |
+| App type | Docker SDK runs any web server; port 7860 is the default (also ours) | `dubber.app` runs as-is in a Dockerfile (Python + ffmpeg + deno) |
+| Storage | Disk is **ephemeral** (lost on restart/sleep); persistence = attached **Storage Bucket** ($18/TB/month private) | library + `work/` cache need a bucket mounted as `output/`, `work/`; cents per month at our size |
+| Sleep | free hardware sleeps after ~48 h unused, wakes on visit (cold start: models re-download unless cached in the bucket) | first dub after a pause is slower |
+| Secrets | Space Secrets → env vars | Claude key as `DUBBER_CLAUDE_KEY`-style secret, not in `.env` |
+| Access | Private Space: only signed-in owner/collaborators; Protected (PRO): code private, app public | public app = anyone could spend the Claude key; private needs the father to have an HF account and log in |
+| Network | outbound only ports 80/443/8080 | fine: Edge TTS, Anthropic, Google, Hugging Face are all 443 |
+
+**The blocker — YouTube.** YouTube answers datacenter IPs with "Sign in to confirm you're not a bot"; users report
+exactly this on Hugging Face's own `openai/whisper` Space, and cookies did not always help (and risk the Google
+account). This is the same block we see in the cloud sandbox, and it applies to every cloud host, not just HF.
+Google Translate also rate-limits datacenter IPs (HTTP 429 here) → the offline NLLB backup (1.4 GB download per cold
+start) or Claude would do the translating.
+
+**Verdict:** not a fit while the input is a YouTube link. It becomes worth a test if the website accepts an
+uploaded video file (PLAN M3 idea) — then: Docker Space + PRO + a private bucket, Claude key as a Space secret, a
+login in front. Until then the home PC is free, faster and already works.
+
+Sources: [Spaces overview](https://huggingface.co/docs/hub/en/spaces-overview),
+[Spaces storage](https://huggingface.co/docs/hub/spaces-storage), [pricing](https://huggingface.co/pricing),
+[ZeroGPU](https://huggingface.co/docs/hub/spaces-zerogpu.md),
+[openai/whisper Space bot-check report](https://huggingface.co/spaces/openai/whisper/discussions/121).
+
 ## Risks
 - YouTube anti-bot changes → keep yt-dlp updated; cookies-from-browser fallback (see `youtube-downloader` skill references).
 - edge-tts is an unofficial client of a Microsoft service — may break; Silero offline fallback planned.

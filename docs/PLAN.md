@@ -96,6 +96,7 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [x] Time left on the job card, learned from this PC's past dubs (ADR-018)
 - [x] Versioned site file addresses so a release never shows old styles (v0.3.1, ADR-018 follow-up)
 - [x] Installer stall after "Obtaining file:///…": build isolation removed + `install.log` (v0.3.1) — Adam: works
+- [x] Each dub of a video is its own library entry; watch page links the other dubs (v0.4.1, ADR-022)
 
 ### M4 — Nice to have
 - [ ] Queue of several links / playlists
@@ -108,5 +109,7 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - Claude key for translation: built (ADR-017); Adam decides whether to buy credit. Estimate at 2026-10 prices: ~$0.10 per 10 min of
   speech on Opus 5.5 ($4/$20 per M tokens), ~$0.05 on Sonnet 5.5, under $0.01 on Haiku 5.5. The key would stay on
   the PC (env var), with a monthly spend limit set in the Anthropic Console; no payment code in Dubber.
-- Should one video keep several dub languages in the library (today a new language replaces the old dub)?
+- ~~Should one video keep several dub languages in the library?~~ — yes, one entry per dub; same choices replace
+  it (Adam, 2026-10-18, ADR-022, v0.4.1).
+- Hosting on Hugging Face Spaces: researched, not now — YouTube blocks its servers (ADR-023).
 - Windows confirmed for Adam's PC and the father's PC (Adam, 2026-10-17).
