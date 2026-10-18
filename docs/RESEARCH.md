@@ -243,7 +243,7 @@ Question (Adam): could Dubber run as a Hugging Face Space instead of on the home
 | Storage | Disk is **ephemeral** (lost on restart/sleep); persistence = attached **Storage Bucket** ($18/TB/month private) | library + `work/` cache need a bucket mounted as `output/`, `work/`; cents per month at our size |
 | Sleep | free hardware sleeps after ~48 h unused, wakes on visit (cold start: models re-download unless cached in the bucket) | first dub after a pause is slower |
 | Secrets | Space Secrets → env vars | Claude key as `DUBBER_CLAUDE_KEY`-style secret, not in `.env` |
-| Access | Private Space: only signed-in owner/collaborators; Protected (PRO): code private, app public | public app = anyone could spend the Claude key; private needs the father to have an HF account and log in |
+| Access | Private Space: only signed-in owner/collaborators; Protected (PRO): code private, app public | public app = anyone could spend the Claude key; private needs every user to have an HF account and log in |
 | Network | outbound only ports 80/443/8080 | fine: Edge TTS, Anthropic, Google, Hugging Face are all 443 |
 
 **The blocker — YouTube.** YouTube answers datacenter IPs with "Sign in to confirm you're not a bot"; users report

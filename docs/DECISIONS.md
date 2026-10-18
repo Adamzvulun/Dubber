@@ -32,7 +32,7 @@ Newest at the bottom. Format: context → decision → consequences.
   schema + count check + retry in halves), server-side refusal fallback. Override with `DUBBER_CLAUDE_MODEL`.
 - **Consequences:** ~$0.05–0.20 per 10-minute video. Only used when `ANTHROPIC_API_KEY` is set.
 
-## ADR-007 — Web UI with Gradio, designed for an older non-technical Russian reader (2026-10-16) — superseded by ADR-010
+## ADR-007 — Web UI with Gradio, designed for a non-technical Russian reader (2026-10-16) — superseded by ADR-010
 - **Decision:** One column, 18px+ text, one big primary action, PT Sans / PT Serif (ParaType fonts made for Cyrillic),
   calm slate + blue palette, all text in Russian, errors that say what to do. Result video hidden until it exists.
 - **Consequences:** No custom frontend to maintain; Gradio gives progress bar, player and downloads for free.
@@ -52,7 +52,7 @@ Newest at the bottom. Format: context → decision → consequences.
   (datacenters/VPNs); a spare Google account is recommended because YouTube may flag the account.
 
 ## ADR-010 — Custom website instead of Gradio (2026-10-16)
-- **Context:** Adam wants a modern, professional site; his father is a professional, not an elderly beginner
+- **Context:** Adam wants a modern, professional site; the user is a professional, not a beginner
   (ADR-007's assumption was wrong). Gradio limits layout and always looks like a demo.
 - **Decision:** FastAPI server (`dubber/app.py`) with a small JSON API + a hand-built front-end (`dubber/web/`, plain
   HTML/CSS/JS, no build step). Pages: new video, library, watch page with a synced bilingual transcript.
@@ -115,7 +115,7 @@ Newest at the bottom. Format: context → decision → consequences.
   NLLB is good but not Google-grade (see RESEARCH "Every dub language"); a Claude key remains the quality option.
 
 ## ADR-017 — Claude translation from the website: key in settings, whole-video context, fallback chain (2026-10-17)
-- **Context:** Adam wants the paid Claude option usable by his father (Windows, not a developer), with a general
+- **Context:** Adam wants the paid Claude option usable by a non-developer on Windows, with a general
   glossary (any topic). He also reported worse translation and timing after ADR-016; dub-length lines address timing
   directly. The old Claude path was CLI/env-only, not installed by the Windows installer, failed the whole dub on a
   bad key, got one-language batches without timing, and shared the free engines' cache.
@@ -229,7 +229,7 @@ Newest at the bottom. Format: context → decision → consequences.
   entry on every run (duplicates to clean up by hand).
 
 ## ADR-023 — Hosting on Hugging Face Spaces: researched, not adopted for now (2026-10-18)
-- **Context:** Adam asked whether Hugging Face Spaces could host Dubber (no install on the father's PC, open from
+- **Context:** Adam asked whether Hugging Face Spaces could host Dubber (no install on the user's PC, open from
   anywhere). Details and sources: `RESEARCH.md` → "Hosting on Hugging Face Spaces".
 - **Decision:** stay on the home PC for now. The app itself would run on a Docker Space unchanged, but: YouTube
   blocks Hugging Face's datacenter addresses (the main input fails — the same block we hit in the cloud sandbox),

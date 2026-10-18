@@ -84,8 +84,8 @@ Newest entries at the top. One entry per working session / milestone.
   website); its README lists the cache files needed for the translation/timing regression.
 
 ## 2026-10-17 — Session 2: Adam's feedback after the re-dub
-- Adam: the EN+FR video now works, but translation quality and timing feel worse than before; the father will use
-  Dubber for every topic (general glossary, not a field list); his PC is Windows; still deciding on a Claude key.
+- Adam: the EN+FR video now works, but translation quality and timing feel worse than before; Dubber will be
+  used for every topic (general glossary, not a field list); target PC is Windows; still deciding on a Claude key.
 - Bug: after dubbing a video into Russian and then into Hebrew, the watch page showed Hebrew text and voice name but
   played the Russian dub. Cause: `dubbed.mp4` keeps its URL and was served without cache headers, so Chrome reused its
   copy. Fix: the video URL carries a version (`?v=` from the file's mtime + size) and `/files/` answers
@@ -181,7 +181,7 @@ Newest entries at the top. One entry per working session / milestone.
 - Explained to Adam how to install on his PC (branch `claude/bold-davinci-qfv627`, `scripts/install_windows.bat`).
 
 ## 2026-10-16 — Session 1c: professional website
-- Adam: the father is a professional, not elderly → modern product look. Researched design guidance and dubbing
+- Adam: the user is a professional, not a beginner → modern product look. Researched design guidance and dubbing
   products; wrote `docs/DESIGN.md` (tokens, Onest + Unbounded fonts, cobalt accent, red "live" lamp, dark mode).
 - Replaced Gradio with a FastAPI + hand-built site (`dubber/web/`): new-video page with live 6-step job card,
   library with thumbnails, watch page with player, RU/EN subtitles and a synced bilingual transcript.
@@ -224,10 +224,10 @@ Newest entries at the top. One entry per working session / milestone.
   - UX bug: for the whole run the page showed nothing (progress bar had no visible place). Fix: fixed-height status
     area + `show_progress="full"` → live bar "Озвучиваю по-русски – 63.7 %". Screenshots in `docs/images/`.
 - Not verifiable here: in-page playback (headless Chromium lacks H.264), Windows installer, Google translation
-  quality (Google blocks this server; the father's home connection should be fine).
+  quality (Google blocks this server; a home connection should be fine).
 
 ## 2026-10-16 — Session 1: research, skills, foundation
-- Agreed scope with Adam: runs on father's PC, free-first, outputs = dubbed MP4 + RU subtitles + transcript.
+- Agreed scope with Adam: runs on the user's PC, free-first, outputs = dubbed MP4 + RU subtitles + transcript.
 - Researched existing dubbing projects and building blocks → `docs/RESEARCH.md`.
 - Searched GitHub for Claude skills; cloned 11 repos, reviewed code, installed 12 skills → `docs/SKILLS.md`.
   Removed one auto-installing script from `youtube-downloader`; skipped two unlicensed skills.

@@ -7,7 +7,7 @@ Japanese) and get back:
 - **subtitles** in the dub language (`.srt`, also embedded in the MP4),
 - **a transcript**, plus a bilingual original + translation transcript for studying.
 
-Built for a Russian-speaking professional who learns from foreign videos. Runs on your own PC, free by default.
+Made for people who learn from videos in other languages. Runs on your own PC, free by default.
 The website has a Russian/English interface switch; a running dub can be cancelled (and resumed later).
 Russian user guide: [`docs/README.ru.md`](docs/README.ru.md). Design: [`docs/DESIGN.md`](docs/DESIGN.md).
 
