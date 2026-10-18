@@ -2,6 +2,28 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-18 — Session 4c: trim personal details, full QA pass (v0.5.1)
+- Adam: 0.5.0 works. Asked to trim the personal details about the end user (current files only; "Adam" stays as
+  maintainer), to run the QA agents again over everything, and for ideas.
+- Three QA agents: guideline audit (`web-design-guidelines`), hands-on Playwright tester (6 pages × RU/EN ×
+  light/dark × 360/768/1280), code review of the session-4 code with reproductions.
+- **Updater made safe to fail** (code review, reproduced): the version file is now written last, after the
+  components installed — a failed pip or a locked file (Windows antivirus) leaves the old version, so the next start
+  retries (`.dubber-deps` stamp reruns pip until it succeeded); file errors no longer stop the start; stray
+  `.partial` files removed; ZIP names / manifest lines confined to the folder; one website update at a time and no
+  new dub meanwhile; 3 s graceful shutdown on restart (open video streams); Ctrl+C doesn't kill the new version;
+  unusual video ids of other sites get a safe library folder name. 5 new tests.
+- **UI fixes:** update banner stuck on «Обновляю…» (never showed the restart note); dubs differing only in the
+  background got identical labels (now «без фона»); delete dialog names the dub and says other dubs stay; footer
+  aligned with content and consistent space below pages; no blue frame around the page after keyboard navigation;
+  "г." no longer wraps alone; one term for voice removal («голос диктора»); hero tense; «Установить обновление»;
+  window name «Дубляж видео»; EN "audio" everywhere; glossary example never splits; status role on the banner text
+  only; labelled download / other-dubs groups; key error re-translated on RU/EN switch; job clock starts when the
+  job leaves the queue (`started`); clearer "key too short" message; no unhandled `play()` rejection.
+- Not changed (by design): `https://localhost` accepted (developer use); remove-voice switch keeps its state while
+  disabled (ignored on submit); a pre-0.4.1 dub redone with identical choices shows twice (rare, old entries only).
+- Verified in Chromium after the fixes (banner restart note RU/EN, labels, delete text, footer, focus). 118 tests.
+
 ## 2026-10-18 — Session 4b: the program updates itself (v0.5.0)
 - Adam: the hosting question was really "stop downloading the ZIP after every merge". He will make the repo public
   and wants updates both at start and with a button.

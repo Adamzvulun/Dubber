@@ -70,7 +70,8 @@ button, a, label, select, input { touch-action: manipulation; -webkit-tap-highli
 .skip:focus { top: 12px; }
 .link { color: var(--accent); text-decoration: none; font-weight: 500; }
 .link:hover { text-decoration: underline; }
-main { padding-bottom: 80px; outline: none; }
+main.wrap { padding-bottom: 80px; }
+#main:focus, #main:focus-visible { outline: none; } /* focus moves here on navigation; no frame around the page */
 [hidden] { display: none !important; }
 
 /* ---------- header ---------- */
@@ -243,7 +244,7 @@ main { padding-bottom: 80px; outline: none; }
 .nav__settings { display: inline-flex; align-items: center; gap: 6px; }
 .nav__settings svg { width: 18px; height: 18px; flex: none; }
 .composer__note { margin-top: 16px; font-size: 14px; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 4px 10px; }
-.settings { display: grid; gap: 22px; max-width: 760px; padding-bottom: 64px; }
+.settings { display: grid; gap: 22px; max-width: 760px; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); padding: 24px; display: grid; gap: 16px; min-width: 0; }
 .panel__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .panel__lead { color: var(--ink-2); font-size: 15px; max-width: 64ch; }
@@ -277,7 +278,7 @@ main { padding-bottom: 80px; outline: none; }
 .update[hidden] { display: none; }
 .update__text { font-size: 15px; }
 
-.footer { padding: 32px 0 28px; color: var(--ink-2); font-size: 13px; }
+.footer { padding-top: 32px; padding-bottom: 28px; color: var(--ink-2); font-size: 13px; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 900px) {

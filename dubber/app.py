@@ -158,6 +158,7 @@ class Job:
     error_en: str = ""
     video_id: str = ""
     created: float = field(default_factory=time.time)
+    started: float = 0.0  # when it left the queue (the job card's clock starts here)
     cancel_requested: bool = False
     _tracker: eta.Tracker | None = field(default=None, repr=False)  # stage timings → time left
     _shares: dict = field(default_factory=dict, repr=False)
@@ -215,7 +216,7 @@ class JobRunner:
             job = self._queue.get()
             if job.status == "cancelled":
                 continue
-            job.status, job.label = "running", "Начинаю"
+            job.status, job.label, job.started = "running", "Начинаю", time.time()
             job._tracker = eta.Tracker(
                 [(key, weight) for key, _, weight in pipeline.stages(job.remove_voice)], self.clock)
             job._shares = eta.load_shares(self.history)
@@ -500,8 +501,10 @@ def create_app(
     def set_claude_key(req: KeyRequest) -> dict:
         key = req.key.strip()
         if not key.startswith("sk-ant-") or len(key) < 20 or any(c.isspace() for c in key):
-            raise HTTPException(422, _detail("Это не похоже на ключ Anthropic: он начинается с sk-ant-",
-                                             "This doesn't look like an Anthropic key: it starts with sk-ant-"))
+            raise HTTPException(422, _detail("Это не похоже на ключ Anthropic: он начинается с sk-ant- и длиннее. "
+                                             "Скопируйте его полностью.",
+                                             "This doesn't look like an Anthropic key: it starts with sk-ant- and is "
+                                             "longer. Copy it completely."))
         try:
             check_key(key)
         except translate.TranslatorUnavailable as exc:

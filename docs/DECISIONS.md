@@ -257,4 +257,7 @@ Newest at the bottom. Format: context → decision → consequences.
   runs).
 - **Consequences:** a merge into `main` reaches the PCs on their next start, so `main` must stay releasable and every
   release must bump the version. Each in-session update leaves the old process waiting for the new one (a few MB).
+- **Follow-up (v0.5.1, QA):** `dubber/__init__.py` is written last, after `pip`; a `.dubber-deps` stamp (sha1 of
+  the installed `pyproject.toml`, "pending" while installing) reruns pip until it succeeded — so any failed update
+  leaves the old version and is retried on the next start.
 

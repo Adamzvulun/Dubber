@@ -2,7 +2,7 @@
 
 import os
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 # Hugging Face's newer "Xet" downloader failed on a real Windows PC ("CAS Client Error ... error sending request")
 # where plain HTTPS works; use plain HTTPS unless the user chose otherwise. Must be set before huggingface_hub loads.
