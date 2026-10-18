@@ -3,7 +3,8 @@
 Run: `python -m dubber.app` → opens http://127.0.0.1:7860
 
 API
-- POST /api/jobs {url, voice: "male"|"female", background: bool, lang} → start dubbing (one job at a time)
+- POST /api/jobs {url, voice: "male"|"female", background: bool, lang, remove_voice: bool} → start dubbing (one job at
+  a time); remove_voice keeps the music under the dub but not the speaker's voice
 - GET  /api/languages                                              → dub languages (code, names, voices)
 - GET  /api/jobs, /api/jobs/{id}                                   → progress, elapsed, rough time left (eta.py)
 - GET  /api/version                                                 → {"version"} (shown in the page footer)
@@ -144,6 +145,7 @@ class Job:
     voice: str  # "male" | "female"
     background: bool
     lang: str = languages.DEFAULT  # dub language
+    remove_voice: bool = False  # keep music and sounds, remove the speaker's voice (Demucs)
     status: str = "queued"  # queued | running | done | error | cancelled
     stage: str = ""
     label: str = "В очереди"
@@ -180,8 +182,11 @@ class JobRunner:
         self._queue: queue.Queue[Job] = queue.Queue()
         threading.Thread(target=self._work, daemon=True).start()
 
-    def submit(self, url: str, voice: str, background: bool, lang: str = languages.DEFAULT) -> Job:
-        job = Job(id=uuid.uuid4().hex[:12], url=url, voice=voice, background=background, lang=lang)
+    def submit(
+        self, url: str, voice: str, background: bool, lang: str = languages.DEFAULT, remove_voice: bool = False,
+    ) -> Job:
+        job = Job(id=uuid.uuid4().hex[:12], url=url, voice=voice, background=background, lang=lang,
+                  remove_voice=remove_voice and background)
         self.jobs[job.id] = job
         self._queue.put(job)
         return job
@@ -207,11 +212,12 @@ class JobRunner:
             if job.status == "cancelled":
                 continue
             job.status, job.label = "running", "Начинаю"
-            job._tracker = eta.Tracker([(key, weight) for key, _, weight in pipeline.STAGES], self.clock)
+            job._tracker = eta.Tracker(
+                [(key, weight) for key, _, weight in pipeline.stages(job.remove_voice)], self.clock)
             job._shares = eta.load_shares(self.history)
             settings = dataclasses.replace(
                 self.settings, target_lang=job.lang, voice=languages.voice_for(job.lang, job.voice),
-                keep_background=job.background,
+                keep_background=job.background, remove_voice=job.remove_voice,
             )
 
             def progress(label: str, fraction: float, job: Job = job) -> None:
@@ -264,6 +270,7 @@ class JobRequest(BaseModel):
     voice: str = "male"
     background: bool = True
     lang: str = languages.DEFAULT
+    remove_voice: bool = False
 
 
 def _read_meta(folder: Path) -> dict | None:
@@ -341,7 +348,7 @@ def create_app(
             raise HTTPException(422, _detail("Неизвестный голос", "Unknown voice"))
         if req.lang not in languages.LANGUAGES:
             raise HTTPException(422, _detail("Неизвестный язык", "Unknown language"))
-        return jobs.submit(url, req.voice, req.background, req.lang).public()
+        return jobs.submit(url, req.voice, req.background, req.lang, req.remove_voice).public()
 
     @app.get("/", include_in_schema=False)
     @app.get("/index.html", include_in_schema=False)

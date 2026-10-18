@@ -83,6 +83,45 @@ def test_without_background_russian_voice_only(tmp_path, sample_video):
     assert abs(len(audio) / 16000 - 6.0) < 0.3
 
 
+def test_remove_voice_puts_the_voice_free_background_under_the_dub(tmp_path, sample_video):
+    """Opt-in Demucs stage: the separated background (here a stand-in: a 900 Hz tone) replaces the original."""
+    import numpy as np
+
+    from dubber.media import decode_audio, run_ffmpeg
+
+    calls, labels = [], []
+
+    def stub_separator(video, out_wav, progress=None):
+        calls.append(video)
+        run_ffmpeg(["-f", "lavfi", "-i", "sine=frequency=900:duration=6", "-ac", "2", "-ar", "44100", str(out_wav)])
+        progress(1.0)
+        return out_wav
+
+    settings = Settings(work_dir=tmp_path / "work", output_dir=tmp_path / "out", remove_voice=True)
+    result = pipeline.run(str(sample_video), settings, progress=lambda label, f: labels.append(label),
+                          translator=StubTranslator(), synth=stub_synth, transcriber=stub_transcriber,
+                          separator=stub_separator)
+    assert len(calls) == 1 and "Убираю оригинальный голос" in labels
+    assert json.loads((result.folder / "meta.json").read_text(encoding="utf-8"))["remove_voice"] is True
+    dub = tmp_path / "dub.wav"
+    run_ffmpeg(["-i", str(result.video), "-map", "0:a:0", "-ac", "1", "-ar", "16000", str(dub)])
+    head = decode_audio(dub, 16000)[: int(0.4 * 16000)]  # before the first dubbed line: background only
+    spectrum = np.abs(np.fft.rfft(head))
+    freqs = np.fft.rfftfreq(len(head), 1 / 16000)
+    assert abs(freqs[spectrum.argmax()] - 900) < 10  # the separated background, not the original 300 Hz tone
+    kinds = json.loads(subprocess.run(
+        ["ffprobe", "-v", "error", "-print_format", "json", "-show_streams", str(result.video)],
+        capture_output=True, text=True, check=True).stdout)["streams"]
+    assert [s["codec_type"] for s in kinds].count("subtitle") == 1  # inputs shifted by one: subtitles still mapped
+
+
+def test_stages_weights_add_up_with_and_without_voice_removal():
+    for remove_voice in (False, True):
+        active = pipeline.stages(remove_voice)
+        assert abs(sum(w for *_, w in active) - 1) < 1e-9
+        assert ("separate" in [k for k, *_ in active]) is remove_voice
+
+
 def test_lines_are_cut_from_word_timings(tmp_path, sample_video):
     """With Whisper word timings, a chunk holding two sentences becomes two lines with speech-only bounds."""
     from dubber.segments import Word
@@ -242,8 +281,9 @@ def test_claude_translation_cache_cost_and_fallback(tmp_path, sample_video, monk
 
     made = []
 
-    def fake_make_backend(choice, model, glossary, target, api_key):
+    def fake_make_backend(choice, model, glossary, target, api_key, video):
         made.append((choice, model, glossary, api_key))
+        assert video == {"title": "sample", "channel": ""}  # the topic goes to Claude
         return engines.pop(0)
 
     monkeypatch.setattr(translate, "make_backend", fake_make_backend)
@@ -275,7 +315,13 @@ def test_claude_translation_cache_cost_and_fallback(tmp_path, sample_video, monk
     run()
     assert len(made) == 3
 
-    # 5. Without a key the free cache from step 1 is used.
+    # 5. A new prompt version translates again.
+    monkeypatch.setattr(translate, "CLAUDE_PROMPT_VERSION", translate.CLAUDE_PROMPT_VERSION + 1)
+    engines = [NamedTranslator("claude", cost=0.05)]
+    run()
+    assert len(made) == 4
+
+    # 6. Without a key the free cache from step 1 is used.
     settings.claude_key = ""
     meta = json.loads((run().folder / "meta.json").read_text(encoding="utf-8"))
-    assert meta["translator"] == "google" and len(made) == 3
+    assert meta["translator"] == "google" and len(made) == 4

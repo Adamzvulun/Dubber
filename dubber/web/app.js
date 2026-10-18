@@ -3,7 +3,7 @@
 "use strict";
 
 const $ = (sel, root = document) => root.querySelector(sel);
-const STEP_KEYS = ["download", "transcribe", "translate", "tts", "align", "mux"];
+const STEP_KEYS = ["download", "transcribe", "translate", "tts", "align", "separate", "mux"]; // matches t("steps")
 // Russian voices keep their Russian names in the Russian interface.
 const RU_VOICE_NAMES = { "ru-RU-DmitryNeural": "Дмитрий", "ru-RU-SvetlanaNeural": "Светлана" };
 const FALLBACK_LANGS = [{ code: "ru", name_ru: "Русский", name_en: "Russian", native: "Русский", rtl: false }];
@@ -168,10 +168,13 @@ function jobSignature(job) {
 }
 
 function jobCard(job) {
-  const activeIndex = STEP_KEYS.indexOf(job.stage);
+  // "separate" (removing the original voice) is a step only when the job asked for it.
+  const keys = STEP_KEYS.filter((k) => k !== "separate" || job.remove_voice);
+  const labels = t("steps").filter((_, i) => STEP_KEYS[i] !== "separate" || job.remove_voice);
+  const activeIndex = keys.indexOf(job.stage);
   const running = job.status === "running" || job.status === "queued";
   const started = job.status === "running";
-  const steps = el("ol", { class: "steps" }, ...t("steps").map((label, i) => {
+  const steps = el("ol", { class: "steps" }, ...labels.map((label, i) => {
     let cls = "";
     if (job.status === "done" || (running && activeIndex > i)) cls = "is-done";
     else if (running && activeIndex === i) cls = "is-active";
@@ -316,14 +319,14 @@ function showFormError(message) {
   else { error.hidden = true; error.textContent = ""; url.removeAttribute("aria-invalid"); }
 }
 
-async function startJob(url, voice, background, lang) {
+async function startJob(url, voice, background, lang, removeVoice = false) {
   if (state.submitting) return; // no double submits while the request is on its way
   state.submitting = true;
   const submit = $("#submit");
   showFormError("");
   submit.disabled = true; submit.textContent = t("form.sending");
   try {
-    await api("/api/jobs", { method: "POST", body: JSON.stringify({ url, voice, background, lang }) });
+    await api("/api/jobs", { method: "POST", body: JSON.stringify({ url, voice, background, lang, remove_voice: removeVoice }) });
     $("#url").value = "";
     pollJobs();
   } catch (e) {
@@ -343,7 +346,7 @@ async function cancelJob(job, button) {
 
 function retryJob(job) {
   dismissJob(job.id);
-  startJob(job.url, job.voice, job.background, job.lang || "ru");
+  startJob(job.url, job.voice, job.background, job.lang || "ru", job.remove_voice);
 }
 
 /* ---------- watch page ---------- */
@@ -404,6 +407,7 @@ function renderWatchDetails() {
   $("#watch-meta").replaceChildren(...[
     video.channel, clock(video.duration), langName(video.target_lang), t("watch.voice", voiceName(video.voice)),
     video.background === false ? t("watch.noBackground") : null,
+    video.remove_voice ? t("watch.noVoice") : null,
     ...translatorLabels(video), dateLabel(video.created),
   ].filter(Boolean).map((text) => el("span", { text })));
 
@@ -484,7 +488,11 @@ function fillLanguageSelect() {
 }
 
 function updateBackgroundHint() {
-  $("#background-hint").textContent = t($("#background").checked ? "form.background.on" : "form.background.off");
+  const background = $("#background").checked, removeVoice = $("#remove-voice");
+  $("#background-hint").textContent = t(background ? "form.background.on" : "form.background.off");
+  removeVoice.disabled = !background; // without a background there is no voice to remove
+  $("#remove-voice-hint").textContent = t(!background ? "form.removeVoice.disabled"
+    : removeVoice.checked ? "form.removeVoice.on" : "form.removeVoice.off");
 }
 
 /** Re-render everything after the interface language changes (without reloading the video). */
@@ -623,7 +631,8 @@ async function init() {
     const url = $("#url").value.trim();
     if (!looksLikeUrl(url)) { showFormError(t("form.badUrl")); $("#url").focus(); return; }
     const voice = new FormData(e.target).get("voice") || "male";
-    startJob(url, voice, $("#background").checked, $("#lang").value || "ru");
+    const background = $("#background").checked;
+    startJob(url, voice, background, $("#lang").value || "ru", background && $("#remove-voice").checked);
   });
 
   try { state.dubLang = localStorage.getItem("dubber.dubLang") || "ru"; } catch (_) {}
@@ -635,6 +644,7 @@ async function init() {
   // The skip link must not change the hash (that is the router's job): just move focus to the content.
   $(".skip").addEventListener("click", (e) => { e.preventDefault(); $("#main").focus(); });
   $("#background").addEventListener("change", updateBackgroundHint);
+  $("#remove-voice").addEventListener("change", updateBackgroundHint);
   document.querySelectorAll("[data-ui-lang]").forEach((b) => b.addEventListener("click", () => {
     setUiLang(b.dataset.uiLang); applyUiLang();
   }));

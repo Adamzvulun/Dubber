@@ -81,6 +81,12 @@ class Settings:
     keep_background: bool = field(
         default_factory=lambda: _env("DUBBER_KEEP_BACKGROUND", "1").lower() not in ("0", "false", "no")
     )
+    # Remove the speaker's voice from that background, keep music and sounds (Demucs; slower: +minutes per video)
+    remove_voice: bool = field(
+        default_factory=lambda: _env("DUBBER_REMOVE_VOICE", "0").lower() in ("1", "true", "yes")
+    )
+    # Volume of that voice-free background under the dub (it is lowered further while the dub speaks)
+    music_volume: float = field(default_factory=lambda: float(_env("DUBBER_MUSIC_VOLUME", "0.7")))
     # Max video height to download (keeps files small)
     max_height: int = field(default_factory=lambda: int(_env("DUBBER_MAX_HEIGHT", "720")))
 
