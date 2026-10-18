@@ -12,3 +12,4 @@ See docs/PLAN.md M3.
 
 ## Narrative
 - 2026-10-16: Card created during session 1 planning. (by @claude)
+- 2026-10-18: Demucs done (`kanban/voice-removal.md`). Voice speed in the UI still open. (by @claude)

@@ -14,7 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import align, languages, media, subtitles, timing, transcribe, translate, tts
+from . import align, languages, media, separate, subtitles, timing, transcribe, translate, tts
 from .config import Settings
 from .download import download, fetch_info, is_url, local_video_id
 from .mux import mux
@@ -23,15 +23,26 @@ from .segments import load_segments, merge_into_sentences, save_segments, split_
 # (message in Russian, overall fraction 0..1)
 ProgressFn = Callable[[str, float], None]
 
-# Share of the total progress bar for each stage (transcription is the slow one on CPU).
+# Share of the total progress bar for each stage (transcription is the slow one on CPU). "separate" only runs when
+# the original voice is removed (Settings.remove_voice); `stages()` gives the stages of one run.
 STAGES = [
     ("download", "Скачиваю видео", 0.10),
     ("transcribe", "Распознаю речь", 0.40),
     ("translate", "Перевожу", 0.10),
     ("tts", "Озвучиваю", 0.20),
     ("align", "Подгоняю озвучку по времени", 0.10),
+    ("separate", "Убираю оригинальный голос", 0.25),
     ("mux", "Собираю итоговое видео", 0.10),
 ]
+# (video, out_wav, progress) -> out_wav: the original soundtrack without the voice
+SeparateFn = Callable[..., Path]
+
+
+def stages(remove_voice: bool = False) -> list[tuple[str, str, float]]:
+    """The stages one run goes through, with weights that add up to 1."""
+    active = [s for s in STAGES if s[0] != "separate" or remove_voice]
+    total = sum(w for *_, w in active)
+    return [(key, label, w / total) for key, label, w in active]
 
 
 @dataclass
@@ -98,12 +109,13 @@ def timing_report(lines: list[dict]) -> dict:
 
 
 class _Progress:
-    def __init__(self, callback: ProgressFn | None):
+    def __init__(self, callback: ProgressFn | None, remove_voice: bool = False):
         self.callback = callback
         self.done = 0.0
+        self.stages = stages(remove_voice)
 
     def stage(self, key: str):
-        label, weight = next((lbl, w) for k, lbl, w in STAGES if k == key)
+        label, weight = next((lbl, w) for k, lbl, w in self.stages if k == key)
         base = self.done
         self.done += weight
 
@@ -138,10 +150,12 @@ def run(
     translator: translate.Backend | None = None,
     synth: tts.SynthFn | None = None,
     transcriber: Callable[[Path], list] | None = None,
+    separator: SeparateFn | None = None,
 ) -> Result:
     """Dub `source` (YouTube URL or local file). Backends can be injected (used by tests)."""
     media.require_ffmpeg()
-    p = _Progress(progress)
+    remove_voice = settings.keep_background and settings.remove_voice  # nothing to remove without a background
+    p = _Progress(progress, remove_voice)
 
     # 1. Download into work/<id>/ (skipped when a previous run already has the video).
     report = p.stage("download")
@@ -184,18 +198,20 @@ def run(
 
     # 3. Translate
     report = p.stage("translate")
-    # The free engines share one cache; a Claude translation has its own, keyed by model and glossary, so adding a
-    # key or editing the glossary translates again. A Claude run that fell back to Google is saved as a free one, so
-    # the next run tries Claude again (e.g. after credit was added).
+    # The free engines share one cache; a Claude translation has its own, keyed by model, glossary and prompt version,
+    # so adding a key, editing the glossary or improving the prompt translates again. A Claude run that fell back to
+    # Google is saved as a free one, so the next run tries Claude again (e.g. after credit was added).
     use_claude = translator is None and translate.uses_claude(settings.translator, settings.claude_key)
     glossary = settings.glossary() if use_claude else ""
     free_json = work / f"segments_{target.code}_v3.json"
-    tag = hashlib.sha1(f"{settings.claude_model}\n{glossary}".encode()).hexdigest()[:8]
+    tag = hashlib.sha1(
+        f"{settings.claude_model}\n{glossary}\n{translate.CLAUDE_PROMPT_VERSION}".encode()).hexdigest()[:8]
     claude_json = work / f"segments_{target.code}_v3_claude_{tag}.json"
     dub_json = claude_json if use_claude else free_json
     if not dub_json.exists():
         backend = translator or translate.make_backend(
-            settings.translator, settings.claude_model, glossary, target=target.code, api_key=settings.claude_key)
+            settings.translator, settings.claude_model, glossary, target=target.code, api_key=settings.claude_key,
+            video={"title": title, "channel": source_info["channel"]})
         translate.translate_segments(segments, backend)
         name = getattr(backend, "name", "")
         dub_json = claude_json if name == "claude" else free_json
@@ -232,7 +248,15 @@ def run(
             line["rate"] = round(rates[line["index"]], 3)
         timing_json.write_text(json.dumps(timing_report(lines), ensure_ascii=False, indent=1), encoding="utf-8")
 
-    # 6. Subtitles + final video, all in output/<id>/ (what the website's library reads)
+    # 6. Optional: the original soundtrack without the speaker's voice (cached per video, any dub language reuses it)
+    background_audio = None
+    if remove_voice:
+        report = p.stage("separate")
+        if media.has_audio(video):
+            background_audio = (separator or separate.separate_background)(
+                video, work / "background_htdemucs.wav", progress=report)
+
+    # 7. Subtitles + final video, all in output/<id>/ (what the website's library reads)
     report = p.stage("mux")
     folder = settings.output_dir / video_id
     files = subtitles.write_all(segments, folder, title, target=target.code, source=source_lang)
@@ -241,6 +265,7 @@ def run(
     mux(
         video, track, partial, dub_srt=files["dub_srt"],
         original_volume=settings.original_volume, background=settings.keep_background,
+        background_audio=background_audio, background_volume=settings.music_volume,
         dub_lang=target.iso3, dub_title=target.native,
         original_lang="mul" if len(source_langs) > 1 else languages.iso3(source_lang),
     )
@@ -257,6 +282,7 @@ def run(
         "duration": round(media.duration(video), 2),
         "voice": voice,
         "background": settings.keep_background,
+        "remove_voice": background_audio is not None,
         "target_lang": target.code,
         "source_lang": source_lang,
         "source_langs": source_langs,

@@ -65,10 +65,21 @@ def test_shares_learned_from_this_pc_blend_with_defaults(tmp_path):
         eta.record(path, slow_whisper)
     assert len(json.loads(path.read_text())) == eta.HISTORY  # capped
     shares = eta.load_shares(path)
-    assert abs(sum(shares.values()) - 1) < 1e-6
+    assert abs(sum(v for k, v in shares.items() if k != "separate") - 1) < 1e-6
     assert shares["transcribe"] > eta.DEFAULT_SHARES["transcribe"] + 0.15  # learned: Whisper dominates here
     eta.record(path, {"download": 1, "transcribe": 2})  # too short to learn from: ignored
     assert eta.load_shares(path) == shares
+
+
+def test_optional_voice_removal_learned_only_from_jobs_that_ran_it(tmp_path):
+    path = tmp_path / "stage_times.json"
+    plain = {"download": 10, "transcribe": 100, "translate": 10, "tts": 50, "align": 10, "mux": 20}
+    for _ in range(4):
+        eta.record(path, plain)
+    without = eta.load_shares(path)["separate"]
+    for _ in range(4):
+        eta.record(path, plain | {"separate": 400})  # this PC separates slowly
+    assert eta.load_shares(path)["separate"] > without + 0.5
 
 
 def test_broken_history_falls_back_to_defaults(tmp_path):

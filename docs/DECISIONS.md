@@ -168,3 +168,50 @@ Newest at the bottom. Format: context → decision → consequences.
   (Adam: Ctrl+F5 did not help in Opera GX).
 - **Consequences:** the first dubs on a new PC use the default shares; the estimate improves after a few dubs. Every
   release must bump `__version__` (and `pyproject.toml`).
+
+## ADR-019 — Hebrew voice: keep Edge with plain text; fix spelling in the translation (2026-10-18)
+- **Context:** Adam: the Hebrew dub mispronounces "almost every second word" — wrong stress and syllables, e.g. "the
+  rest" read "iter" instead of "yeter". Free tools only.
+- **Measured** (`tools/qa_hebrew_voice.py`, RESEARCH "Session 3"): 50 benchmark sentences with gold IPA + stress,
+  scored by a Hebrew-IPA Whisper. Word errors incl. stress: Edge Avri plain **0.231**, Phonikud Piper voice 0.233,
+  Edge Hila 0.256, Edge + niqqud on ambiguous words 0.251, Edge + full niqqud (Phonikud) 0.313.
+  Edge says יתר correctly in every context; it says the spelling **ייתר** "yiter" — the dub read a misspelling.
+- **Decision:** keep Edge with plain text (male voice is the default and scores best). Claude gets a spelling note
+  per dub language (`translate.SPEECH_NOTES`): Hebrew — standard ktiv male, no extra yod/vav, with the ייתר example;
+  Russian — write "ё". Part of the Claude prompt version (ADR-021), so cached Claude translations are redone.
+- **Rejected:** niqqud before Edge (Edge misreads vowelled text — worse in both variants); Phonikud's offline voice
+  (ties on accuracy, less natural, non-commercial licence, one more 60 MB model); paid voices (Adam: free only).
+- **Consequences:** the free Google/offline path gets no spelling rule (can't be prompted). Homographs and
+  grammatical gender (לך) stay a limit of any text-to-speech from plain text.
+
+## ADR-020 — Remove the speaker's voice, keep music and sounds (Demucs v4, ONNX on CPU) (2026-10-18)
+- **Context:** the original soundtrack plays quietly (15 %) under the dub, voice included, or not at all. Adam liked
+  the Demucs idea; off by default, a switch.
+- **Decision:** `dubber/separate.py` runs Demucs v4 `htdemucs` as ONNX (`StemSplitio/htdemucs-onnx`, fp16 weights,
+  166 MB, MIT, downloaded on first use from Hugging Face) with onnxruntime — already a dependency; background = drums
+  + bass + other. 7.8-s windows, quarter overlap with complementary cross-fades; audio read from and written to
+  memory-mapped files (an hour-long video never sits in memory). Cached as `work/<id>/background_htdemucs.wav` (any
+  dub language reuses it). A new stage "Убираю оригинальный голос" (`pipeline.stages()`, job card shows it only when
+  on; eta learns it only from jobs that ran it). Mix: background at 0.7, ducked by `sidechaincompress` while the dub
+  speaks; track 2 stays the untouched original. Website: switch «Убрать голос диктора» under the background switch
+  (disabled when the background is off); API/CLI/env: `remove_voice` / `--remove-voice` / `DUBBER_REMOVE_VOICE`.
+- **Rejected:** the `demucs` PyTorch package (≈ 200 MB+ torch on Windows, torchaudio saving breakage, weights host
+  blocked here); MDX-Net models via audio-separator (more dependencies); a three-way background menu (two switches
+  are simpler and the old `background` setting keeps its meaning).
+- **Consequences:** ≈ +5 min per 10 min of video on 4 CPU cores (measured idle; card claims 0.2× real time on a fast
+  CPU). The ONNX export is a community one: checked here by ear-free tests (no words left, music level unchanged).
+
+## ADR-021 — Transcription fixes and a better Claude request (2026-10-18)
+- **Context:** Adam: translations "still off sometimes, even with Opus". Measured on real recorded speech (FLEURS).
+- **Decision:**
+  - Language per region is chosen among the languages of the whole video (`transcribe.video_languages`: ≥ 15 % of
+    the speech or one sure ≥ 2 s region) — stray guesses (Hebrew regions called Italian/French) made gibberish.
+  - Language runs keep up to 1 s around them, never past the middle of the pause (0.2 s lost first words).
+  - Whisper `small` stays the default: `large-v3-turbo` is better on French/Hebrew but skipped an English sentence
+    twice, hallucinated short lines and is ~1.5× slower.
+  - Claude: the video's title/channel as topic; "text comes from speech recognition — translate what was most likely
+    said"; a line may be part of a sentence; meaning before the character budget; effort `low` → `medium`; spelling
+    notes (ADR-019). `CLAUDE_PROMPT_VERSION` is part of the Claude cache key.
+- **Consequences:** mixed EN+FR word errors 0.199 → 0.153 (English part 0.272 → 0.171); Hebrew regions all Hebrew.
+  The Claude changes are unit-tested only — no key in the sandbox; Adam's next dub with a key is the real check.
+  Cached Claude translations are redone once (cost of one translation per video).

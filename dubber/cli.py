@@ -16,6 +16,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--voice", help="male / female, or an edge-tts voice, e.g. ru-RU-SvetlanaNeural")
     parser.add_argument("--whisper-model", help="tiny / base / small / medium / large-v3")
     parser.add_argument("--translator", choices=["auto", "google", "claude", "offline"])
+    parser.add_argument("--remove-voice", action="store_true",
+                        help="keep music and sounds under the dub, without the speaker's voice (slower)")
     args = parser.parse_args(argv)
 
     settings = load_settings()
@@ -27,6 +29,8 @@ def main(argv: list[str] | None = None) -> int:
         settings.whisper_model = args.whisper_model
     if args.translator:
         settings.translator = args.translator
+    if args.remove_voice:
+        settings.remove_voice = True
 
     def progress(label: str, fraction: float) -> None:
         print(f"\r[{fraction * 100:5.1f}%] {label}...".ljust(60), end="", flush=True)

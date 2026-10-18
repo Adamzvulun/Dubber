@@ -1,16 +1,16 @@
 # Status — read this first
 
-_Last updated: 2026-10-18 (end of session 2). Update this page at the end of every session._
+_Last updated: 2026-10-18 (session 3). Update this page at the end of every session._
 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video in **any spoken language** (also
 mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by default) with subtitles and
 transcripts. Built for Adam's father, a Russian-speaking professional (Windows PC, watches videos on every topic).
-It runs on **Adam's Windows PC**. Current version **0.3.1** (shown in the page footer). Session 2 added: the `main`
-branch + PR workflow + CI, the Claude translation option (Settings page: key, model, glossary), a time-left estimate,
-and fixes so updates are always visible. **Open:** Adam's report that translation/timing got worse after the
-language work (waiting for his files), the installer seeming stuck after "Obtaining file:///…" (changed in 0.3.1,
-waiting for his re-run), and a first real dub with a Claude key.
+It runs on **Adam's Windows PC**. Current version **0.4.0** (shown in the page footer). Session 3 (Adam: 0.3.1
+installs fine): measured the Hebrew voice (plain Edge is the best free option; his "iter" was the spelling ייתר →
+spelling notes for Claude), fixed two transcription bugs found on real speech (stray language guesses, lost first
+words at language switches), improved the Claude request, and added an optional **voice removal** switch (Demucs,
+music stays). **Open:** Adam listens to a v0.4.0 Hebrew dub and an English dub with Claude.
 
 ## Where things are
 - **Git:** `main` = stable; Adam installs from its ZIP. Work happens on a branch + PR into `main`; CI (lint + tests)
@@ -18,8 +18,9 @@ waiting for his re-run), and a first real dub with a Claude key.
   fixes and follow-ups to the current work go on the same branch** (this session: `claude/inspiring-davinci-4qon8o`).
   Details: `CONTRIBUTING.md`. Files Adam shares arrive on `uploads/…` branches in `dev-uploads/`.
 - **Code:** `dubber/` (pipeline stages, `app.py` = server/API/jobs/settings, `eta.py` = time left, `config.py` =
-  settings + `save_env`), `dubber/web/` (site; `i18n.js` = all UI text RU/EN), `tests/` (90 tests, offline),
-  `tools/` (stub server, 12-language QA), `scripts/` (installers/launchers). Conventions: `CLAUDE.md`.
+  settings + `save_env`, `separate.py` = voice removal), `dubber/web/` (site; `i18n.js` = all UI text RU/EN),
+  `tests/` (100 tests, offline), `tools/` (stub server, 12-language QA, Hebrew voice QA), `scripts/`
+  (installers/launchers). Conventions: `CLAUDE.md`.
 - **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…018), `DESIGN.md`
   (design system), `RESEARCH.md` (tools, timing research, 12-language QA), `SKILLS.md`, `README.ru.md` (father's
   guide: install, update, Claude key, troubleshooting). Task cards: `kanban/` (hand-off list: `kanban/next-steps.md`).
@@ -27,21 +28,30 @@ waiting for his re-run), and a first real dub with a Claude key.
   `glossary.txt`, `install.log` (last installer run), `work/<id>/` = cache per video (`source.mp4`, `info.json`,
   `segments_src_v3.json` = what was said with each line's language, `speech_info.json`, `segments_<lang>_v3.json` (free
   engines) / `segments_<lang>_v3_claude_<hash>.json` + `.info.json` (engine, cost, notes), `clips_<voice>/`,
-  `dub_track_<voice>_<hash>.wav`, `timing_<voice>_<hash>.json`), `work/stage_times.json` (stage timings of the last
+  `dub_track_<voice>_<hash>.wav`, `timing_<voice>_<hash>.json`, `background_htdemucs.wav` = original without the
+  voice, only when that switch was on), `work/stage_times.json` (stage timings of the last
   10 dubs, for the time-left estimate); `output/<id>/` = what the library shows (`dubbed.mp4`, `meta.json` with
   languages/files/translator/cost, `thumbnail.jpg`, `segments.json`, `timing.json`, subtitles, transcripts).
   One video = one library entry: dubbing it into another language replaces the previous dub.
 
 ## How it works (one line per stage — details in the `dubber-pipeline` skill)
 1. Download (yt-dlp + deno) → 2. Transcribe: Whisper `base` detects the language of every speech region, Whisper
-`small` transcribes each language run with word timings → sentence lines (`segments.split_into_units`) → 3. Translate
+`small` transcribes each language run with word timings (each region gets one of the video's languages,
+`transcribe.video_languages`; runs keep up to 1 s around them) → sentence lines (`segments.split_into_units`) → 3. Translate
 (`translate.Translator`): lines already in the dub language kept; Claude (opt-in key) gets the whole video with time
 slots, else one-language batches to Google (retries 2-4-8-16-30 s); fallback chain Claude → Google → NLLB-200 1.3B
 offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 `timing.plan_rates`) → 5. Align (trim Edge silence, lines on the speaker's start times, ≤1.1× correction) → 6. Mux
-(language tags) + subtitles + meta.
+(language tags) + subtitles + meta. Optional before 6: `separate.py` (Demucs ONNX) removes the
+original voice; the voice-free background goes under the dub, ducked while it speaks.
 
 ## What works (verified by running it)
+- **0.4.0 — voice removal (ADR-020):** switch «Убрать голос диктора» (off by default), CLI `--remove-voice`; on a
+  test mix no words remain in the background and the music level is unchanged; end-to-end dub verified (Russian
+  voice + music, original track intact); ≈ +5 min per 10-min video on 4 cores. UI checked RU/EN, 360 px, dark.
+- **Transcription fixes (ADR-021):** on real FLEURS speech, mixed EN+FR errors 0.199 → 0.153; Hebrew regions no
+  longer transcribed as Italian/French.
+- **Hebrew voice measured (ADR-019):** `tools/qa_hebrew_voice.py`; plain Edge kept.
 - **0.3.1 — updates always visible (ADR-018):** the app serves `index.html` with versioned file addresses
   (`?v=<version>.<newest file time>`) + `no-cache`; reproduced Adam's "new page, old styles" and verified fixed; a
   simulated next release shows on the first open. A second start says "already running (version …)" instead of
@@ -57,23 +67,20 @@ offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 - Timing (ADR-013), all 12 dub languages (ADR-014/016: 24 real QA dubs), real YouTube runs (session 1).
 
 ## Not verified yet
-1. **A real Claude translation** (needs Adam's key): quality, cost, and whether timing beats the free path.
-2. **Installer change in 0.3.1** (no pip build isolation + `install.log`): verified in a fresh Linux venv only; Adam's
-   Windows run pending.
+1. **Claude request v2** (ADR-021, spelling notes ADR-019): unit-tested only (no key here). Adam's first dub on 0.4.0
+   with Claude re-translates once (new prompt version) — check quality and `meta.json` cost.
+2. Voice removal speed and quality on Adam's PC and on real videos (music, noise, several speakers).
 3. **Google translation end-to-end** (Google answers this sandbox with HTTP 429; Adam's PC normally gets Google).
 4. H.264 playback in a real Chrome/Edge; the fixed desktop shortcut (Cyrillic name) — not re-reported by Adam.
 
 ## Next steps (in order)
-1. **Adam updates to 0.3.1** (close windows → extract over the old folder → `install_windows.bat`; clear cached files
-   once if the page looks broken). Confirm: footer 0.3.1, Settings page looks right. If the installer stalls again:
-   ask for `install.log` (in the program folder) on an `uploads/…` branch.
-2. **Translation/timing regression** (`kanban/translation-timing-regression.md`): read his files from `dev-uploads/`
-   (on an `uploads/…` branch), compare old (`*_v2`) and new (`*_v3`) caches, find the cause, fix.
-3. **First dub with a Claude key**: check `meta.json` (translator, cost) and `timing.json` against a free dub;
-   calibrate `languages.chars_per_second` if lines run long.
-4. Product ideas to offer: several dub languages of one video in the library; upload a local file from the website;
-   voice speed control; Demucs (keep music without the original voice); queue (PLAN M3/M4).
-5. Known offline-backup slips: Hebrew "flour" → "acid/vinegar"; speaker gender unknown to the translator.
+1. **Adam updates to 0.4.0** and listens: a Hebrew dub (is the pronunciation acceptable now that Claude spells for
+   the voice?), an English dub with Claude (translation), one dub with «Убрать голос диктора».
+2. If Hebrew misspellings also come from the free path (Google/offline), add a spelling fix there (PLAN M7).
+3. Product ideas to offer: several dub languages of one video in the library; upload a local file from the website;
+   voice speed control; queue (PLAN M3/M4).
+4. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;
+   speaker gender unknown to the translator; offline-backup slips (Hebrew "flour" → "acid/vinegar").
 
 ## Gotchas for Claude in the cloud sandbox
 - **Network:** the environment needs these hosts allowed (or "Full" access): `youtube.com`, `*.youtube.com`,
@@ -90,6 +97,8 @@ offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
   `ffmpeg -t 70 -i dubbed.mp4 -map 0:v:0 -map 0:a:0 -c:v libvpx-vp9 -b:v 300k -deadline realtime -cpu-used 8 -c:a libopus out.mp4`.
 - **Playwright:** the venv has no playwright; use a separate venv (`python3 -m venv /tmp/pw && /tmp/pw/bin/pip install
   playwright`) and launch with `executable_path="/opt/pw-browsers/chromium"`; never run `playwright install`.
+- **Killing:** `pkill -f X` / `pgrep -f X` also match your own shell command (exit 144) — even inside a wait loop.
+  Use the PID (`$!`) or `pgrep -f "python -I .*script"`.
 - **Killing a server:** `pkill -f dubber.app` also kills your own shell (exit 144). Kill by PID
   (`... & echo $! > pid` when starting, then `kill $(cat pid)`).
 - **Copyright:** test dubs of third-party videos are for Adam's personal review only — don't commit or publish them or

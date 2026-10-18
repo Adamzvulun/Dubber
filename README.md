@@ -17,6 +17,7 @@ Russian user guide: [`docs/README.ru.md`](docs/README.ru.md). Design: [`docs/DES
 ```
 YouTube ─yt-dlp─► video ─faster-whisper (language per stretch of speech)─► text ─Google/Claude─► translation
         ─edge-tts─► voice in the dub language ─align─► timed track ─ffmpeg─► dubbed MP4 + SRT + TXT
+        (optional: Demucs removes the original voice, keeping music and sounds under the dub)
 ```
 Details and tool research: [`docs/RESEARCH.md`](docs/RESEARCH.md). Why each choice: [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
@@ -50,7 +51,7 @@ only its last 4 characters are ever shown), the model, Claude on/off, and a glos
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `DUBBER_WHISPER_MODEL` | `small` | `tiny`/`base` faster, `medium`/`large-v3` more accurate (GPU recommended) |
+| `DUBBER_WHISPER_MODEL` | `small` | `tiny`/`base` faster; `large-v3-turbo` more accurate on French/Hebrew but ~1.5× slower and it skipped English lines in tests (RESEARCH "Session 3") |
 | `DUBBER_VOICE` | `ru-RU-DmitryNeural` | or `ru-RU-SvetlanaNeural` |
 | `DUBBER_TRANSLATOR` | `auto` | `auto` = Claude if a key is set, else free Google; `google` (free only), `claude`, `offline` (NLLB on this PC). Fallback chain: Claude → Google → offline |
 | `ANTHROPIC_API_KEY` | – | enables Claude translation (paid, ~$0.09 per 10 min of speech on Opus 5.5) — normally entered on the website's **Settings** page, which saves it here |
@@ -58,6 +59,8 @@ only its last 4 characters are ever shown), the model, Claude on/off, and a glos
 | `DUBBER_COOKIES` | – | path to a `cookies.txt` exported from your browser, if YouTube says "confirm you're not a bot" |
 | `DUBBER_LANG` | `ru` | default dub language (`ru en he uk es fr de it pt ar zh ja`) |
 | `DUBBER_KEEP_BACKGROUND` | `1` | `0` = only the dubbed voice, without the original sound underneath (also a switch on the website) |
+| `DUBBER_REMOVE_VOICE` | `0` | `1` = keep music and sounds under the dub but remove the speaker's voice (Demucs, ≈ +5 min per 10 min of video on 4 cores; also a switch on the website, CLI `--remove-voice`) |
+| `DUBBER_MUSIC_VOLUME` | `0.7` | loudness of that voice-free background (lowered further while the dub speaks) |
 | `DUBBER_MAX_SPEEDUP` | `1.6` | fastest the dub voice may speak (1.6 = 60% faster than natural) to keep the speaker's timing |
 | `DUBBER_ORIGINAL_VOLUME` | `0.15` | loudness of the original under the dub |
 

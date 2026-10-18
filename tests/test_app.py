@@ -101,6 +101,27 @@ def test_job_runs_with_chosen_voice_and_background(tmp_path):
     assert seen == {"url": "https://youtu.be/x", "voice": "ru-RU-SvetlanaNeural", "background": False}
 
 
+def test_remove_voice_reaches_the_pipeline_only_with_a_background(tmp_path):
+    seen = []
+
+    def runner(url, settings, progress):
+        seen.append(settings.remove_voice)
+        progress("Убираю оригинальный голос", 0.8)
+        return SimpleNamespace(id="vid1")
+
+    c, _ = client(tmp_path, runner)
+    for background in (True, False):
+        job = c.post("/api/jobs", json={"url": "https://youtu.be/x", "background": background,
+                                        "remove_voice": True}).json()
+        for _ in range(100):
+            job = c.get(f"/api/jobs/{job['id']}").json()
+            if job["status"] == "done":
+                break
+            time.sleep(0.02)
+        assert job["status"] == "done" and job["remove_voice"] is background
+    assert seen == [True, False]  # no background = nothing to remove the voice from
+
+
 def test_job_error_is_reported_in_russian(tmp_path):
     def runner(url, settings, progress):
         raise RuntimeError("DownloadError: HTTP Error 403")

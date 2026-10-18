@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dubber"
-version = "0.3.1"
+version = "0.4.0"
 description = "Paste a YouTube link, get the video dubbed into Russian (plus subtitles and transcript)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,7 +14,7 @@ dependencies = [
     "faster-whisper>=1.1",
     "edge-tts>=7.0",
     "requests>=2.31",  # Google Translate JSON endpoint
-    "onnxruntime>=1.17",  # offline translator
+    "onnxruntime>=1.17",  # offline translator, removing the original voice (Demucs ONNX)
     "tokenizers>=0.15",
     "huggingface_hub>=0.20",
     "numpy>=1.24",

@@ -18,11 +18,14 @@ def mux(
     dub_lang: str = "rus",
     dub_title: str = "Русский",
     original_lang: str = "eng",
+    background_audio: Path | None = None,
+    background_volume: float = 0.7,
 ) -> Path:
     """Write `out_mp4`.
 
     Audio track 1 (default): the dubbed voice mixed over the original at `original_volume`
-    (or the voice alone when `background` is False).
+    (or the voice alone when `background` is False). With `background_audio` (the original without its voice,
+    `separate.py`) that plays under the dub instead, at `background_volume`, lowered further while the dub speaks.
     Audio track 2 (optional): the untouched original, selectable in any player.
     Subtitle track: the dub language, soft (can be turned on/off in the player).
     Language tags are ISO 639-2 codes (`languages.Language.iso3`, `languages.iso3`).
@@ -31,10 +34,26 @@ def mux(
     original_has_audio = has_audio(video)
 
     args = ["-i", str(video), "-i", str(dub_wav)]
+    if background_audio:
+        args += ["-i", str(background_audio)]
     if dub_srt:
         args += ["-i", str(dub_srt)]
+    srt_input = 3 if background_audio else 2
 
-    if original_has_audio and background:
+    if original_has_audio and background and background_audio:
+        # The voice-free soundtrack keeps its music and effects, so it can be much louder than the original;
+        # sidechaincompress ducks it (about -10 dB) whenever the dubbed voice is speaking.
+        args += [
+            "-filter_complex",
+            "[1:a]aresample=44100,aformat=channel_layouts=stereo,apad,asplit=2[fg][key];"
+            f"[2:a]aresample=44100,aformat=channel_layouts=stereo,volume={background_volume}[bg];"
+            "[bg][key]sidechaincompress=threshold=0.02:ratio=6:attack=20:release=500[ducked];"
+            "[ducked][fg]amix=inputs=2:duration=first:normalize=0[dub]",
+            "-map", "0:v:0", "-map", "[dub]",
+        ]
+        if keep_original_track:
+            args += ["-map", "0:a:0"]
+    elif original_has_audio and background:
         args += [
             "-filter_complex",
             f"[0:a]volume={original_volume}[bg];[1:a]apad[fg];"
@@ -53,7 +72,7 @@ def mux(
         keep_original_track = False
 
     if dub_srt:
-        args += ["-map", "2:s:0", "-c:s", "mov_text", "-metadata:s:s:0", f"language={dub_lang}"]
+        args += ["-map", f"{srt_input}:s:0", "-c:s", "mov_text", "-metadata:s:s:0", f"language={dub_lang}"]
 
     args += [
         "-c:v", "copy",

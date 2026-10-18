@@ -363,16 +363,32 @@ CLAUDE_MODELS = {
 }
 DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
 
+# Part of the Claude cache key (pipeline.py): changing the prompt or the request translates cached videos again.
+CLAUDE_PROMPT_VERSION = 2
 CLAUDE_SYSTEM_PROMPT = """You translate the speech of a video into natural spoken {target} for a voice-over.
 The speech may be in any language, or several (each line says its language); translate every line into {target}.
-The listener is a {target}-speaking professional learning from this video.
+The listener is a {target}-speaking professional learning from this video. "video" gives its title and channel: use
+them to understand the topic and its terms.
 Rules:
 - Return exactly one {target} line per input line, in the same order (same count).
-- Each line is spoken in the time the speaker took ("seconds"). Keep it within about "max_chars" characters:
-  prefer short, natural spoken wording over a literal translation; shorten the wording, never drop meaning.
-- Keep technical terms accurate; keep names, product names, code and acronyms as in the original.
-- "context_before" holds earlier lines of the same video, for context only: do not translate them.
-- Use the surrounding lines as context, but translate each line on its own row."""
+- The text comes from automatic speech recognition: it can contain misheard words, missing punctuation or a wrong
+  language label. When a word makes no sense in context, translate what the speaker most likely said.
+- A line can be just part of a sentence that continues on the next line. Translate so that consecutive lines read as
+  one natural {target} sentence, but keep each line's content on its own row.
+- Each line is spoken in the time the speaker took ("seconds"). Aim for about "max_chars" characters: prefer short,
+  natural spoken wording over a literal translation. Meaning comes first: never drop or change what is said to fit;
+  a little over the budget is fine.
+- Keep technical terms accurate and consistent through the whole video; keep names, product names, code and
+  acronyms as in the original.
+- "context_before" holds earlier lines of the same video, for context only: do not translate them."""
+
+# Spelling that a speech engine needs (it reads exactly what is written), added to the prompt for that dub language.
+SPEECH_NOTES = {
+    "he": "Write standard Hebrew spelling (ktiv male as the Academy of the Hebrew Language defines it), without "
+          "niqqud. A speech engine reads it aloud exactly as written, so an extra yod or vav changes the word: "
+          "\"ייתר\" is read \"yiter\", the word for \"the rest\" is \"יתר\" (yeter).",
+    "ru": "Write \"ё\" wherever it is pronounced (всё, её, ещё): a speech engine reads \"е\" otherwise.",
+}
 
 
 class ClaudeBackend:
@@ -385,9 +401,10 @@ class ClaudeBackend:
 
     def __init__(
         self, model: str = DEFAULT_CLAUDE_MODEL, client=None, glossary: str = "", target: str = languages.DEFAULT,
-        api_key: str | None = None,
+        api_key: str | None = None, video: dict | None = None,
     ):
         self._client = client
+        self._video = {k: v for k, v in (video or {}).items() if v}  # {"title", "channel"}: what the video is about
         self._api_key = api_key
         self.model = model if model in CLAUDE_MODELS else DEFAULT_CLAUDE_MODEL
         self._glossary = glossary.strip()
@@ -405,6 +422,8 @@ class ClaudeBackend:
 
     def _system(self) -> str:
         system = CLAUDE_SYSTEM_PROMPT.format(target=self.target.name_en)
+        if self.target.code in SPEECH_NOTES:
+            system += f"\n- {SPEECH_NOTES[self.target.code]}"
         if self._glossary:
             system += ("\nGlossary from the user — always translate these terms this way (one per line, "
                        f"\"term = translation\"):\n{self._glossary}")
@@ -418,6 +437,7 @@ class ClaudeBackend:
         import anthropic
 
         payload = {
+            "video": self._video,
             "context_before": context,
             "lines": [{"n": n + 1, "lang": ln.get("lang") or "unknown", "seconds": round(ln["seconds"], 1)
                        if ln.get("seconds") else None, "max_chars": self._budget(ln.get("seconds")),
@@ -428,7 +448,7 @@ class ClaudeBackend:
             "max_tokens": 64000,
             "system": self._system(),
             "output_config": {
-                "effort": "low",
+                "effort": "medium",  # "low" read lines too literally; the whole video costs cents more
                 "format": {
                     "type": "json_schema",
                     "schema": {
@@ -533,7 +553,7 @@ def uses_claude(choice: str, api_key: str | None = None) -> bool:
 
 def make_backend(
     choice: str = "auto", claude_model: str = DEFAULT_CLAUDE_MODEL, glossary: str = "",
-    target: str = languages.DEFAULT, api_key: str | None = None,
+    target: str = languages.DEFAULT, api_key: str | None = None, video: dict | None = None,
 ) -> Translator:
     """The translator for a dub into `target`.
 
@@ -546,7 +566,7 @@ def make_backend(
         return Translator(target, NllbBackend(target=target))
     if uses_claude(choice, api_key):
         key = api_key or os.environ.get("ANTHROPIC_API_KEY") or None
-        claude = ClaudeBackend(model=claude_model, glossary=glossary, target=target, api_key=key)
+        claude = ClaudeBackend(model=claude_model, glossary=glossary, target=target, api_key=key, video=video)
         return Translator(target, claude, [google, nllb])
     return Translator(target, google(), [nllb])
 

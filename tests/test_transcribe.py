@@ -55,6 +55,31 @@ def test_mixed_language_audio_is_transcribed_run_by_run(tmp_path, tone, monkeypa
     monkeypatch.setattr(transcribe, "language_runs", lambda model, samples: [(0.5, 1.5, "en"), (2.0, 3.0, "fr")])
     info = {}
     segs = transcribe.transcribe(wav, "tiny", info_out=info)
-    assert calls == [("en", 1.4), ("fr", 1.4)]  # each run ± 0.2 s
-    assert [round(s.start, 2) for s in segs] == [0.6, 2.1] and round(segs[1].words[0].start, 2) == 2.1
+    assert calls == [("en", 1.8), ("fr", 2.2)]  # each run + up to 1 s, never past the middle of the pause
+    assert [round(s.start, 2) for s in segs] == [0.3, 2.05] and round(segs[1].words[0].start, 2) == 2.05
     assert set(info["languages"]) == {"en", "fr"}
+
+
+def test_stray_language_guesses_are_relabelled_to_the_video_languages(monkeypatch):
+    """Real Hebrew speech: Whisper called some regions Italian/French with middling confidence (2026-10-18)."""
+    hebrew = [(0, 6, {"he": 0.46, "ka": 0.21}), (6, 12, {"it": 0.55, "he": 0.10}), (12, 20, {"he": 0.92}),
+              (20, 26, {"fr": 0.68, "he": 0.12}), (26, 40, {"he": 0.99}), (40, 44, {"lv": 0.50, "he": 0.05})]
+    assert transcribe.video_languages(hebrew) == {"he"}
+    mixed = [(0, 10, {"en": 0.98}), (10, 20, {"fr": 0.99}), (20, 30, {"en": 0.97}), (30, 34, {"fr": 0.97})]
+    assert transcribe.video_languages(mixed) == {"en", "fr"}
+    quote = [(0, 60, {"en": 0.99}), (60, 63, {"fr": 0.95}), (63, 120, {"en": 0.99})]  # a short sure quote stays
+    assert transcribe.video_languages(quote) == {"en", "fr"}
+
+    class Detector:
+        def __init__(self, pieces):
+            self.pieces = iter(pieces)
+
+        def detect_language(self, audio):
+            probs = next(self.pieces)[2]
+            lang = max(probs, key=probs.get)
+            return lang, probs[lang], list(probs.items())
+
+    regions = [{"start": int(a * 16000), "end": int(b * 16000)} for a, b, _ in hebrew]
+    import faster_whisper.vad as vad
+    monkeypatch.setattr(vad, "get_speech_timestamps", lambda samples, options: regions)
+    assert transcribe.language_runs(Detector(hebrew), np.zeros(16000 * 44, np.float32)) == [(0.0, 44.0, "he")]

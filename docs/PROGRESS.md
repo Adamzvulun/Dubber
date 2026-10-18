@@ -2,6 +2,20 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-18 — Session 3: Hebrew voice, translation quality, voice removal (v0.4.0)
+- Adam: 0.3.1 installs and runs (installer no longer stalls). Asked: Hebrew dub mispronounces, translation still
+  off sometimes even with Opus, and voice removal (Demucs), off by default. Free only; test without his input.
+- **Hebrew (ADR-019):** built a measurable test (gold IPA + stress, Hebrew-IPA Whisper scorer) — plain Edge is the
+  best free option; niqqud makes Edge worse; Adam's "iter" comes from the spelling ייתר (Edge reads it right as
+  יתר). Claude now gets Hebrew/Russian spelling notes for the speech engine. `tools/qa_hebrew_voice.py`.
+- **Translation (ADR-021):** found two transcription bugs on real speech: stray language guesses (Hebrew regions
+  transcribed as Italian/French) and first words lost at language switches — both fixed (mixed EN+FR errors
+  0.199 → 0.153). Whisper turbo measured, not adopted. Claude request: topic, ASR-aware, sentence-aware, effort
+  medium, prompt version in the cache key. No Claude key here: unit-tested only.
+- **Voice removal (ADR-020):** Demucs v4 ONNX on CPU, switch on the website, CLI `--remove-voice`; verified: no
+  words left in the background, music level unchanged, end-to-end dub with music + Russian voice; ≈ +5 min per
+  10-min video. UI checked in Chromium (RU/EN, 360 px, dark).
+
 ## 2026-10-18 — Session 2f: installer "stuck after Obtaining file", hand-off docs
 - Adam: the installer window seems stuck after "Obtaining file:///…". Not reproducible here (the step takes ~3 s; the
   editable build does not walk `work/`/`.venv`). The next hidden step is pip's build isolation (a temporary env that

@@ -112,7 +112,7 @@ def test_claude_backend_and_request_shape():
     assert out == ["РУ:Hello.", "РУ:World."]
     req = client.requests[0]
     assert req["model"] == "claude-opus-5-5"
-    assert req["output_config"]["format"]["type"] == "json_schema" and req["output_config"]["effort"] == "low"
+    assert req["output_config"]["format"]["type"] == "json_schema" and req["output_config"]["effort"] == "medium"
     assert req["fallbacks"] == "default" and req["betas"] == ["server-side-fallback-2026-07-01"]
 
 
@@ -139,6 +139,15 @@ def test_claude_gets_the_whole_video_with_languages_slots_and_budgets():
     assert [s.ru for s in segs] == ["РУ:Hello there friends", "РУ:Je fais du pain", "Привет всем",
                                     "РУ:Sourdough is alive"]
     assert t.name == "claude" and t.cost_usd == round((1000 * 4 + 500 * 20) / 1e6, 4)
+
+
+def test_claude_knows_what_the_video_is_and_that_lines_come_from_speech_recognition():
+    client = FakeClaude()
+    ClaudeBackend(client=client, video={"title": "How sourdough works", "channel": "Bake Lab"}).translate_texts(["Hi"])
+    assert FakeClaude.payload(client.requests[0])["video"] == {"title": "How sourdough works", "channel": "Bake Lab"}
+    system = client.requests[0]["system"]
+    assert "speech recognition" in system and "most likely said" in system  # misheard words: fix, don't translate
+    assert "part of a sentence" in system and "Meaning comes first" in system
 
 
 def test_claude_long_video_is_chunked_with_context():
@@ -313,6 +322,7 @@ def test_claude_prompt_names_the_target_language():
     client = FakeClaude()
     ClaudeBackend(client=client, target="he").translate_texts(["Hello"])
     assert "Hebrew" in client.requests[0]["system"] and "Russian" not in client.requests[0]["system"]
+    assert "ייתר" in client.requests[0]["system"]  # Hebrew spelling for the speech engine (Adam's "iter")
     assert "Glossary" not in client.requests[0]["system"]
 
 
