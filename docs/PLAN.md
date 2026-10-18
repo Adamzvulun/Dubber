@@ -1,6 +1,6 @@
 # Plan & roadmap
 
-_Last updated: 2026-10-18 (end of session 2)_ — current state at a glance: `docs/STATUS.md`. Task cards: `kanban/`.
+_Last updated: 2026-10-18 (session 3)_ — current state at a glance: `docs/STATUS.md`. Task cards: `kanban/`.
 
 ## Goal
 A Russian-speaking professional (not a developer) pastes a YouTube link into a local web page and gets:
@@ -54,7 +54,7 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
   (ADR-017); the free engines can't follow one reliably
 - [x] Voice choice (male/female) in the UI
 - [ ] Voice speed in the UI
-- [ ] Optional Demucs: keep background music, remove English voice
+- [x] Optional Demucs: keep background music, remove the speaker's voice (ONNX on CPU, switch; ADR-020)
 - [x] Translation prompt asks for "dub-length" Russian when using Claude (`translate.CLAUDE_SYSTEM_PROMPT`)
 
 ### M3.5 — Dub timing that follows the speaker (Adam's report, research in `docs/RESEARCH.md` "Dub timing")
@@ -83,10 +83,19 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [x] Claude translation from the website: key/model/glossary on a Settings page, whole-video context, dub-length
   lines, fallback chain Claude → Google → offline, cost on the watch page (ADR-017)
 - [ ] Adam's first real dub with a Claude key (end-to-end check; compare timing with the free path)
+  — Adam used it: "still off sometimes" → ADR-021 fixes; re-check with v0.4.0
+
+### M7 — Session 3 (Adam, 2026-10-18)
+- [x] Hebrew pronunciation measured; plain Edge kept; spelling notes for the speech engine (ADR-019)
+- [x] Transcription: video-level languages, wider run margins; turbo measured, not adopted (ADR-021)
+- [x] Claude request v2: topic, ASR-aware, sentence-aware, effort medium, prompt version in cache key (ADR-021)
+- [x] Voice removal switch (Demucs ONNX) (ADR-020)
+- [ ] Adam: re-dub a Hebrew video and an English one with Claude on v0.4.0 and listen
+- [ ] Spelling fixes for the free path (Google/offline) if Hebrew misspellings show up there too
 - [x] Updates always visible: no-cache site files, version in the footer, "already running" check (ADR-018)
 - [x] Time left on the job card, learned from this PC's past dubs (ADR-018)
 - [x] Versioned site file addresses so a release never shows old styles (v0.3.1, ADR-018 follow-up)
-- [ ] Installer stall after "Obtaining file:///…": build isolation removed + `install.log` (v0.3.1) — Adam to re-run
+- [x] Installer stall after "Obtaining file:///…": build isolation removed + `install.log` (v0.3.1) — Adam: works
 
 ### M4 — Nice to have
 - [ ] Queue of several links / playlists

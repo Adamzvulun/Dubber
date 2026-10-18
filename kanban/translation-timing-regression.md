@@ -1,6 +1,6 @@
 ---
 id: 11
-status: doing
+status: done
 priority: High
 blocked_by: []
 tags: [quality, timing, translation, bug]
@@ -23,3 +23,4 @@ Evidence needed from Adam's PC, `work/<id>/` (old and new caches side by side): 
 
 ## Narrative
 - 2026-10-17: Created from Adam's report; hypotheses from a code diff 3e4955f..HEAD. Waiting for his files. (by @claude)
+- 2026-10-18: Session 3, without his files (Adam: test yourself): measured real speech and found two transcription bugs (stray language guesses, first words lost at language switches) — fixed; Claude request improved (ADR-021). Timing code unchanged. (by @claude)

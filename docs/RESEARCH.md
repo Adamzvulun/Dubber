@@ -180,6 +180,57 @@ speaker's gender isn't known to the translator (a woman speaking can come out ma
 was garbled by Whisper itself (two sentences merged), which every translation inherits. Google (primary on Adam's PC)
 could not be exercised end-to-end here (429 on every try) — its client is covered by unit tests.
 
+## Session 3 measurements — Hebrew voice, transcription, voice removal (2026-10-18)
+
+### Hebrew pronunciation (Adam: "mispronounces almost every second word", e.g. יתר read "iter")
+Method (all free, runs offline after downloads): 50 sentences with gold IPA readings incl. stress from the
+[heb-g2p-benchmark](https://huggingface.co/spaces/Phonikud/heb-g2p-benchmark) (built around homographs); every
+candidate speaks them; [renikud/whisper-he-ipa](https://huggingface.co/renikud/whisper-he-ipa) (converted to
+CTranslate2 int8) writes down what it hears as IPA with stress; word error rate against the gold reading. The scorer
+makes errors of its own, so only the comparison between candidates matters. Script: `tools/qa_hebrew_voice.py`.
+
+| Candidate | Word errors incl. stress | Sounds only |
+|---|---|---|
+| Edge Avri (male), plain text — today | **0.231** | **0.174** |
+| [Phonikud](https://huggingface.co/Phonikud) Piper voice + [renikud](https://huggingface.co/renikud/renikud) G2P (offline) | 0.233 | 0.184 |
+| Edge Hila (female), plain text | 0.256 | 0.203 |
+| Edge Avri + full niqqud from [phonikud-onnx](https://huggingface.co/Phonikud/phonikud-onnx) | 0.313 | 0.243 |
+| Edge Avri + niqqud only on words without vowel letters (ambiguous ones like יתר) | 0.251 | 0.189 |
+
+- **Edge reads niqqud badly**: Phonikud writes holam/qubuts before a plain vav (לִכְתֹּוב) and Edge then says
+  "lixtov-ov"; even after moving the vowel onto the vav, vowelled text scored worse than plain text.
+- **Adam's example is a spelling problem, not a voice problem:** Edge says יתר correctly ("yeter") in all 6 test
+  contexts, both voices; the spelling **ייתר** (an extra yod) is read "yiter"/"iter" by both. The dub reads what the
+  translation wrote. → Claude now gets a Hebrew spelling rule (`translate.SPEECH_NOTES`).
+- Edge's remaining errors are homographs (חיה, בירה, שמתי), grammatical gender that spelling doesn't show
+  (לך lax/lexa), and English brand names. No free engine did better; the Phonikud voice ties on accuracy but sounds
+  less natural and is non-commercial (CC-NC).
+- Russian: Claude is asked to write "ё" (Edge reads "е" otherwise, e.g. всё/все).
+
+### Transcription on real recorded speech (FLEURS dev, 12 clips per language, Dubber's own `transcribe()`)
+| Whisper | English | French | Hebrew | EN+FR mixed (en / fr) | CPU s per audio minute* |
+|---|---|---|---|---|---|
+| small (default) | 0.101 | 0.140 | 0.811 → **0.757** | 0.199 (0.272 / 0.146) → **0.153** (0.171 / 0.140) | 26–39 |
+| large-v3-turbo | 0.115 | 0.070 | 0.709 → **0.631** | 0.137 → 0.137 (0.212 / 0.083) | 34–90 |
+| medium | 0.166 | — | — | — | 79 |
+→ = after the two fixes below. *4 vCPUs shared with other jobs. Hebrew WER is inflated by spelling variants.
+- **Bug 1: stray language guesses.** The per-region detector (Whisper base, small too) called clear Hebrew regions
+  Italian 0.74 / French 0.68 / Latvian 0.50 → those regions were transcribed as Italian/French gibberish and then
+  "translated". Fix: `transcribe.video_languages` — a language counts only if it fills ≥ 15 % of the speech (summed
+  probabilities) or one ≥ 2 s region is ≥ 0.9 sure; every region gets the likeliest of those.
+- **Bug 2: first words of a run lost.** Runs were cut with 0.2 s margins; the first words after a language switch
+  were dropped. Fix: margins up to 1 s, never past the middle of the pause.
+- **turbo not made the default:** better on French/Hebrew, but it skipped a whole English sentence in both runs and
+  hallucinated "The / The / You" at the end of the English file; ~1.5× slower. English is the main source language.
+
+### Voice removal (Demucs v4 `htdemucs`, ONNX: [StemSplitio/htdemucs-onnx](https://huggingface.co/StemSplitio/htdemucs-onnx), MIT)
+- Test mix: Edge English voice over a generated music bed (30 s). Background output: Whisper finds **no words**;
+  level unchanged (−20.6 dB music in, −20.6 dB background out).
+- Speed on this sandbox (4 vCPUs, partly busy): ~1× real time (114 s for 120 s) → ≈ 10 min per 10-min video while busy, **65 s for 120 s (≈ 5.4 min per 10 min) on the idle 4 vCPUs**;
+  the model card reports 0.2× real time on an Apple M4 Pro. Memory stays low (files on disk, 7.8-s windows).
+- End-to-end CLI dub (`--remove-voice`, offline translator): Russian track = Russian voice + music, no English left
+  (Whisper forced to English only re-translates the Russian); original English track and Russian subtitles intact.
+
 ## Risks
 - YouTube anti-bot changes → keep yt-dlp updated; cookies-from-browser fallback (see `youtube-downloader` skill references).
 - edge-tts is an unofficial client of a Microsoft service — may break; Silero offline fallback planned.

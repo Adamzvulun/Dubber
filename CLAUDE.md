@@ -30,13 +30,15 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 ```
 
 ## Layout
-- `dubber/` — pipeline stages (`download`, `transcribe`, `translate`, `tts`, `align`, `mux`, `subtitles`), orchestrated by
+- `dubber/` — pipeline stages (`download`, `transcribe`, `translate`, `tts`, `align`, `separate` (optional voice
+  removal), `mux`, `subtitles`), orchestrated by
   `pipeline.py`; `languages.py` (the 12 dub languages: voices, codes), `timing.py` (pace planner), `segments.py`
   (lines from word timings), `hub.py` (model downloads), `cli.py`, `app.py` (FastAPI server + JSON API, jobs, cancel,
   settings: Claude key/model/glossary saved to `.env` + `glossary.txt`), `config.py` (settings, `save_env`).
 - `dubber/web/` — the website front-end (plain HTML/CSS/JS, no build step): `index.html`, `styles.css`, `app.js`,
   `i18n.js` (every UI string in RU + EN — never hard-code text elsewhere).
-- `tools/` — developer tools (not shipped): `stub_server.py`, `qa_languages.py` (see docs/STATUS.md "How to test").
+- `tools/` — developer tools (not shipped): `stub_server.py`, `qa_languages.py`, `qa_hebrew_voice.py` (see
+  docs/STATUS.md "How to test").
 - `tests/` — unit tests per stage; network stages are mocked.
 - `docs/` — STATUS (start here), PLAN, RESEARCH, DECISIONS, DESIGN, PROGRESS, SKILLS, README.ru.
 - `kanban/` — task cards (see `kanban-ai` skill).
