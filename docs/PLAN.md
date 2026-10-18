@@ -97,6 +97,7 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [x] Versioned site file addresses so a release never shows old styles (v0.3.1, ADR-018 follow-up)
 - [x] Installer stall after "Obtaining file:///…": build isolation removed + `install.log` (v0.3.1) — Adam: works
 - [x] Each dub of a video is its own library entry; watch page links the other dubs (v0.4.1, ADR-022)
+- [x] The program updates itself from `main` at start and with a button on the site (v0.5.0, ADR-024)
 
 ### M4 — Nice to have
 - [ ] Queue of several links / playlists

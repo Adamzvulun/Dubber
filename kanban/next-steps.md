@@ -16,6 +16,7 @@ Read `docs/STATUS.md` first. Open items, in order:
 3. First real dub with a Claude key (`kanban/claude-translation.md`).
 4. Still unconfirmed from session 1: Google path end-to-end (`translator` in `meta.json`), H.264 playback, desktop
    shortcut.
+0. Adam makes the repo public and updates the PCs to 0.5.0 one last time by hand (self-update, ADR-024).
 5. Offer: upload a local file from the website (also unlocks cloud hosting, ADR-023); PLAN M3/M4.
    (Several dubs per video: done in 0.4.1, `kanban/library-per-dub.md`.)
 

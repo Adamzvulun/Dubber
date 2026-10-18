@@ -516,6 +516,7 @@ function applyUiLang() {
   renderLibrary();
   renderSettings();
   renderVersion();
+  renderUpdate();
   if (state.video) renderWatchDetails();
   else if (!$("#view-settings").hidden) document.title = t("title.settings");
   else if (!$("#view-library").hidden) document.title = t("title.library");
@@ -571,6 +572,37 @@ function renderSettings() {
 
 function renderVersion() {
   if (state.version) $("#app-version").textContent = t("footer.version", state.version);
+}
+
+/* ---------- new version (the program also updates itself at start, see dubber/update.py) ---------- */
+async function checkUpdate() {
+  try { state.update = await api("/api/update"); } catch (_) { return; }
+  renderUpdate();
+}
+
+function renderUpdate() {
+  const u = state.update, box = $("#update");
+  if ($("#update-btn").disabled) return; // installing: keep the "updating" text
+  box.hidden = !(u && (u.available || u.note));
+  if (box.hidden) return;
+  $("#update-text").textContent = u.note ? t(u.note) : t("update.available", u.latest);
+  $("#update-btn").hidden = Boolean(u.note);
+}
+
+async function installUpdate() {
+  const button = $("#update-btn");
+  button.disabled = true;
+  $("#update-text").textContent = t("update.working");
+  let result;
+  try { result = await api("/api/update", { method: "POST" }); } catch (e) {
+    $("#update-text").textContent = e.message; button.disabled = false; return;
+  }
+  if (!result.restarting) { state.update = { note: "update.restart" }; renderUpdate(); return; }
+  for (let i = 0; i < 600; i++) { // the server restarts with the new version; dependencies can take minutes
+    await new Promise((r) => setTimeout(r, 1000));
+    try { if ((await api("/api/version")).version === result.installed) { location.reload(); return; } } catch (_) {}
+  }
+  state.update = { note: "update.restart" }; renderUpdate();
 }
 
 function renderTranslatorNote() {
@@ -671,6 +703,9 @@ async function init() {
   route();
   if (!state.settings) loadSettings(); // the note under the dub form says which translator is used
   try { state.version = (await api("/api/version")).version; renderVersion(); } catch (_) {}
+  $("#update-btn").addEventListener("click", installUpdate);
+  checkUpdate();
+  setInterval(checkUpdate, 60 * 60 * 1000); // the server asks GitHub at most once an hour
   pollJobs();
 }
 

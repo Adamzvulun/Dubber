@@ -14,6 +14,8 @@ API
 - GET  /files/{id}/{name}[?download=1]                               → video, subtitles, transcripts, thumbnail
 - GET  /api/settings, PUT /api/settings {use_claude, model, glossary} → translation settings (saved in .env)
 - POST /api/settings/claude-key {key}, DELETE /api/settings/claude-key → check + save / remove the Claude API key
+- GET  /api/update                                                  → {current, latest, available, enabled}
+- POST /api/update                                                  → install the newest `main` and restart (update.py)
 
 Requests that change something are refused when they come from another website (Origin check): the server listens
 on this computer only, but a page open in the same browser could otherwise send them.
@@ -27,6 +29,8 @@ import os
 import queue
 import re
 import shutil
+import subprocess
+import sys
 import threading
 import time
 import traceback
@@ -42,7 +46,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import __version__, eta, languages, pipeline, translate
+from . import __version__, eta, languages, pipeline, translate, update
 from .config import Settings, load_settings, save_env
 from .download import is_url
 
@@ -318,9 +322,14 @@ def create_app(
     runner=pipeline.run,
     check_key: Callable[[str], None] = translate.check_claude_key,
     clock: Callable[[], float] = time.monotonic,
+    updater: update.Updater | None = None,
+    restart: Callable[[], None] | None = None,
 ) -> FastAPI:
+    """`restart` (given by main()) stops this server so main() can start the version an update installed."""
     settings = settings or load_settings()
     jobs = JobRunner(settings, runner, clock)
+    updater = updater or update.Updater()
+    newest: dict = {"version": None, "checked": None}  # GitHub is asked at most once an hour
     app = FastAPI(title="Дубляж", docs_url=None, redoc_url=None)
 
     @app.middleware("http")
@@ -361,6 +370,36 @@ def create_app(
     @app.get("/api/version")
     def version() -> dict:
         return {"version": __version__}
+
+    def update_state() -> dict:
+        enabled = updater.enabled()
+        if enabled and (newest["checked"] is None or clock() - newest["checked"] > 3600):
+            newest.update(version=updater.latest(), checked=clock())
+        latest = newest["version"]
+        return {"current": __version__, "latest": latest, "enabled": enabled,
+                "available": enabled and update.is_newer(latest, __version__)}
+
+    @app.get("/api/update")
+    def get_update() -> dict:
+        return update_state()
+
+    @app.post("/api/update")
+    def install_update() -> dict:
+        if not update_state()["available"]:
+            raise HTTPException(409, _detail("Новой версии нет.", "There is no new version."))
+        if any(j.status in ("queued", "running") for j in jobs.jobs.values()):
+            raise HTTPException(409, _detail("Дождитесь окончания озвучки, потом обновите программу.",
+                                             "Wait until the dub is finished, then update."))
+        try:
+            installed = updater.install()
+        except update.UpdateError as exc:
+            print(f"Update failed: {exc}", flush=True)
+            raise HTTPException(502, _detail(
+                "Не удалось обновить программу. Проверьте интернет и попробуйте ещё раз.",
+                "Couldn't update the program. Check the internet and try again.")) from exc
+        if restart:  # after this answer has been sent: the server stops, main() starts the new version
+            threading.Timer(0.5, restart).start()
+        return {"installed": installed, "restarting": restart is not None}
 
     @app.get("/api/languages")
     def list_languages() -> list[dict]:
@@ -519,9 +558,34 @@ def _open_browser_when_ready(url: str, host: str, port: int) -> None:
         time.sleep(0.5)
 
 
+def _start_new_version(open_browser: bool) -> int:
+    """Run the version an update just installed (this process still has the old code loaded) and wait for it."""
+    env = dict(os.environ, DUBBER_JUST_UPDATED="1")
+    if not open_browser:
+        env["DUBBER_NO_BROWSER"] = "1"  # the open page reloads itself
+    return subprocess.call([sys.executable, "-m", "dubber.app"], env=env)
+
+
+def update_at_start(updater: update.Updater) -> bool:
+    """Install a newer `main` before starting; True if the new version must be started. Never stops the start."""
+    if os.environ.get("DUBBER_JUST_UPDATED") or not updater.enabled():
+        return False
+    latest = updater.latest()
+    if not update.is_newer(latest, __version__):
+        return False
+    print(f"Обновляю «Дубляж» до версии {latest}… (обычно несколько секунд, иногда несколько минут)", flush=True)
+    try:
+        updater.install()
+    except update.UpdateError as exc:
+        print(f"Обновить не удалось ({exc}). Запускаю текущую версию {__version__}.", flush=True)
+        return False
+    return True
+
+
 def main() -> int:
     import uvicorn
 
+    settings = load_settings()  # also reads .env (e.g. DUBBER_AUTO_UPDATE=0)
     host = os.environ.get("DUBBER_HOST", "127.0.0.1")
     port = int(os.environ.get("DUBBER_PORT", "7860"))
     url = f"http://{host}:{port}"
@@ -532,10 +596,25 @@ def main() -> int:
         print(f"«Дубляж» уже запущен ({which}) на {url}.\n"
               "Закройте другое чёрное окно «Дубляж» и запустите программу снова.")
         return 1
-    if os.environ.get("DUBBER_NO_BROWSER") is None:
+    open_browser = os.environ.get("DUBBER_NO_BROWSER") is None
+    updater = update.Updater()
+    if update_at_start(updater):
+        return _start_new_version(open_browser)
+    if open_browser:
         threading.Thread(target=_open_browser_when_ready, args=(url, host, port), daemon=True).start()
     print(f"«Дубляж» {__version__} работает: {url}  (не закрывайте это окно)")
-    uvicorn.run(create_app(), host=host, port=port, log_level="warning")
+    restarting = threading.Event()
+    server = uvicorn.Server(uvicorn.Config(None, host=host, port=port, log_level="warning"))
+
+    def restart() -> None:
+        restarting.set()
+        server.should_exit = True
+
+    server.config.app = create_app(settings, updater=updater, restart=restart)
+    server.run()
+    if restarting.is_set():
+        print("Запускаю новую версию…", flush=True)
+        return _start_new_version(open_browser=False)
     return 0
 
 

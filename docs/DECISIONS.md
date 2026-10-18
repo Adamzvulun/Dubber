@@ -239,3 +239,22 @@ Newest at the bottom. Format: context → decision → consequences.
 - **Revisit when:** the website can take an uploaded video file (then YouTube isn't needed on the server), or a
   reliable YouTube path from a server exists. A "Duplicate this Space" demo for others is possible then too.
 
+## ADR-024 — The program updates itself from `main` (2026-10-18)
+- **Context:** Adam was tired of downloading the newest ZIP by hand after every merge (the real reason he looked at
+  hosting, ADR-023). He chose to make the repository public and to update both automatically and with a button.
+- **Decision:** `dubber/update.py`. At start, `app.main()` reads `__version__` from `main`
+  (raw.githubusercontent.com); if it is higher, it downloads `main` as a ZIP (codeload.github.com), checks it is a
+  Dubber, replaces the program files one by one (`.partial` + rename) and starts the new version. The site asks at
+  most once an hour and shows «Вышла новая версия — Обновить»; the button installs, the server restarts itself and the
+  page reloads on the new version. Rules: the user's data (`.env`, `glossary.txt`, `work/`, `output/`, `models/`,
+  `.venv/`, `install.log`) is never written; files dropped from `main` are removed (`.dubber-files` lists what the
+  last update installed); `pip install -e .` only when `pyproject.toml` changed; yt-dlp refreshed every update; no
+  internet / GitHub down → the current version starts as usual; refused while a dub runs; off in a git checkout and
+  with `DUBBER_AUTO_UPDATE=0`. `start_windows.bat` keeps the start and `pause` on one line (cmd reads a running .bat
+  line by line). Rehearsal without GitHub: `DUBBER_UPDATE_SOURCE`.
+- **Rejected:** `git pull` (needs Git installed on the PCs and a clone instead of the ZIP folder); a private repo with
+  a read-only token on each PC (expires, one more secret); a Windows scheduled task (updates files while the program
+  runs).
+- **Consequences:** a merge into `main` reaches the PCs on their next start, so `main` must stay releasable and every
+  release must bump the version. Each in-session update leaves the old process waiting for the new one (a few MB).
+
