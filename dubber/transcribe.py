@@ -17,7 +17,11 @@ from .segments import Segment, Word
 
 SAMPLE_RATE = 16000  # what Whisper expects
 DETECTOR = "base"  # small Whisper model used only to identify the language of each speech region
-EDGE = 0.2  # seconds of audio kept around a run when it is cut out
+EDGE = 1.0  # at most this much audio is kept around a run when it is cut out (never past half the pause)
+# A language counts as spoken in the video when it fills this share of the speech (summed detection probabilities)…
+MAIN_SHARE = 0.15
+# …or when one stretch of at least SURE_SECONDS is detected this surely (a short quote in another language).
+SURE, SURE_SECONDS = 0.9, 2.0
 
 
 def merge_runs(pieces: list[tuple[float, float, str, float]]) -> list[tuple[float, float, str]]:
@@ -42,21 +46,51 @@ def merge_runs(pieces: list[tuple[float, float, str, float]]) -> list[tuple[floa
     return runs
 
 
+def video_languages(pieces: list[tuple[float, float, dict[str, float]]]) -> set[str]:
+    """The languages really spoken in a video, from per-region detections [(start, end, {language: probability})].
+
+    Whisper's detector guesses wildly on some regions of clear speech (real Hebrew recordings: regions called
+    Italian 0.74, French 0.68, Latvian 0.50 — measured 2026-10-18), and a region transcribed in the wrong language
+    comes out as gibberish. Such stray guesses are weak and few, so they never add up to a real share of the speech.
+    """
+    share: Counter[str] = Counter()
+    total = 0.0
+    sure: set[str] = set()
+    for start, end, probs in pieces:
+        seconds = end - start
+        total += seconds
+        for lang, prob in probs.items():
+            share[lang] += seconds * prob
+        lang, prob = max(probs.items(), key=lambda kv: kv[1], default=("", 0.0))
+        if prob >= SURE and seconds >= SURE_SECONDS:
+            sure.add(lang)
+    spoken = {lang for lang, value in share.items() if value >= MAIN_SHARE * total} | sure
+    return spoken or ({share.most_common(1)[0][0]} if share else set())
+
+
 def language_runs(detector, samples) -> list[tuple[float, float, str]]:
     """Stretches of the audio in one language each: [(start_s, end_s, language)].
 
     The language is detected for EVERY speech region (a sentence or two): Whisper's language detection mostly hears
     the start of what it is given, so a 20-s piece that began in French and ended in English was called French and
     its English lines were mislabelled (measured 2026-10-16). `detector` is a small Whisper model ("base"): it
-    identified all 19 regions of two mixed test clips correctly, at ~0.3 s per region on CPU.
+    identified all 19 regions of two mixed test clips correctly, at ~0.3 s per region on CPU. Each region then gets
+    the most likely of the languages spoken in the whole video (`video_languages`), never a stray guess.
     """
     from faster_whisper.vad import VadOptions, get_speech_timestamps
 
     regions = get_speech_timestamps(samples, VadOptions(min_silence_duration_ms=300, max_speech_duration_s=15))
-    pieces = []
+    detected = []
     for r in regions:
-        lang, prob, _ = detector.detect_language(audio=samples[r["start"]:r["end"]])
-        pieces.append((r["start"] / SAMPLE_RATE, r["end"] / SAMPLE_RATE, lang, float(prob)))
+        lang, prob, all_probs = detector.detect_language(audio=samples[r["start"]:r["end"]])
+        probs = dict(all_probs or [(lang, prob)])
+        detected.append((r["start"] / SAMPLE_RATE, r["end"] / SAMPLE_RATE, probs))
+    spoken = video_languages(detected)
+    pieces = []
+    for start, end, probs in detected:
+        lang = max(spoken, key=lambda language: probs.get(language, 0.0))
+        among = sum(probs.get(language, 0.0) for language in spoken)
+        pieces.append((start, end, lang, probs.get(lang, 0.0) / among if among else 0.0))
     return merge_runs(pieces)
 
 
@@ -90,7 +124,13 @@ def transcribe(
         language = next(iter(spoken), None)
         pieces = [(0.0, total, language)]
     else:
-        pieces = [(max(0.0, s - EDGE), min(total, e + EDGE), lang) for s, e, lang in runs]
+        # The speech detector's bounds are tight: with 0.2 s the first words of a run were lost (FLEURS en+fr,
+        # 2026-10-18). Reach into the pause before and after, but never past its middle (the other language).
+        pieces = []
+        for i, (s, e, lang) in enumerate(runs):
+            before = (s - runs[i - 1][1]) / 2 if i else s
+            after = (runs[i + 1][0] - e) / 2 if i + 1 < len(runs) else total - e
+            pieces.append((s - min(EDGE, before), e + min(EDGE, after), lang))
 
     segments: list[Segment] = []
     for start, end, language in pieces:
