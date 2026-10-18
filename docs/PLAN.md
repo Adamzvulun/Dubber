@@ -3,7 +3,7 @@
 _Last updated: 2026-10-18 (session 3)_ — current state at a glance: `docs/STATUS.md`. Task cards: `kanban/`.
 
 ## Goal
-A Russian-speaking professional (not a developer) pastes a YouTube link into a local web page and gets:
+A Russian speaker (not a developer) pastes a YouTube link into a local web page and gets:
 1. the video dubbed into Russian (MP4),
 2. Russian subtitles (SRT, also embedded in the MP4),
 3. a Russian transcript (plus a bilingual EN/RU one for learning).
@@ -29,13 +29,13 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [x] unit tests + offline end-to-end test (network services stubbed)
 - [x] real end-to-end run with YouTube + Whisper + translation + TTS (2 real TED-Ed videos, CLI + web UI; offline translator because Google blocks the cloud server)
 - [x] offline translator fallback, cookies option, deno runtime
-- [ ] real run with Google translation (needs a non-datacenter connection — first run on father's PC)
+- [ ] real run with Google translation (needs a non-datacenter connection — first run on a home connection)
 
 ### M2 — Russian web UI + installers
 - [x] ~~Gradio app in Russian~~ (first version; replaced by the custom website in M2.5)
 - [x] Windows `install_windows.bat` / `start_windows.bat` (+ desktop shortcut); Linux/macOS `install.sh` / `start.sh`
 - [ ] Test the Windows installer on a real Windows PC
-- [x] `docs/README.ru.md` user guide for the father
+- [x] `docs/README.ru.md` user guide (Russian)
 - [x] UI checked in Chromium with Playwright (desktop + phone width) → now `docs/images/site-home-*.png`
 
 ### M2.5 — Professional website (Adam's request)
@@ -98,6 +98,7 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [x] Installer stall after "Obtaining file:///…": build isolation removed + `install.log` (v0.3.1) — Adam: works
 - [x] Each dub of a video is its own library entry; watch page links the other dubs (v0.4.1, ADR-022)
 - [x] The program updates itself from `main` at start and with a button on the site (v0.5.0, ADR-024)
+- [x] Full QA pass (3 agents): updater safe to fail, UI/copy fixes (v0.5.1)
 
 ### M4 — Nice to have
 - [ ] Queue of several links / playlists
@@ -106,11 +107,11 @@ A Russian-speaking professional (not a developer) pastes a YouTube link into a l
 - [ ] Offline TTS fallback (Silero)
 
 ## Open questions
-- ~~Father's work field~~ — every topic, so tools like the glossary must be general-purpose (Adam, 2026-10-17).
+- ~~The user's work field~~ — every topic, so tools like the glossary must be general-purpose (Adam, 2026-10-17).
 - Claude key for translation: built (ADR-017); Adam decides whether to buy credit. Estimate at 2026-10 prices: ~$0.10 per 10 min of
   speech on Opus 5.5 ($4/$20 per M tokens), ~$0.05 on Sonnet 5.5, under $0.01 on Haiku 5.5. The key would stay on
   the PC (env var), with a monthly spend limit set in the Anthropic Console; no payment code in Dubber.
 - ~~Should one video keep several dub languages in the library?~~ — yes, one entry per dub; same choices replace
   it (Adam, 2026-10-18, ADR-022, v0.4.1).
 - Hosting on Hugging Face Spaces: researched, not now — YouTube blocks its servers (ADR-023).
-- Windows confirmed for Adam's PC and the father's PC (Adam, 2026-10-17).
+- Windows confirmed as the target OS (Adam, 2026-10-17).

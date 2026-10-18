@@ -120,6 +120,7 @@ def test_job_runs_with_chosen_voice_and_background(tmp_path):
             break
         time.sleep(0.02)
     assert job["status"] == "done" and job["video_id"] == "vid1"
+    assert job["started"] >= job["created"]  # the card's clock starts when the job leaves the queue
     assert seen == {"url": "https://youtu.be/x", "voice": "ru-RU-SvetlanaNeural", "background": False}
 
 

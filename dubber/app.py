@@ -158,6 +158,7 @@ class Job:
     error_en: str = ""
     video_id: str = ""
     created: float = field(default_factory=time.time)
+    started: float = 0.0  # when it left the queue (the job card's clock starts here)
     cancel_requested: bool = False
     _tracker: eta.Tracker | None = field(default=None, repr=False)  # stage timings → time left
     _shares: dict = field(default_factory=dict, repr=False)
@@ -215,7 +216,7 @@ class JobRunner:
             job = self._queue.get()
             if job.status == "cancelled":
                 continue
-            job.status, job.label = "running", "Начинаю"
+            job.status, job.label, job.started = "running", "Начинаю", time.time()
             job._tracker = eta.Tracker(
                 [(key, weight) for key, _, weight in pipeline.stages(job.remove_voice)], self.clock)
             job._shares = eta.load_shares(self.history)
@@ -330,6 +331,7 @@ def create_app(
     jobs = JobRunner(settings, runner, clock)
     updater = updater or update.Updater()
     newest: dict = {"version": None, "checked": None}  # GitHub is asked at most once an hour
+    updating = threading.Lock()  # one update at a time; no new dub starts while one is installed
     app = FastAPI(title="Дубляж", docs_url=None, redoc_url=None)
 
     @app.middleware("http")
@@ -359,6 +361,9 @@ def create_app(
             raise HTTPException(422, _detail("Неизвестный голос", "Unknown voice"))
         if req.lang not in languages.LANGUAGES:
             raise HTTPException(422, _detail("Неизвестный язык", "Unknown language"))
+        if updating.locked():
+            raise HTTPException(409, _detail("Программа обновляется. Начните озвучку после перезапуска.",
+                                             "The program is updating. Start the dub after it restarts."))
         return jobs.submit(url, req.voice, req.background, req.lang, req.remove_voice).public()
 
     @app.get("/", include_in_schema=False)
@@ -385,18 +390,26 @@ def create_app(
 
     @app.post("/api/update")
     def install_update() -> dict:
-        if not update_state()["available"]:
-            raise HTTPException(409, _detail("Новой версии нет.", "There is no new version."))
-        if any(j.status in ("queued", "running") for j in jobs.jobs.values()):
-            raise HTTPException(409, _detail("Дождитесь окончания озвучки, потом обновите программу.",
-                                             "Wait until the dub is finished, then update."))
+        if not updating.acquire(blocking=False):
+            raise HTTPException(409, _detail("Обновление уже идёт.", "The update is already running."))
         try:
+            if not update_state()["available"]:
+                raise HTTPException(409, _detail("Новой версии нет.", "There is no new version."))
+            if any(j.status in ("queued", "running") for j in jobs.jobs.values()):
+                raise HTTPException(409, _detail("Дождитесь окончания озвучки, потом обновите программу.",
+                                                 "Wait until the dub is finished, then update."))
             installed = updater.install()
         except update.UpdateError as exc:
+            updating.release()
             print(f"Update failed: {exc}", flush=True)
             raise HTTPException(502, _detail(
                 "Не удалось обновить программу. Проверьте интернет и попробуйте ещё раз.",
                 "Couldn't update the program. Check the internet and try again.")) from exc
+        except BaseException:
+            updating.release()
+            raise
+        if not restart:  # nothing restarts this server: new dubs are fine until the user restarts it
+            updating.release()
         if restart:  # after this answer has been sent: the server stops, main() starts the new version
             threading.Timer(0.5, restart).start()
         return {"installed": installed, "restarting": restart is not None}
@@ -488,8 +501,10 @@ def create_app(
     def set_claude_key(req: KeyRequest) -> dict:
         key = req.key.strip()
         if not key.startswith("sk-ant-") or len(key) < 20 or any(c.isspace() for c in key):
-            raise HTTPException(422, _detail("Это не похоже на ключ Anthropic: он начинается с sk-ant-",
-                                             "This doesn't look like an Anthropic key: it starts with sk-ant-"))
+            raise HTTPException(422, _detail("Это не похоже на ключ Anthropic: он начинается с sk-ant- и длиннее. "
+                                             "Скопируйте его полностью.",
+                                             "This doesn't look like an Anthropic key: it starts with sk-ant- and is "
+                                             "longer. Copy it completely."))
         try:
             check_key(key)
         except translate.TranslatorUnavailable as exc:
@@ -563,7 +578,12 @@ def _start_new_version(open_browser: bool) -> int:
     env = dict(os.environ, DUBBER_JUST_UPDATED="1")
     if not open_browser:
         env["DUBBER_NO_BROWSER"] = "1"  # the open page reloads itself
-    return subprocess.call([sys.executable, "-m", "dubber.app"], env=env)
+    child = subprocess.Popen([sys.executable, "-m", "dubber.app"], env=env)
+    while True:  # Ctrl+C reaches both processes: let the new version stop by itself, don't kill it
+        try:
+            return child.wait()
+        except KeyboardInterrupt:
+            continue
 
 
 def update_at_start(updater: update.Updater) -> bool:
@@ -576,7 +596,7 @@ def update_at_start(updater: update.Updater) -> bool:
     print(f"Обновляю «Дубляж» до версии {latest}… (обычно несколько секунд, иногда несколько минут)", flush=True)
     try:
         updater.install()
-    except update.UpdateError as exc:
+    except Exception as exc:  # never stop the program from starting
         print(f"Обновить не удалось ({exc}). Запускаю текущую версию {__version__}.", flush=True)
         return False
     return True
@@ -604,7 +624,9 @@ def main() -> int:
         threading.Thread(target=_open_browser_when_ready, args=(url, host, port), daemon=True).start()
     print(f"«Дубляж» {__version__} работает: {url}  (не закрывайте это окно)")
     restarting = threading.Event()
-    server = uvicorn.Server(uvicorn.Config(None, host=host, port=port, log_level="warning"))
+    # A restart must not wait for a paused video another tab is still streaming.
+    server = uvicorn.Server(uvicorn.Config(None, host=host, port=port, log_level="warning",
+                                           timeout_graceful_shutdown=3))
 
     def restart() -> None:
         restarting.set()

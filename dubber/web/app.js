@@ -45,7 +45,8 @@ function clock(seconds) {
 
 function dateLabel(iso) {
   if (!iso) return "";
-  return new Date(iso).toLocaleDateString(uiLang === "ru" ? "ru-RU" : "en-GB", { day: "numeric", month: "long", year: "numeric" });
+  return new Date(iso).toLocaleDateString(uiLang === "ru" ? "ru-RU" : "en-GB", { day: "numeric", month: "long", year: "numeric" })
+    .replace(/ /g, "\u00a0"); // one unit: "г." never wraps onto its own line
 }
 
 function el(tag, attrs = {}, ...children) {
@@ -127,10 +128,15 @@ function card(video) {
   if (video.thumbnail) $("img", node).src = video.thumbnail;
   $(".card__duration", node).textContent = clock(video.duration);
   $(".card__title", node).textContent = video.title;
-  // Several dubs of one video differ by language, voice and sound: show all three.
-  $(".card__meta", node).textContent = [video.channel, langName(video.target_lang), voiceName(video.voice),
-    video.remove_voice ? t("card.noVoice") : null, dateLabel(video.created)].filter(Boolean).join(" · ");
+  $(".card__meta", node).textContent = [video.channel, dubLabel(video), dateLabel(video.created)]
+    .filter(Boolean).join(" · ");
   return node;
+}
+
+/** What tells dubs of one video apart: language, voice, and the sound choices (e.g. "Русский · Дмитрий · без фона"). */
+function dubLabel(dub) {
+  return [langName(dub.target_lang), voiceName(dub.voice), dub.background === false ? t("card.noBackground") : null,
+    dub.remove_voice ? t("card.noVoice") : null].filter(Boolean).join(" · ");
 }
 
 async function loadLibrary() {
@@ -182,7 +188,7 @@ function jobCard(job) {
     return el("li", { class: cls, text: label });
   }));
 
-  const elapsed = (Date.now() / 1000) - job.created;
+  const elapsed = (Date.now() / 1000) - (job.started || job.created); // not counting the time in the queue
   const head = el("div", { class: "job__head" },
     el("span", { class: "job__status" },
       running ? el("span", { class: job.status === "queued" ? "lamp lamp--idle" : "lamp", "aria-hidden": "true" }) : null,
@@ -248,7 +254,7 @@ function updateJobCard(node, job) {
   const fill = $(".bar__fill", node), bar = $(".bar", node), time = $(".job__time", node);
   if (fill) fill.style.width = `${(job.progress * 100).toFixed(1)}%`;
   if (bar) bar.setAttribute("aria-valuenow", String(Math.round(job.progress * 100)));
-  if (time) time.textContent = clock((Date.now() / 1000) - job.created);
+  if (time) time.textContent = clock((Date.now() / 1000) - (job.started || job.created));
 }
 
 function hiddenJobs() {
@@ -417,7 +423,7 @@ function renderWatchDetails() {
   $("#other-dubs").hidden = !siblings.length;
   $("#other-dubs-list").replaceChildren(...siblings.map((s) => el("a", {
     class: "btn", href: `#/watch/${encodeURIComponent(s.id)}`,
-    text: [langName(s.target_lang), voiceName(s.voice), s.remove_voice ? t("card.noVoice") : null].filter(Boolean).join(" · "),
+    text: dubLabel(s),
   })));
 
   const files = video.files || {};
@@ -448,7 +454,7 @@ function renderTranscript(video) {
   const keys = { ArrowDown: (i) => i + 1, ArrowUp: (i) => i - 1, Home: () => 0, End: () => lines.length - 1 };
   const lines = segments.map((seg, i) => el("li", {
     class: target?.rtl ? "line line--rtl" : "line", tabindex: i === 0 ? "0" : "-1", "data-i": String(i),
-    onclick: () => { player.currentTime = seg.start + 0.01; player.play(); },
+    onclick: () => { player.currentTime = seg.start + 0.01; player.play().catch(() => {}); },
     onkeydown: (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
       else if (keys[e.key]) { e.preventDefault(); move(i, keys[e.key](i)); }
@@ -481,7 +487,7 @@ function renderTranscript(video) {
 }
 
 async function deleteVideo(video) {
-  if (!confirm(t("watch.delete", video.title))) return;
+  if (!confirm(t("watch.delete", video.title, dubLabel(video)))) return;
   try { await api(`/api/videos/${encodeURIComponent(video.id)}`, { method: "DELETE" }); } catch (e) { alert(e.message); return; }
   location.hash = "#/library";
 }
@@ -508,6 +514,7 @@ function updateBackgroundHint() {
 function applyUiLang() {
   applyStaticTexts();
   showFormError(""); // a validation message in the old language would linger otherwise
+  showKeyError("");
   if (!state.submitting) $("#submit").textContent = t("form.submit");
   document.querySelectorAll("[data-ui-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.uiLang === uiLang)));
   fillLanguageSelect();
@@ -582,7 +589,7 @@ async function checkUpdate() {
 
 function renderUpdate() {
   const u = state.update, box = $("#update");
-  if ($("#update-btn").disabled) return; // installing: keep the "updating" text
+  if (state.installing) return; // keep the "updating" text
   box.hidden = !(u && (u.available || u.note));
   if (box.hidden) return;
   $("#update-text").textContent = u.note ? t(u.note) : t("update.available", u.latest);
@@ -591,18 +598,23 @@ function renderUpdate() {
 
 async function installUpdate() {
   const button = $("#update-btn");
-  button.disabled = true;
+  const done = (update) => {
+    state.installing = false; button.disabled = false; button.removeAttribute("aria-busy");
+    if (update) state.update = update;
+    renderUpdate();
+  };
+  state.installing = true; button.disabled = true; button.setAttribute("aria-busy", "true");
   $("#update-text").textContent = t("update.working");
   let result;
   try { result = await api("/api/update", { method: "POST" }); } catch (e) {
-    $("#update-text").textContent = e.message; button.disabled = false; return;
+    done(); $("#update-text").textContent = e.message; return;
   }
-  if (!result.restarting) { state.update = { note: "update.restart" }; renderUpdate(); return; }
+  if (!result.restarting) { done({ note: "update.restart" }); return; }
   for (let i = 0; i < 600; i++) { // the server restarts with the new version; dependencies can take minutes
     await new Promise((r) => setTimeout(r, 1000));
     try { if ((await api("/api/version")).version === result.installed) { location.reload(); return; } } catch (_) {}
   }
-  state.update = { note: "update.restart" }; renderUpdate();
+  done({ note: "update.restart" });
 }
 
 function renderTranslatorNote() {

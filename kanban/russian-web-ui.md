@@ -14,7 +14,7 @@ Paste link, see progress, watch result, download MP4/SRT/TXT. Windows .bat launc
 - 2026-10-16: Card created during session 1 planning. (by @claude)
 - 2026-10-16: UI built and checked in Playwright with a stubbed pipeline. Remaining: try the Windows installer on a real PC. (by @claude)
 - 2026-10-16: Real run through the page works; fixed the invisible progress bar. Remaining: Windows installer on a real PC. (by @claude)
-- 2026-10-16: Replaced the Gradio page with a custom, professional website (library, watch page with synced bilingual transcript, live job card, dark mode, no-background option). Adam clarified his father is a professional, not elderly. Remaining: Windows installer + H.264 playback on a real PC. (by @claude)
+- 2026-10-16: Replaced the Gradio page with a custom, professional website (library, watch page with synced bilingual transcript, live job card, dark mode, no-background option). Adam clarified the user is a professional, not a beginner. Remaining: Windows installer + H.264 playback on a real PC. (by @claude)
 
 ## Narrative
 - 2026-10-17: Done — superseded by the professional website (M2.5) and RU/EN + 12 languages (M6). (by @claude)

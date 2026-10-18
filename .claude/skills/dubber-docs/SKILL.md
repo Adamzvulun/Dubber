@@ -15,7 +15,7 @@ The repository is the project's memory. Before committing, walk this list:
 4. **`docs/DECISIONS.md`** — a new ADR whenever a tool/approach was chosen or rejected.
 5. **`docs/SKILLS.md`** — when a skill is added/removed/updated (source, commit, license, notes).
 6. **`docs/RESEARCH.md`** — new findings about tools, with source links.
-7. **User-facing docs** — `README.md` (dev, English) and `docs/README.ru.md` (father, Russian) if behaviour,
+7. **User-facing docs** — `README.md` (dev, English) and `docs/README.ru.md` (end user, Russian) if behaviour,
    install steps or the UI changed.
 8. **`CLAUDE.md`** — if commands, layout or working rules changed.
 

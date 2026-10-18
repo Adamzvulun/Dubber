@@ -1,12 +1,13 @@
 # Status — read this first
 
-_Last updated: 2026-10-18 (session 4). Update this page at the end of every session._
+_Last updated: 2026-10-18 (session 4c). Update this page at the end of every session._
 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video in **any spoken language** (also
 mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by default) with subtitles and
-transcripts. Built for Adam's father, a Russian-speaking professional (Windows PC, watches videos on every topic).
-It runs on **Adam's Windows PC**. Current version **0.5.0** (shown in the page footer). Session 4 (Adam merged
+transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
+It runs on **Adam's Windows PC**. Current version **0.5.1** (shown in the page footer). Session 4c: personal details trimmed from the docs and a
+full three-agent QA pass (updater made safe to fail, 15 UI/copy fixes — PROGRESS). Session 4 (Adam merged
 PR #6, dub quality OK): each dub of a video is now its own library entry (ADR-022); Hugging Face Spaces hosting was
 researched — not now, YouTube blocks its servers (ADR-023); and **the program now updates itself from `main`** at
 start and with an «Обновить» button (ADR-024) — merging is shipping. Session 3 (Adam: 0.3.1
@@ -26,7 +27,7 @@ music stays). **Open:** Adam listens to a v0.4.0 Hebrew dub and an English dub w
   `tests/` (100 tests, offline), `tools/` (stub server, 12-language QA, Hebrew voice QA), `scripts/`
   (installers/launchers). Conventions: `CLAUDE.md`.
 - **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…018), `DESIGN.md`
-  (design system), `RESEARCH.md` (tools, timing research, 12-language QA), `SKILLS.md`, `README.ru.md` (father's
+  (design system), `RESEARCH.md` (tools, timing research, 12-language QA), `SKILLS.md`, `README.ru.md` (user's
   guide: install, update, Claude key, troubleshooting). Task cards: `kanban/` (hand-off list: `kanban/next-steps.md`).
 - **Data on a user's PC (git-ignored):** `.env` (settings saved by the website, incl. the Claude key),
   `glossary.txt`, `install.log` (last installer run), `work/<id>/` = cache per video (`source.mp4`, `info.json`,

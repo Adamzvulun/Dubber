@@ -8,4 +8,4 @@
 - [ ] `docs/STATUS.md` / `docs/PROGRESS.md` / `docs/PLAN.md`
 - [ ] `kanban/` cards
 - [ ] `docs/DECISIONS.md` (if a choice was made)
-- [ ] `docs/README.ru.md` (if the father sees a change)
+- [ ] `docs/README.ru.md` (if the user sees a change)

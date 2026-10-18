@@ -354,3 +354,13 @@ def test_dub_id_is_a_safe_name_that_changes_with_every_choice():
     assert re.fullmatch(r"[A-Za-z0-9_-]{1,64}", pipeline.dub_id(**{**base, "video_id": "local-0123456789ab"}))
     changed = [dict(lang="en"), dict(voice="ru-RU-SvetlanaNeural"), dict(background=False), dict(remove_voice=True)]
     assert len({one, *(pipeline.dub_id(**{**base, **c}) for c in changed)}) == 5
+
+
+def test_dub_id_of_an_unusual_video_id_is_still_a_safe_name():
+    # yt-dlp ids of other sites can be long or contain dots, spaces, non-ASCII: the library could not open them.
+    import re
+
+    for vid in ("a" * 70, "lecture.final v2", "видео", "x/../y"):
+        name = pipeline.dub_id(vid, "ru", "ru-RU-DmitryNeural", True, False)
+        assert re.fullmatch(r"[A-Za-z0-9_-]{1,64}", name), name
+    assert pipeline.dub_id("a" * 70, "ru", "v", True, False) != pipeline.dub_id("a" * 71, "ru", "v", True, False)

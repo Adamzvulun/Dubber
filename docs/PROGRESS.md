@@ -2,6 +2,28 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-18 — Session 4c: trim personal details, full QA pass (v0.5.1)
+- Adam: 0.5.0 works. Asked to trim the personal details about the end user (current files only; "Adam" stays as
+  maintainer), to run the QA agents again over everything, and for ideas.
+- Three QA agents: guideline audit (`web-design-guidelines`), hands-on Playwright tester (6 pages × RU/EN ×
+  light/dark × 360/768/1280), code review of the session-4 code with reproductions.
+- **Updater made safe to fail** (code review, reproduced): the version file is now written last, after the
+  components installed — a failed pip or a locked file (Windows antivirus) leaves the old version, so the next start
+  retries (`.dubber-deps` stamp reruns pip until it succeeded); file errors no longer stop the start; stray
+  `.partial` files removed; ZIP names / manifest lines confined to the folder; one website update at a time and no
+  new dub meanwhile; 3 s graceful shutdown on restart (open video streams); Ctrl+C doesn't kill the new version;
+  unusual video ids of other sites get a safe library folder name. 5 new tests.
+- **UI fixes:** update banner stuck on «Обновляю…» (never showed the restart note); dubs differing only in the
+  background got identical labels (now «без фона»); delete dialog names the dub and says other dubs stay; footer
+  aligned with content and consistent space below pages; no blue frame around the page after keyboard navigation;
+  "г." no longer wraps alone; one term for voice removal («голос диктора»); hero tense; «Установить обновление»;
+  window name «Дубляж видео»; EN "audio" everywhere; glossary example never splits; status role on the banner text
+  only; labelled download / other-dubs groups; key error re-translated on RU/EN switch; job clock starts when the
+  job leaves the queue (`started`); clearer "key too short" message; no unhandled `play()` rejection.
+- Not changed (by design): `https://localhost` accepted (developer use); remove-voice switch keeps its state while
+  disabled (ignored on submit); a pre-0.4.1 dub redone with identical choices shows twice (rare, old entries only).
+- Verified in Chromium after the fixes (banner restart note RU/EN, labels, delete text, footer, focus). 118 tests.
+
 ## 2026-10-18 — Session 4b: the program updates itself (v0.5.0)
 - Adam: the hosting question was really "stop downloading the ZIP after every merge". He will make the repo public
   and wants updates both at start and with a button.
@@ -84,8 +106,8 @@ Newest entries at the top. One entry per working session / milestone.
   website); its README lists the cache files needed for the translation/timing regression.
 
 ## 2026-10-17 — Session 2: Adam's feedback after the re-dub
-- Adam: the EN+FR video now works, but translation quality and timing feel worse than before; the father will use
-  Dubber for every topic (general glossary, not a field list); his PC is Windows; still deciding on a Claude key.
+- Adam: the EN+FR video now works, but translation quality and timing feel worse than before; Dubber will be
+  used for every topic (general glossary, not a field list); target PC is Windows; still deciding on a Claude key.
 - Bug: after dubbing a video into Russian and then into Hebrew, the watch page showed Hebrew text and voice name but
   played the Russian dub. Cause: `dubbed.mp4` keeps its URL and was served without cache headers, so Chrome reused its
   copy. Fix: the video URL carries a version (`?v=` from the file's mtime + size) and `/files/` answers
@@ -181,7 +203,7 @@ Newest entries at the top. One entry per working session / milestone.
 - Explained to Adam how to install on his PC (branch `claude/bold-davinci-qfv627`, `scripts/install_windows.bat`).
 
 ## 2026-10-16 — Session 1c: professional website
-- Adam: the father is a professional, not elderly → modern product look. Researched design guidance and dubbing
+- Adam: the user is a professional, not a beginner → modern product look. Researched design guidance and dubbing
   products; wrote `docs/DESIGN.md` (tokens, Onest + Unbounded fonts, cobalt accent, red "live" lamp, dark mode).
 - Replaced Gradio with a FastAPI + hand-built site (`dubber/web/`): new-video page with live 6-step job card,
   library with thumbnails, watch page with player, RU/EN subtitles and a synced bilingual transcript.
@@ -224,10 +246,10 @@ Newest entries at the top. One entry per working session / milestone.
   - UX bug: for the whole run the page showed nothing (progress bar had no visible place). Fix: fixed-height status
     area + `show_progress="full"` → live bar "Озвучиваю по-русски – 63.7 %". Screenshots in `docs/images/`.
 - Not verifiable here: in-page playback (headless Chromium lacks H.264), Windows installer, Google translation
-  quality (Google blocks this server; the father's home connection should be fine).
+  quality (Google blocks this server; a home connection should be fine).
 
 ## 2026-10-16 — Session 1: research, skills, foundation
-- Agreed scope with Adam: runs on father's PC, free-first, outputs = dubbed MP4 + RU subtitles + transcript.
+- Agreed scope with Adam: runs on the user's PC, free-first, outputs = dubbed MP4 + RU subtitles + transcript.
 - Researched existing dubbing projects and building blocks → `docs/RESEARCH.md`.
 - Searched GitHub for Claude skills; cloned 11 repos, reviewed code, installed 12 skills → `docs/SKILLS.md`.
   Removed one auto-installing script from `youtube-downloader`; skipped two unlicensed skills.

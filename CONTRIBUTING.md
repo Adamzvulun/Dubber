@@ -2,7 +2,7 @@
 
 - **`main` is the stable line.** It always passes CI (`ruff check .` + `pytest`) and is what the PCs run: since
   0.5.0 they **update themselves from `main`** at start (and with the site's «Обновить» button, ADR-024). Merging is
-  shipping — a merged change reaches the father's PC on its next start. Nobody commits to `main` directly.
+  shipping — a merged change reaches the users' PCs on their next start. Nobody commits to `main` directly.
 - **A new branch only for a new feature** (Adam, 2026-10-18), created from the latest `main`: `feat/<short-name>`.
   Fixes, follow-ups and docs for the work in progress go on **that same branch** (or the Claude session's
   `claude/...` branch) — not a new branch per fix. When its PR is merged and more fixes come, continue on the same

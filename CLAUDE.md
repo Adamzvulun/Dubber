@@ -4,8 +4,8 @@
 
 Dubber turns a YouTube video in **any spoken language** (also mixed, e.g. English + French) into a **dubbed** MP4 in one
 of 12 languages (**Russian by default**) + subtitles + transcripts, with a steady pace that follows the speaker.
-End user: a Russian-speaking professional (not a developer) who learns from foreign videos, running it on his own
-Windows PC. The website (RU/EN interface, cancel button) must look like a modern, professional product — `docs/DESIGN.md`.
+End user: a Russian speaker (not a developer) who learns from foreign videos, running it on a Windows PC.
+The website (RU/EN interface, cancel button) must look like a modern, professional product — `docs/DESIGN.md`.
 
 ## Golden rules
 1. **The repo is the source of truth.** Every plan, decision and progress note lives in `docs/` and `kanban/`.

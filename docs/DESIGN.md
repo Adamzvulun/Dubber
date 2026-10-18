@@ -3,7 +3,7 @@
 _Last updated: 2026-10-16_
 
 ## Brief
-A modern, professional personal tool. The user is a Russian-speaking professional who learns from foreign videos
+A modern, professional personal tool. The user is a Russian speaker who learns from foreign videos
 (any spoken language; the dub defaults to Russian, 12 dub languages). The interface is Russian or English (RU/EN switch).
 He is not a beginner with computers; the site should feel like a current, well-made product, not a simplified kiosk.
 Primary jobs: (1) paste a link and get a dub, (2) watch and study dubbed videos, (3) download the files.
