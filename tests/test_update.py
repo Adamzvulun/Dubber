@@ -178,3 +178,66 @@ def test_website_update_refused_when_none_or_while_dubbing(tmp_path):
 
     failing = FakeUpdater("99.0.0", fail=True)
     assert client(tmp_path, failing).post("/api/update").status_code == 502
+
+
+def test_failed_component_install_keeps_the_old_version_and_retries_next_time(installed):
+    # QA: pip failing after the files were replaced left the new version number on disk, so no later start retried.
+    runs = []
+    updater = make_updater(installed, {ZIP: github_zip(NEW)}, runs)
+    updater.run = lambda cmd, **k: runs.append(cmd) or SimpleNamespace(returncode=1 if "-e" in cmd else 0)
+    with pytest.raises(update.UpdateError):
+        updater.install()
+    assert '"0.4.0"' in (installed / "dubber/__init__.py").read_text()  # still the old version → retried
+    updater.run = lambda cmd, **k: runs.append(cmd) or SimpleNamespace(returncode=0)
+    runs.clear()
+    assert updater.install() == "9.0.0"
+    assert any("-e" in cmd for cmd in runs)  # the components are installed although pyproject is already new
+    assert '"9.0.0"' in (installed / "dubber/__init__.py").read_text()
+
+
+def test_a_locked_file_is_an_update_error_and_leaves_the_old_version(installed, monkeypatch):
+    # Windows: antivirus or an open editor can lock a file while it is replaced.
+    real_replace = update.Path.replace
+
+    def replace(self, target):
+        if str(target).endswith("app.py"):
+            raise PermissionError("locked")
+        return real_replace(self, target)
+
+    monkeypatch.setattr(update.Path, "replace", replace)
+    with pytest.raises(update.UpdateError):
+        make_updater(installed, {ZIP: github_zip(NEW)}).install()
+    assert '"0.4.0"' in (installed / "dubber/__init__.py").read_text()
+    assert not list(installed.rglob("*.partial"))
+
+
+def test_paths_outside_the_program_folder_are_ignored(installed, tmp_path_factory):
+    outside = tmp_path_factory.mktemp("outside") / "victim.txt"
+    outside.write_text("keep")
+    (installed / update.MANIFEST).write_text(f"../{outside.parent.name}/victim.txt\n{outside}\n")
+    hostile = {**NEW, "..\\..\\evil.txt": "x", "C:/evil.txt": "x"}
+    make_updater(installed, {ZIP: github_zip(hostile)}).install()
+    assert outside.read_text() == "keep"
+    assert not (installed.parent / "evil.txt").exists()
+    assert set((installed / update.MANIFEST).read_text().split()) == set(NEW)
+
+
+def test_only_one_update_at_a_time_and_no_new_dub_meanwhile(tmp_path):
+    import threading
+    started, release = threading.Event(), threading.Event()
+
+    class SlowUpdater(FakeUpdater):
+        def install(self, timeout=120.0):
+            started.set()
+            release.wait(5)
+            return super().install(timeout)
+
+    c = client(tmp_path, SlowUpdater("99.0.0"))
+    first = threading.Thread(target=lambda: c.post("/api/update"))
+    first.start()
+    assert started.wait(5)
+    assert c.post("/api/update").status_code == 409
+    r = c.post("/api/jobs", json={"url": "https://youtu.be/x"})
+    assert r.status_code == 409 and "обнов" in r.json()["detail"]["ru"]
+    release.set()
+    first.join(5)

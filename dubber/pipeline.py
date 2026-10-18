@@ -64,6 +64,8 @@ def dub_id(video_id: str, lang: str, voice: str, background: bool, remove_voice:
     The same choices again give the same name, so redoing a dub replaces it instead of adding a duplicate.
     """
     choices = hashlib.sha1(f"{lang}|{voice}|{background}|{remove_voice}".encode()).hexdigest()[:6]
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", video_id):  # other sites' ids: long, dots, spaces, non-ASCII
+        video_id = "v" + hashlib.sha1(video_id.encode()).hexdigest()[:12]
     return f"{video_id}--{lang}-{choices}"
 
 
