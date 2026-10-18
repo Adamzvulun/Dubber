@@ -37,8 +37,7 @@ def test_storage_sizes_per_video(tmp_path):
     rows = {v["video_id"]: v for v in s["videos"]}
     assert rows["vidA"] == {"video_id": "vidA", "title": "Лекция A", "cache": 3000 + info, "library": 0, "dubs": 0}
     assert rows["vidB"]["title"] == "Видео B" and rows["vidB"]["dubs"] == 1 and rows["vidB"]["library"] > 2000
-    assert [v["video_id"] for v in s["videos"]] == ["vidA", "vidB"]  # biggest cache first
-    assert "uploads" not in rows
+    assert [v["video_id"] for v in s["videos"]] == ["vidA", "vidB", "uploads"]  # biggest cache first
 
 
 def test_clear_one_video_and_all(tmp_path):
@@ -64,3 +63,11 @@ def test_clearing_waits_for_running_dubs(tmp_path):
         assert c.delete("/api/storage/cache").status_code == 409
     finally:
         release.set()
+
+
+def test_uploads_have_their_own_row_and_can_be_cleared(tmp_path):
+    c, settings = setup(tmp_path)
+    rows = {v["video_id"]: v for v in c.get("/api/storage").json()["videos"]}
+    assert rows["uploads"]["cache"] == 500 and rows["uploads"]["title"] == ""
+    assert c.delete("/api/storage/cache/uploads").json()["freed"] == 500
+    assert not (settings.work_dir / "uploads").exists()

@@ -104,3 +104,26 @@ def test_playlist_api(tmp_path, monkeypatch):
     monkeypatch.setattr(download, "playlist_entries", broken)
     r = c.post("/api/playlist", json={"url": "https://www.youtube.com/playlist?list=PL1"})
     assert r.status_code == 502 and "робот" in r.json()["detail"]["ru"]
+
+
+def test_the_same_upload_dubbed_twice_keeps_the_file_until_both_are_done(tmp_path):
+    # QA: dubbing one uploaded file into two languages — the first finished job deleted the file the second needed.
+    import threading
+    gates = {"ru": threading.Event(), "en": threading.Event()}
+
+    def runner(url, settings, progress):
+        gates[settings.target_lang].wait(5)
+        return SimpleNamespace(id=f"vid-{settings.target_lang}")
+
+    settings = Settings(work_dir=tmp_path / "w", output_dir=tmp_path / "out")
+    c = TestClient(app.create_app(settings, runner=runner))
+    up = c.post("/api/upload", params={"name": "a.mp4"}, content=b"video").json()
+    path = settings.work_dir / "uploads" / up["file"]
+    first = c.post("/api/jobs", json={"file": up["file"], "lang": "ru"}).json()
+    second = c.post("/api/jobs", json={"file": up["file"], "lang": "en"}).json()
+    gates["ru"].set()
+    assert wait_done(c, first["id"])["status"] == "done"
+    assert path.exists()  # the English dub still needs it
+    gates["en"].set()
+    assert wait_done(c, second["id"])["status"] == "done"
+    assert not path.exists()

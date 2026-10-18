@@ -27,6 +27,7 @@ on this computer only, but a page open in the same browser could otherwise send 
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import dataclasses
 import hashlib
@@ -257,7 +258,9 @@ class JobRunner:
             try:
                 result = self.runner(job.url, settings, progress=progress)
                 job.video_id, job.status, job.progress, job.label = result.id, "done", 1.0, "Готово"
-                if job.file:  # the dub keeps its own copy (work/<id>/source.mp4); a failed one keeps it to retry
+                others = any(j is not job and j.file == job.file and j.status in ("queued", "running")
+                             for j in list(self.jobs.values()))
+                if job.file and not others:  # the dub has its own copy (work/<id>/source.mp4); a failed one keeps it
                     uploaded = Path(job.url)
                     uploaded.unlink(missing_ok=True)
                     with contextlib.suppress(OSError):
@@ -327,6 +330,11 @@ def _read_meta(folder: Path) -> dict | None:
     if "target_lang" not in meta:  # dubbed before other languages existed: English → Russian, old file names
         meta.update(target_lang="ru", source_lang="en", files=LEGACY_FILES)
     return meta
+
+
+def _save_chunk(out, digest, chunk: bytes) -> None:
+    digest.update(chunk)
+    out.write(chunk)
 
 
 def folder_size(path: Path) -> int:
@@ -438,8 +446,7 @@ def create_app(
         try:
             with incoming.open("wb") as out:
                 async for chunk in request.stream():  # in pieces: a video can be several GB
-                    digest.update(chunk)
-                    out.write(chunk)
+                    await asyncio.to_thread(_save_chunk, out, digest, chunk)  # pages keep answering meanwhile
                     size += len(chunk)
             if not size:
                 raise HTTPException(422, _detail("Файл пустой.", "The file is empty."))
@@ -607,14 +614,16 @@ def create_app(
                            "library": sum(folder_size(settings.output_dir / d["id"]) for d in dubs),
                            "dubs": len(dubs)})
         videos.sort(key=lambda v: v["cache"], reverse=True)
-        return {"cache": sum(v["cache"] for v in videos) + folder_size(work / "uploads"),
+        if (uploaded := folder_size(work / "uploads")):  # files not dubbed yet (or whose dub failed)
+            videos.append({"video_id": "uploads", "title": "", "cache": uploaded, "library": 0, "dubs": 0})
+        return {"cache": sum(v["cache"] for v in videos),
                 "uploads": folder_size(work / "uploads"), "library": folder_size(settings.output_dir),
                 "models": models_size(), "videos": videos}
 
     @app.delete("/api/storage/cache/{video_id}")
     def clear_cache(video_id: str) -> dict:
         folder = settings.work_dir / video_id
-        if not _ID.match(video_id) or video_id == "uploads" or not folder.is_dir():
+        if not _ID.match(video_id) or not folder.is_dir():
             raise HTTPException(404)
         refuse_while_dubbing()
         freed = folder_size(folder)

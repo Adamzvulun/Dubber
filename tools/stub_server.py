@@ -8,7 +8,7 @@ ends with a download error instead (to see the error card).
 Put real finished videos into DATA_DIR/out/<id>/ (e.g. copied from output/) to test the library and watch pages.
 Settings are saved in DATA_DIR (never the project's .env); a Claude key ending in "bad" is refused, any other
 key-shaped one is accepted without calling Anthropic.
-Playlist links get a made-up playlist of 3 videos (no YouTube needed).
+Playlist links get a made-up playlist of 3 videos (15 when the list id starts with "BIG"; no YouTube needed).
 STUB_UPDATE=9.9.9 makes the site offer an update to that version (installing it takes 2 s and changes nothing).
 Kill it by PID, never with `pkill -f` (that kills your own shell).
 """
@@ -45,8 +45,10 @@ def runner(url: str, settings: Settings, progress) -> SimpleNamespace:
 
 
 def fake_playlist(url: str, limit: int = 200) -> dict:
-    return {"title": "Тестовый плейлист", "entries": [
-        {"url": f"https://www.youtube.com/watch?v=stubvideo0{i}", "title": f"Видео {i}"} for i in range(1, 4)]}
+    count = 15 if "list=BIG" in url else 3
+    entries = [{"url": f"https://www.youtube.com/watch?v=stubvideo{i:02d}", "title": f"Видео {i}"}
+               for i in range(1, count + 1)]
+    return {"title": "Тестовый плейлист", "entries": entries}
 
 
 def check_key(key: str) -> None:

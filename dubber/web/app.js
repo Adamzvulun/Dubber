@@ -399,19 +399,37 @@ function playlistKind(link) {
   return "both";
 }
 
-/** Shows the playlist question in the form; resolves to "one", "all" or null (cancelled). */
-function askPlaylist(playlist) {
-  const box = $("#playlist-choice"), n = playlist.entries.length;
-  $("#playlist-text").textContent = t("playlist.ask", playlist.title || "", n);
-  $("#playlist-all").textContent = t("playlist.all", n);
+/** Shows the playlist question in the form; resolves to "one", "all" or null (cancelled, also Esc).
+ * withOne: the link is a video inside the playlist ("just this video" is offered). */
+function askPlaylist(playlist, withOne) {
+  const box = $("#playlist-choice");
+  state.playlistAsk = { playlist, withOne };
+  renderPlaylistAsk();
   box.hidden = false;
-  $("#playlist-one").focus();
+  $("#submit").textContent = t("form.submit");
+  (withOne ? $("#playlist-one") : $("#playlist-all")).focus();
   return new Promise((resolve) => {
-    const done = (answer) => () => { box.hidden = true; resolve(answer); };
+    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); done(null)(); } };
+    const done = (answer) => () => {
+      box.hidden = true; state.playlistAsk = null;
+      document.removeEventListener("keydown", onKey);
+      $("#submit").textContent = t("form.sending");
+      resolve(answer);
+    };
     $("#playlist-one").onclick = done("one");
     $("#playlist-all").onclick = done("all");
     $("#playlist-cancel").onclick = done(null);
+    document.addEventListener("keydown", onKey); // Esc cancels, wherever the focus is
   });
+}
+
+function renderPlaylistAsk() {
+  const ask = state.playlistAsk;
+  if (!ask) return;
+  const n = ask.playlist.entries.length, title = ask.playlist.title || "";
+  $("#playlist-text").textContent = ask.withOne ? t("playlist.ask", title, n) : t("playlist.askAll", title, n);
+  $("#playlist-one").hidden = !ask.withOne;
+  $("#playlist-all").textContent = t("playlist.all", n);
 }
 
 /** The links in the field (one per line, or separated by spaces) → queued jobs; playlists become their videos. */
@@ -429,13 +447,16 @@ async function submitLinks() {
       $("#submit").textContent = t("playlist.loading");
       const playlist = await api("/api/playlist", { method: "POST", body: JSON.stringify({ url: link }) });
       if (!playlist.entries.length) throw new Error(t("playlist.empty"));
-      const answer = kind === "both" ? await askPlaylist(playlist) : "all";
+      // a video inside a playlist: always ask; a playlist page: ask only when it is long
+      const answer = kind === "both" ? await askPlaylist(playlist, true)
+        : playlist.entries.length > 10 ? await askPlaylist(playlist, false) : "all";
       if (answer === null) { cancelled = true; return; }
       if (answer === "one") sources.push({ url: link });
       else sources.push(...playlist.entries.map((entry) => ({ url: entry.url })));
     }
     $("#submit").textContent = t("form.sending");
-    await startJobs(sources, choices);
+    const unique = [...new Map(sources.map((source) => [source.url, source])).values()]; // a link listed twice
+    await startJobs(unique, choices);
     field.value = ""; autoGrow();
   });
   if (cancelled) field.focus();
@@ -661,7 +682,7 @@ function applyUiLang() {
   applyStaticTexts();
   showFormError(""); // a validation message in the old language would linger otherwise
   showKeyError("");
-  if (!state.submitting) $("#submit").textContent = t("form.submit");
+  if (!state.submitting || state.playlistAsk) $("#submit").textContent = t("form.submit");
   document.querySelectorAll("[data-ui-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.uiLang === uiLang)));
   fillLanguageSelect();
   updateBackgroundHint();
@@ -671,6 +692,7 @@ function applyUiLang() {
   renderVersion();
   renderUpdate();
   renderNews();
+  renderPlaylistAsk();
   renderStorage();
   if (state.video) renderWatchDetails();
   else if (!$("#view-settings").hidden) document.title = t("title.settings");
@@ -703,12 +725,12 @@ function renderStorage() {
     s.models ? stat(t("storage.models"), s.models) : ""); // models: downloaded on the first dub
   $("#storage-clear-all").hidden = !s.cache;
   $("#storage-list").replaceChildren(...s.videos.map((v) => el("li", {},
-    el("span", { class: "storage-list__name", text: v.title, title: v.title }),
+    el("span", { class: "storage-list__name", text: v.title || t("storage.uploads"), title: v.title || t("storage.uploads") }),
     el("span", { class: "storage-list__size", text: [sizeLabel(v.cache), v.dubs ? t("storage.inLibrary", v.dubs) : null]
       .filter(Boolean).join(" · ") }),
     el("button", { class: "btn btn--quiet", type: "button", text: t("storage.clear"), "aria-label": t("storage.clearAria", v.title),
       onclick: () => clearCache(`/api/storage/cache/${encodeURIComponent(v.video_id)}`) }))));
-  if (!s.videos.length && !s.cache) $("#storage-list").append(el("li", { class: "muted", text: t("storage.empty") }));
+  if (!s.videos.length) $("#storage-list").append(el("li", { class: "muted", text: t("storage.empty") }));
 }
 
 async function clearCache(path, confirmText) {
@@ -717,8 +739,10 @@ async function clearCache(path, confirmText) {
   try {
     const { freed } = await api(path, { method: "DELETE" });
     note.textContent = t("storage.freed", sizeLabel(freed));
-  } catch (e) { note.textContent = e.message; }
+    note.classList.remove("is-error");
+  } catch (e) { note.textContent = e.message; note.classList.add("is-error"); }
   note.hidden = false;
+  $("#storage-title").focus(); // the pressed button may disappear with its row
   loadStorage();
 }
 
@@ -782,7 +806,14 @@ function newerVersion(a, b) {
 async function checkNews() {
   let seen = null;
   try { seen = localStorage.getItem("dubber.seenVersion"); } catch (_) { return; }
-  if (!seen) { markNewsSeen(); return; } // first visit ever: nothing is "new"
+  if (!seen) {
+    // 0.5.x didn't remember the version: someone who already used the program has settings or videos
+    let used = false;
+    try { used = Object.keys(localStorage).some((key) => key.startsWith("dubber.")); } catch (_) {}
+    if (!used) { try { used = (await api("/api/videos")).length > 0; } catch (_) {} }
+    if (!used) { markNewsSeen(); return; } // first visit ever: nothing is "new"
+    seen = "0.5.1";
+  }
   if (!newerVersion(state.version, seen)) return;
   let log = [];
   try { log = await api("/api/changelog"); } catch (_) { return; }
@@ -913,6 +944,10 @@ async function init() {
   $("#pick-file").addEventListener("click", () => $("#file").click());
   $("#file").addEventListener("change", (e) => uploadFile(e.target.files[0]));
   $("#upload-cancel").addEventListener("click", () => uploadRequest?.abort());
+  // A file dropped anywhere else on the page would open in the tab and leave the program.
+  for (const type of ["dragover", "drop"]) {
+    window.addEventListener(type, (e) => { if ([...(e.dataTransfer?.types || [])].includes("Files")) e.preventDefault(); });
+  }
   const composer = $("#dub-form");
   const hasFile = (e) => [...(e.dataTransfer?.types || [])].includes("Files");
   composer.addEventListener("dragover", (e) => { if (hasFile(e)) { e.preventDefault(); composer.classList.add("is-dragover"); } });

@@ -129,7 +129,9 @@ main.wrap { padding-bottom: 80px; }
 .link-button { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 500; cursor: pointer;
   text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
 .link-button:hover { text-decoration-thickness: 2px; }
-.upload, .choice { margin-top: 14px; padding: 14px 16px; border-radius: var(--r-control); background: var(--surface-2); display: grid; gap: 10px; }
+.upload, .choice { margin-top: 14px; padding: 14px 16px; border-radius: var(--r-control); background: var(--surface-2); display: grid;
+  grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.upload .bar { margin-top: 0; background: var(--line); }
 .upload[hidden], .choice[hidden] { display: none; }
 .upload__head { display: flex; align-items: center; gap: 12px; font-size: 15px; }
 .upload__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
@@ -139,7 +141,7 @@ main.wrap { padding-bottom: 80px; }
 .composer { position: relative; }
 .drop-hint { display: none; }
 .composer.is-dragover { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent); }
-.composer.is-dragover .drop-hint { display: grid; place-items: center; position: absolute; inset: 0; border-radius: inherit;
+.composer.is-dragover .drop-hint { display: grid; place-items: center; position: absolute; inset: 0; z-index: 2; border-radius: inherit;
   background: color-mix(in srgb, var(--surface) 92%, transparent); font-weight: 600; font-size: 18px; color: var(--accent); }
 .composer__error { margin-top: 10px; color: var(--danger); font-size: 15px; overflow-wrap: anywhere; }
 .composer__options { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px 40px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
@@ -309,6 +311,7 @@ main.wrap { padding-bottom: 80px; }
 .settings__options .select-field__box { flex: 0 1 360px; }
 .settings__options select { width: 100%; }
 .saved-note { color: var(--ok); font-size: 15px; font-weight: 500; }
+.saved-note.is-error { color: var(--danger); }
 
 /* ---------- new version banner ---------- */
 .update { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap;
