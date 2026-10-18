@@ -41,6 +41,14 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dubber.ps1 -NoStart
           if (-not (Test-Path .venv\dubber-installed)) { throw "existing install not recognised" }
           if (Test-Path install.log) { throw "reinstalled although the program was installed" }
+      - name: Windows helpers compile in PowerShell 5.1 (font switch, shortcut)
+        shell: powershell
+        run: |
+          $src = Get-Content scripts\windows\dubber.ps1 -Raw -Encoding UTF8
+          $code = [regex]::Match($src, '(?s)\$NativeCode = @"\r?\n(.*?)\r?\n"@').Groups[1].Value
+          if (-not $code) { throw "helper code not found" }
+          Add-Type -TypeDefinition $code
+          "font switched: $([DubberSetup.ConsoleFont]::UseCyrillicFont())  (False is expected here: CI has no console window)"
       - name: Desktop shortcut with the icon
         shell: powershell
         run: |

@@ -6,7 +6,7 @@ _Last updated: 2026-10-18 (session 5). Update this page at the end of every sess
 Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video **or a video file** in **any
 spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version **0.6.0** (page footer). The PCs **update themselves from `main`** (ADR-024): merging is shipping.
+Current version **0.6.1** (page footer). The PCs **update themselves from `main`** (ADR-024): merging is shipping.
 Session 5: one-click Windows start (`Start Dubber.cmd` → install + desktop shortcut with its own icon + start; the
 old `?` / missing-shortcut bug reproduced and fixed on real Windows in CI, ADR-025), file upload, several links and
 playlists (ADR-026), grouped library with search, disk space page, "What's new" after updates (ADR-027).

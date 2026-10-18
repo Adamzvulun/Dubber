@@ -2,6 +2,13 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-18 — Session 5b: question marks in the window (v0.6.1)
+- Adam merged PR #9; after a restart the PC updated itself to 0.6.0. The shortcut appears once «Start Dubber» runs
+  (the self-update restarts only the program, not the launcher). His screenshot of the launcher window: title
+  «Дубляж видео» correct, every Russian line `?` — also Python's own output, so not an encoding problem but the
+  console font (Raster Fonts have only the system language's letters). Fix: switch to Consolas at start (ADR-025
+  follow-up). Not verifiable here or in CI (no visible console) — Adam checks.
+
 ## 2026-10-18 — Session 5: one-click Windows start, upload, playlists, disk space, "What's new" (v0.6.0)
 - Adam merged PR #8. Asked: fix the installer (question marks, no shortcut) so one click installs, creates a desktop
   shortcut with a dedicated icon and starts; then ideas 1 (upload), 2 (several links/playlists), 4 (What's new),

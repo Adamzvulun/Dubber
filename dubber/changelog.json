@@ -1,4 +1,12 @@
 {
+  "0.6.1": {
+    "ru": [
+      "Русские буквы в чёрном окне программы больше не превращаются в вопросительные знаки."
+    ],
+    "en": [
+      "Russian letters in the program's black window no longer turn into question marks."
+    ]
+  },
   "0.6.0": {
     "ru": [
       "Один значок для запуска: «Start Dubber» сам устанавливает всё нужное и создаёт на рабочем столе ярлык «Дубляж видео» с собственным значком.",
@@ -28,7 +36,11 @@
     ]
   },
   "0.5.0": {
-    "ru": ["Программа обновляется сама — скачивать новую версию вручную больше не нужно."],
-    "en": ["The program updates itself: no more downloading new versions by hand."]
+    "ru": [
+      "Программа обновляется сама — скачивать новую версию вручную больше не нужно."
+    ],
+    "en": [
+      "The program updates itself: no more downloading new versions by hand."
+    ]
   }
 }
