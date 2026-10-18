@@ -231,7 +231,7 @@ function jobCard(job) {
       el("span", { class: "job__left", title: t("job.leftHint"), text: etaText(job) })) : null);
 
   const node = el("article", { class: `job job--${job.status}`, "data-job": job.id },
-    head, el("p", { class: "job__url", text: `${t("job.into", langName(job.lang || "ru"))} · ${job.url}` }));
+    head, el("p", { class: "job__url", text: `${t("job.into", langName(job.lang || "ru"))} · ${job.title || job.url}` }));
 
   const hide = () => el("button", { class: "btn", type: "button", "data-action": "hide", text: t("btn.hide"), onclick: () => dismissJob(job.id) });
   const cancel = () => el("button", { class: "btn", type: "button", "data-action": "cancel", disabled: job.cancel_requested,
@@ -359,22 +359,132 @@ function showFormError(message) {
   else { error.hidden = true; error.textContent = ""; url.removeAttribute("aria-invalid"); }
 }
 
-async function startJob(url, voice, background, lang, removeVoice = false) {
-  if (state.submitting) return; // no double submits while the request is on its way
+/** The form's choices for a new dub. */
+function formChoices() {
+  const background = $("#background").checked;
+  return { voice: new FormData($("#dub-form")).get("voice") || "male", background, lang: $("#lang").value || "ru",
+    remove_voice: background && $("#remove-voice").checked };
+}
+
+/** Queue one job per source ({url} or {file}); they run one after another. */
+async function startJobs(sources, choices = formChoices()) {
+  for (const source of sources) {
+    await api("/api/jobs", { method: "POST", body: JSON.stringify({ ...source, ...choices }) });
+  }
+  pollJobs();
+  if (sources.length > 1) $("#jobs-status").textContent = t("form.queued", sources.length);
+}
+
+/** While a request is on its way: no double submits, the button says so. */
+async function busy(work, label = t("form.sending")) {
+  if (state.submitting) return;
   state.submitting = true;
   const submit = $("#submit");
   showFormError("");
-  submit.disabled = true; submit.textContent = t("form.sending");
-  try {
-    await api("/api/jobs", { method: "POST", body: JSON.stringify({ url, voice, background, lang, remove_voice: removeVoice }) });
-    $("#url").value = "";
-    pollJobs();
-  } catch (e) {
-    showFormError(e.message);
-  } finally {
+  submit.disabled = true; submit.textContent = label;
+  try { await work(); } catch (e) { showFormError(e.message); } finally {
     state.submitting = false;
     submit.disabled = false; submit.textContent = t("form.submit");
   }
+}
+
+/** "playlist" for a playlist page, "both" for a video inside a playlist, null otherwise (YouTube mixes too). */
+function playlistKind(link) {
+  let url;
+  try { url = new URL(link); } catch (_) { return null; }
+  const list = url.searchParams.get("list");
+  if (!list || list.startsWith("RD") || !/(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(url.hostname)) return null;
+  if (url.pathname === "/playlist") return "playlist";
+  return "both";
+}
+
+/** Shows the playlist question in the form; resolves to "one", "all" or null (cancelled). */
+function askPlaylist(playlist) {
+  const box = $("#playlist-choice"), n = playlist.entries.length;
+  $("#playlist-text").textContent = t("playlist.ask", playlist.title || "", n);
+  $("#playlist-all").textContent = t("playlist.all", n);
+  box.hidden = false;
+  $("#playlist-one").focus();
+  return new Promise((resolve) => {
+    const done = (answer) => () => { box.hidden = true; resolve(answer); };
+    $("#playlist-one").onclick = done("one");
+    $("#playlist-all").onclick = done("all");
+    $("#playlist-cancel").onclick = done(null);
+  });
+}
+
+/** The links in the field (one per line, or separated by spaces) → queued jobs; playlists become their videos. */
+async function submitLinks() {
+  const field = $("#url"), links = field.value.split(/\s+/).filter(Boolean);
+  if (!links.length) { showFormError(t("form.badUrl")); field.focus(); return; }
+  const bad = links.find((link) => !looksLikeUrl(link));
+  if (bad) { showFormError(links.length > 1 ? t("form.badUrlLine", bad) : t("form.badUrl")); field.focus(); return; }
+  const choices = formChoices(), sources = [];
+  let cancelled = false;
+  await busy(async () => {
+    for (const link of links) {
+      const kind = playlistKind(link);
+      if (!kind) { sources.push({ url: link }); continue; }
+      $("#submit").textContent = t("playlist.loading");
+      const playlist = await api("/api/playlist", { method: "POST", body: JSON.stringify({ url: link }) });
+      if (!playlist.entries.length) throw new Error(t("playlist.empty"));
+      const answer = kind === "both" ? await askPlaylist(playlist) : "all";
+      if (answer === null) { cancelled = true; return; }
+      if (answer === "one") sources.push({ url: link });
+      else sources.push(...playlist.entries.map((entry) => ({ url: entry.url })));
+    }
+    $("#submit").textContent = t("form.sending");
+    await startJobs(sources, choices);
+    field.value = ""; autoGrow();
+  });
+  if (cancelled) field.focus();
+}
+
+/** The link field grows with its lines (up to its max height). */
+function autoGrow() {
+  const field = $("#url");
+  field.style.height = "auto";
+  field.style.height = `${field.scrollHeight + 2}px`;
+}
+
+/* ---------- upload a video file ---------- */
+const VIDEO_TYPES = /\.(mp4|mkv|webm|mov|avi|m4v|wmv|flv|mpg|mpeg|ts|3gp)$/i;
+let uploadRequest = null;
+
+function uploadFile(file) {
+  if (!file || uploadRequest) return;
+  showFormError("");
+  if (!VIDEO_TYPES.test(file.name)) { showFormError(t("upload.badType")); return; }
+  const choices = formChoices(), box = $("#upload");
+  $("#upload-name").textContent = file.name;
+  const show = (fraction) => {
+    $("#upload-pct").textContent = `${Math.round(fraction * 100)}%`;
+    $("#upload-fill").style.width = `${(fraction * 100).toFixed(1)}%`;
+    $("#upload-bar").setAttribute("aria-valuenow", String(Math.round(fraction * 100)));
+  };
+  show(0);
+  box.hidden = false;
+  const xhr = uploadRequest = new XMLHttpRequest(); // fetch() can't report upload progress
+  const finish = (message) => {
+    uploadRequest = null; box.hidden = true; $("#file").value = "";
+    if (message) showFormError(message);
+  };
+  xhr.open("POST", `/api/upload?name=${encodeURIComponent(file.name)}`);
+  xhr.upload.onprogress = (e) => { if (e.lengthComputable) show(e.loaded / e.total); };
+  xhr.onerror = () => finish(t("server.down"));
+  xhr.onabort = () => finish("");
+  xhr.onload = async () => {
+    let body = {};
+    try { body = JSON.parse(xhr.responseText); } catch (_) {}
+    if (xhr.status !== 200) {
+      const detail = body.detail && typeof body.detail === "object" ? (body.detail[uiLang] || body.detail.ru) : "";
+      finish(detail || t("server.down"));
+      return;
+    }
+    finish("");
+    try { await startJobs([{ file: body.file }], choices); } catch (e) { showFormError(e.message); }
+  };
+  xhr.send(file);
 }
 
 async function cancelJob(job, button) {
@@ -386,7 +496,9 @@ async function cancelJob(job, button) {
 
 function retryJob(job) {
   dismissJob(job.id);
-  startJob(job.url, job.voice, job.background, job.lang || "ru", job.remove_voice);
+  const source = job.file ? { file: job.file } : { url: job.url };
+  startJobs([source], { voice: job.voice, background: job.background, lang: job.lang || "ru",
+    remove_voice: job.remove_voice }).catch((e) => showFormError(e.message));
 }
 
 /* ---------- watch page ---------- */
@@ -712,13 +824,22 @@ function initSettings() {
 
 /* ---------- init ---------- */
 async function init() {
-  $("#dub-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const url = $("#url").value.trim();
-    if (!looksLikeUrl(url)) { showFormError(t("form.badUrl")); $("#url").focus(); return; }
-    const voice = new FormData(e.target).get("voice") || "male";
-    const background = $("#background").checked;
-    startJob(url, voice, background, $("#lang").value || "ru", background && $("#remove-voice").checked);
+  $("#dub-form").addEventListener("submit", (e) => { e.preventDefault(); submitLinks(); });
+  $("#url").addEventListener("keydown", (e) => { // Enter dubs, Shift+Enter starts a new line for another link
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); submitLinks(); }
+  });
+  $("#url").addEventListener("input", autoGrow);
+  $("#pick-file").addEventListener("click", () => $("#file").click());
+  $("#file").addEventListener("change", (e) => uploadFile(e.target.files[0]));
+  $("#upload-cancel").addEventListener("click", () => uploadRequest?.abort());
+  const composer = $("#dub-form");
+  const hasFile = (e) => [...(e.dataTransfer?.types || [])].includes("Files");
+  composer.addEventListener("dragover", (e) => { if (hasFile(e)) { e.preventDefault(); composer.classList.add("is-dragover"); } });
+  composer.addEventListener("dragleave", (e) => { if (!composer.contains(e.relatedTarget)) composer.classList.remove("is-dragover"); });
+  composer.addEventListener("drop", (e) => {
+    if (!hasFile(e)) return;
+    e.preventDefault(); composer.classList.remove("is-dragover");
+    uploadFile(e.dataTransfer.files[0]);
   });
 
   try { state.dubLang = localStorage.getItem("dubber.dubLang") || "ru"; } catch (_) {}

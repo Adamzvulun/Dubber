@@ -52,12 +52,38 @@
         <div class="composer__row">
           <div class="field">
             <svg class="field__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            <input id="url" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
-                   placeholder="https://www.youtube.com/watch?v=…" required aria-describedby="form-error">
+            <textarea id="url" name="url" rows="1" inputmode="url" autocomplete="off" spellcheck="false"
+                   placeholder="https://www.youtube.com/watch?v=…" required aria-describedby="url-hint form-error"></textarea>
           </div>
           <button class="btn btn--primary btn--lg" type="submit" id="submit" data-i18n="form.submit">Озвучить</button>
         </div>
+        <div class="composer__alt">
+          <span class="muted" id="url-hint" data-i18n="form.manyHint">Можно вставить несколько ссылок или плейлист — по одной в строке.</span>
+          <span class="composer__file">
+            <span class="muted" data-i18n="form.or">или</span>
+            <button class="link-button" type="button" id="pick-file" data-i18n="form.pickFile">выберите видеофайл на компьютере</button>
+            <input type="file" id="file" accept="video/*,.mkv,.ts" hidden>
+          </span>
+        </div>
         <p class="composer__error" id="form-error" role="alert" hidden></p>
+        <div class="upload" id="upload" hidden>
+          <div class="upload__head">
+            <span class="upload__name" id="upload-name"></span>
+            <span class="upload__pct" id="upload-pct"></span>
+            <button class="btn btn--quiet" type="button" id="upload-cancel" data-i18n="btn.cancel">Отменить</button>
+          </div>
+          <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="upload-bar"
+               data-i18n-aria="upload.progress" aria-label="Загрузка файла"><div class="bar__fill" id="upload-fill"></div></div>
+        </div>
+        <div class="choice" id="playlist-choice" role="group" aria-labelledby="playlist-text" hidden>
+          <p id="playlist-text"></p>
+          <div class="choice__buttons">
+            <button class="btn btn--primary" type="button" id="playlist-one" data-i18n="playlist.one">Только это видео</button>
+            <button class="btn" type="button" id="playlist-all"></button>
+            <button class="btn btn--quiet" type="button" id="playlist-cancel" data-i18n="btn.cancel">Отменить</button>
+          </div>
+        </div>
+        <p class="drop-hint" aria-hidden="true" data-i18n="form.drop">Отпустите файл, чтобы озвучить его</p>
 
         <div class="composer__options">
           <div class="select-field">

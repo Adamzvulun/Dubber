@@ -3,8 +3,10 @@
 Run: `python -m dubber.app` → opens http://127.0.0.1:7860
 
 API
-- POST /api/jobs {url, voice: "male"|"female", background: bool, lang, remove_voice: bool} → start dubbing (one job at
-  a time); remove_voice keeps the music under the dub but not the speaker's voice
+- POST /api/jobs {url | file, voice: "male"|"female", background: bool, lang, remove_voice: bool} → start dubbing
+  (jobs run one after another); remove_voice keeps the music under the dub but not the speaker's voice
+- POST /api/upload?name=<file name> (body: the file) → {file, name}: a video from this computer, for /api/jobs
+- POST /api/playlist {url}                                           → {title, entries: [{url, title}]} (no download)
 - GET  /api/languages                                              → dub languages (code, names, voices)
 - GET  /api/jobs, /api/jobs/{id}                                   → progress, elapsed, rough time left (eta.py)
 - GET  /api/version                                                 → {"version"} (shown in the page footer)
@@ -23,7 +25,9 @@ on this computer only, but a page open in the same browser could otherwise send 
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
+import hashlib
 import json
 import os
 import queue
@@ -46,13 +50,26 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import __version__, eta, languages, pipeline, translate, update
+from . import __version__, download, eta, languages, pipeline, translate, update
 from .config import Settings, load_settings, save_env
 from .download import is_url
 
 WEB_DIR = Path(__file__).parent / "web"
 STAGE_KEYS = {label: key for key, label, _ in pipeline.STAGES}
 _ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# Uploaded videos: work/uploads/<first 12 hex of the file's sha1>/<file name>
+_UPLOAD = re.compile(r"^[0-9a-f]{12}/[^/\\:*?\"<>|]{1,120}$")
+UPLOAD_TYPES = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v", ".wmv", ".flv", ".mpg", ".mpeg", ".ts", ".3gp"}
+UPLOAD_MTIME = 1_000_000_000  # every upload gets this time stamp: the same file again → the same video id → cache
+
+
+def safe_file_name(name: str) -> str:
+    """The file name alone (no folders), without characters Windows forbids, at most 120 characters."""
+    name = re.sub(r'[<>:"|?*\x00-\x1f]', "", name.replace("\\", "/").rsplit("/", 1)[-1]).strip().strip(".")
+    if len(name) > 120:
+        stem, dot, ext = name.rpartition(".")
+        name = (stem[: 119 - len(ext)] + dot + ext) if dot else name[:120]
+    return name
 
 # Files the browser may fetch from output/<id>/ (see subtitles.file_names; "en"/"en_ru" names are from videos
 # dubbed before other languages existed, when the original was always English and the dub Russian).
@@ -157,6 +174,8 @@ class Job:
     error: str = ""  # Russian
     error_en: str = ""
     video_id: str = ""
+    title: str = ""  # shown on the job card instead of the link (an uploaded file's name)
+    file: str = ""  # an uploaded file (work/uploads/<file>), for "try again"
     created: float = field(default_factory=time.time)
     started: float = 0.0  # when it left the queue (the job card's clock starts here)
     cancel_requested: bool = False
@@ -189,9 +208,10 @@ class JobRunner:
 
     def submit(
         self, url: str, voice: str, background: bool, lang: str = languages.DEFAULT, remove_voice: bool = False,
+        title: str = "", file: str = "",
     ) -> Job:
         job = Job(id=uuid.uuid4().hex[:12], url=url, voice=voice, background=background, lang=lang,
-                  remove_voice=remove_voice and background)
+                  remove_voice=remove_voice and background, title=title, file=file)
         self.jobs[job.id] = job
         self._queue.put(job)
         return job
@@ -235,6 +255,11 @@ class JobRunner:
             try:
                 result = self.runner(job.url, settings, progress=progress)
                 job.video_id, job.status, job.progress, job.label = result.id, "done", 1.0, "Готово"
+                if job.file:  # the dub keeps its own copy (work/<id>/source.mp4); a failed one keeps it to retry
+                    uploaded = Path(job.url)
+                    uploaded.unlink(missing_ok=True)
+                    with contextlib.suppress(OSError):
+                        uploaded.parent.rmdir()
                 eta.record(self.history, job._tracker.stage_seconds())
             except Exception as exc:  # shown to the user in Russian
                 if job.cancel_requested:  # yt-dlp may wrap our JobCancelled in its own error
@@ -270,8 +295,13 @@ def _key_hint(key: str) -> str:
     return f"…{key[-4:]}" if key else ""
 
 
-class JobRequest(BaseModel):
+class PlaylistRequest(BaseModel):
     url: str
+
+
+class JobRequest(BaseModel):
+    url: str = ""
+    file: str = ""  # instead of url: an uploaded video (from POST /api/upload)
     voice: str = "male"
     background: bool = True
     lang: str = languages.DEFAULT
@@ -353,8 +383,14 @@ def create_app(
 
     @app.post("/api/jobs")
     def start_job(req: JobRequest) -> dict:
-        url = req.url.strip()
-        if not is_url(url):
+        url, title = req.url.strip(), ""
+        if req.file:
+            uploaded = settings.work_dir / "uploads" / req.file
+            if not _UPLOAD.match(req.file) or not uploaded.is_file():
+                raise HTTPException(422, _detail("Файл не найден. Выберите его ещё раз.",
+                                                 "The file was not found. Choose it again."))
+            url, title = str(uploaded), req.file.split("/", 1)[1]
+        elif not is_url(url):
             raise HTTPException(422, _detail("Вставьте ссылку на видео — она начинается с https://",
                                              "Paste a video link — it starts with https://"))
         if req.voice not in ("male", "female"):
@@ -364,7 +400,47 @@ def create_app(
         if updating.locked():
             raise HTTPException(409, _detail("Программа обновляется. Начните озвучку после перезапуска.",
                                              "The program is updating. Start the dub after it restarts."))
-        return jobs.submit(url, req.voice, req.background, req.lang, req.remove_voice).public()
+        return jobs.submit(url, req.voice, req.background, req.lang, req.remove_voice, title, req.file).public()
+
+    @app.post("/api/upload")
+    async def upload_file(request: Request, name: str) -> dict:
+        clean = safe_file_name(name)
+        if Path(clean).suffix.lower() not in UPLOAD_TYPES:
+            raise HTTPException(422, _detail(
+                "Этот файл не подходит. Нужно видео: MP4, MKV, WEBM, MOV, AVI и подобные.",
+                "This file won't work. It needs to be a video: MP4, MKV, WEBM, MOV, AVI and the like."))
+        uploads = settings.work_dir / "uploads"
+        uploads.mkdir(parents=True, exist_ok=True)
+        incoming = uploads / f".incoming-{uuid.uuid4().hex}"
+        digest, size = hashlib.sha1(), 0
+        try:
+            with incoming.open("wb") as out:
+                async for chunk in request.stream():  # in pieces: a video can be several GB
+                    digest.update(chunk)
+                    out.write(chunk)
+                    size += len(chunk)
+            if not size:
+                raise HTTPException(422, _detail("Файл пустой.", "The file is empty."))
+            token = f"{digest.hexdigest()[:12]}/{clean}"
+            target = uploads / token
+            target.parent.mkdir(exist_ok=True)
+            os.replace(incoming, target)
+            os.utime(target, (UPLOAD_MTIME, UPLOAD_MTIME))
+        except OSError as exc:  # e.g. the disk is full
+            raise HTTPException(507, _detail("Не удалось сохранить файл: на диске не хватает места?",
+                                             "Couldn't save the file: is the disk full?")) from exc
+        finally:
+            incoming.unlink(missing_ok=True)
+        return {"file": token, "name": clean}
+
+    @app.post("/api/playlist")
+    def playlist(req: PlaylistRequest) -> dict:
+        if not is_url(req.url.strip()):
+            raise HTTPException(422, _detail("Вставьте ссылку на плейлист.", "Paste a playlist link."))
+        try:
+            return download.playlist_entries(req.url.strip())
+        except Exception as exc:  # shown to the user, like a failed job
+            raise HTTPException(502, _detail(friendly_error(exc), friendly_error(exc, "en"))) from exc
 
     @app.get("/", include_in_schema=False)
     @app.get("/index.html", include_in_schema=False)

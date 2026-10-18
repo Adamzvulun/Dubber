@@ -58,6 +58,25 @@ def base_opts() -> dict:
     return opts
 
 
+def playlist_entries(url: str, limit: int = 200) -> dict:
+    """{title, entries: [{url, title}]} of a playlist (or the playlist a video link carries), without downloading."""
+    import yt_dlp
+
+    opts = {**base_opts(), "noplaylist": False, "extract_flat": "in_playlist", "playlistend": limit}
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+    entries = []
+    for entry in info.get("entries") or []:
+        vid = entry.get("id")
+        if not vid:  # private or deleted videos have no id
+            continue
+        link = entry.get("url") or ""
+        if not link.startswith("http"):
+            link = f"https://www.youtube.com/watch?v={vid}"
+        entries.append({"url": link, "title": entry.get("title") or vid})
+    return {"title": info.get("title") or "", "entries": entries[:limit]}
+
+
 def fetch_info(url: str) -> dict:
     """Video metadata without downloading (id, title, duration...)."""
     import yt_dlp
