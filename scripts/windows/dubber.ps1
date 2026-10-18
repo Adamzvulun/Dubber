@@ -4,7 +4,8 @@
 # This file is UTF-8 with BOM: Windows PowerShell 5.1 then reads the Russian text correctly. Keep Russian text out of
 # .bat/.cmd files: cmd shows it as question marks on many PCs (that was the old installer's problem).
 param(
-    [switch]$NoStart  # install + shortcut only, never wait for Enter (used by the Windows test in CI)
+    [switch]$NoStart,  # install + shortcut only, never wait for Enter (used by the Windows test in CI)
+    [switch]$ShortcutOnly  # only the shortcuts, silently: asked by the program when it started without this script
 )
 
 $ErrorActionPreference = 'Stop'
@@ -150,6 +151,15 @@ function Install-Shortcut([string]$Folder) {
         'Дубляж видео: озвучка видео на русском и других языках')
 }
 
+if ($ShortcutOnly) {
+    if (-not $Native) { exit 1 }
+    try {
+        Install-Shortcut ([Environment]::GetFolderPath('Desktop'))
+        Install-Shortcut ([Environment]::GetFolderPath('Programs'))
+    } catch { exit 1 }
+    exit 0
+}
+
 Say '=== Дубляж видео ==='
 
 # Files from a downloaded ZIP are marked "from the internet": Windows would ask before each start. Unmark ours.
@@ -220,6 +230,7 @@ try {
 if ($NoStart) { exit 0 }
 
 # 5. Start (the program opens the page in the browser and updates itself when a new version is out)
+$env:DUBBER_LAUNCHER = '1'  # the shortcuts are done: the program needn't make them
 & $VenvPython -m dubber.app
 if ($LASTEXITCODE -ne 0) {
     [void](Read-Host 'Нажмите Enter, чтобы закрыть окно')

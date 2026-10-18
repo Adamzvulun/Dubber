@@ -750,6 +750,21 @@ def _start_new_version(open_browser: bool) -> int:
             continue
 
 
+def shortcut_command(environ=os.environ, platform: str = sys.platform) -> list[str] | None:
+    """On Windows, when the program was started without the launcher (an old start file, or the restart after a
+    self-update), the command that makes the desktop shortcut the launcher would have made; else None."""
+    script = Path(__file__).resolve().parent.parent / "scripts" / "windows" / "dubber.ps1"
+    if platform != "win32" or environ.get("DUBBER_LAUNCHER") or not script.is_file():
+        return None
+    return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-ShortcutOnly"]
+
+
+def _make_shortcut(command: list[str]) -> None:
+    with contextlib.suppress(OSError, subprocess.SubprocessError):  # no shortcut is not worth stopping for
+        subprocess.run(command, capture_output=True, timeout=120,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+
 def update_at_start(updater: update.Updater) -> bool:
     """Install a newer `main` before starting; True if the new version must be started. Never stops the start."""
     if os.environ.get("DUBBER_JUST_UPDATED") or not updater.enabled():
@@ -784,6 +799,8 @@ def main() -> int:
     updater = update.Updater()
     if update_at_start(updater):
         return _start_new_version(open_browser)
+    if command := shortcut_command():
+        threading.Thread(target=_make_shortcut, args=(command,), daemon=True).start()
     if open_browser:
         threading.Thread(target=_open_browser_when_ready, args=(url, host, port), daemon=True).start()
     print(f"«Дубляж» {__version__} работает: {url}  (не закрывайте это окно)")
