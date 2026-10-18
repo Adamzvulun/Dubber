@@ -2,6 +2,13 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-18 — Session 5c: step-by-step guides in the README (Russian + Hebrew)
+- Adam: a full, simple install-and-use guide for non-technical users in Russian and Hebrew on the README, committed
+  straight to `main` at his request. Top of `README.md`: direct ZIP download link, unpacking, «Start Dubber», the
+  Windows warnings (SmartScreen, security warning, UAC), first-run wait, daily use, closing, updates, a small
+  troubleshooting table. The Hebrew guide is RTL and tells the reader to switch the site to EN (the site has no
+  Hebrew interface) and quotes the English button names.
+
 ## 2026-10-18 — Session 5b: question marks in the window (v0.6.1)
 - Adam merged PR #9; after a restart the PC updated itself to 0.6.0. The shortcut appears once «Start Dubber» runs
   (the self-update restarts only the program, not the launcher). His screenshot of the launcher window: title
