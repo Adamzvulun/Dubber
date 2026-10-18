@@ -8,6 +8,11 @@ Newest entries at the top. One entry per working session / milestone.
   Windows warnings (SmartScreen, security warning, UAC), first-run wait, daily use, closing, updates, a small
   troubleshooting table. The Hebrew guide is RTL and tells the reader to switch the site to EN (the site has no
   Hebrew interface) and quotes the English button names.
+- Expanded both README guides to every function (Adam): site sections, several links / playlists / files, dub
+  options, the job card, watching (transcript, subtitles, downloads, other dubs), library + search, Claude step by
+  step (console account, billing, monthly limit, key, model prices from the app's own estimate, glossary), disk
+  space, updates / What's new, tips, a larger troubleshooting table. Every quoted label checked against `i18n.js`
+  and the server's messages.
 
 ## 2026-10-18 — Session 5b: question marks in the window (v0.6.1)
 - Adam merged PR #9; after a restart the PC updated itself to 0.6.0. The shortcut appears once «Start Dubber» runs
