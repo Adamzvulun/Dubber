@@ -15,11 +15,12 @@ music stays). **Open:** Adam listens to a v0.4.0 Hebrew dub and an English dub w
 ## Where things are
 - **Git:** `main` = stable; Adam installs from its ZIP. Work happens on a branch + PR into `main`; CI (lint + tests)
   must be green; **Adam reviews and merges**. **Branch rule (Adam, 2026-10-18): a new branch only for a new feature;
-  fixes and follow-ups to the current work go on the same branch** (this session: `claude/inspiring-davinci-4qon8o`).
-  Details: `CONTRIBUTING.md`. Files Adam shares arrive on `uploads/…` branches in `dev-uploads/`.
+  fixes and follow-ups to the current work go on the same branch**. Session 3 = branch
+  `claude/dubber-project-continuation-6ukr86`, **PR #6 (v0.4.0) open, waiting for Adam's review/merge**. If it is
+  merged, start new work from the latest `main`; if not, follow-ups go on that branch. Details: `CONTRIBUTING.md`. Files Adam shares arrive on `uploads/…` branches in `dev-uploads/`.
 - **Code:** `dubber/` (pipeline stages, `app.py` = server/API/jobs/settings, `eta.py` = time left, `config.py` =
   settings + `save_env`, `separate.py` = voice removal), `dubber/web/` (site; `i18n.js` = all UI text RU/EN),
-  `tests/` (100 tests, offline), `tools/` (stub server, 12-language QA, Hebrew voice QA), `scripts/`
+  `tests/` (99 tests + 1 network test, offline), `tools/` (stub server, 12-language QA, Hebrew voice QA), `scripts/`
   (installers/launchers). Conventions: `CLAUDE.md`.
 - **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…018), `DESIGN.md`
   (design system), `RESEARCH.md` (tools, timing research, 12-language QA), `SKILLS.md`, `README.ru.md` (father's
@@ -101,6 +102,16 @@ original voice; the voice-free background goes under the dub, ducked while it sp
   Use the PID (`$!`) or `pgrep -f "python -I .*script"`.
 - **Killing a server:** `pkill -f dubber.app` also kills your own shell (exit 144). Kill by PID
   (`... & echo $! > pid` when starting, then `kill $(cat pid)`).
+- **Blocked hosts here:** GitHub downloads (`github.com` 403 → no `pip install git+…`), `dl.fbaipublicfiles.com`
+  (official Demucs weights), `download.pytorch.org`, Dicta's Nakdan API. Models come from Hugging Face instead.
+- **No Claude key:** `ANTHROPIC_BASE_URL` is set but the API answers 401 — Claude paths are unit-tested only.
+- **PyPI traps:** `pip install phonikud` is an unrelated training package (pulls torch, no phonemizer); the real
+  phonemizer is GitHub-only. `phonikud-onnx`, `renikud-onnx`, `piper-onnx` are fine (only in `tools/`, not deps).
+  The `.venv` here also has torch/transformers from session-3 measurements — CI installs only `pyproject.toml`, so
+  never import them from `dubber/`.
+- **CPU is slow and shared (4 vCPUs):** transformers Whisper takes minutes per clip — convert to CTranslate2
+  (`ct2-transformers-converter … --quantization int8`) and use faster-whisper. Run long measurements in the
+  background, wait by PID, and time things only when nothing else runs (timings doubled under load).
 - **Copyright:** test dubs of third-party videos are for Adam's personal review only — don't commit or publish them or
   put their frames in `docs/images/` (current screenshots show only synthetic test clips).
 
@@ -111,13 +122,25 @@ Every release: bump `__version__` in `dubber/__init__.py` and `pyproject.toml` (
 .venv/bin/ruff check . && .venv/bin/pytest                    # offline checks (must pass before every commit)
 DUBBER_NETWORK_TESTS=1 .venv/bin/pytest -m network            # real NLLB model (downloads 1.4 GB once)
 
-# UI work without network: the real website + a stand-in pipeline (6 uneven stages ~31 s; URL with "fail" → error
+# UI work without network: the real website + a stand-in pipeline (6 uneven stages ~31 s, 7 with "remove voice"; URL with "fail" → error
 # card; settings kept in the data folder; a Claude key ending in "bad" is refused)
 .venv/bin/python tools/stub_server.py /tmp/stub 7871 & echo $! > /tmp/stub.pid
 #   copy finished videos into /tmp/stub/out/<id>/ to test library/watch pages; drive with Playwright; kill by PID
 
 # Translation + timing QA on real dubs (Edge voices, Whisper, NLLB): results.json + table.md
 .venv/bin/python tools/qa_languages.py /tmp/qa --clips mixed,trio --targets ru,he   # all 12 if --targets omitted
+
+# Hebrew voice QA: 5 voices vs gold IPA readings with stress (extra packages + one-time scorer conversion: see the
+# tool's docstring); ~1-2 min per sentence on this CPU → run in the background. Results: RESEARCH "Session 3".
+.venv/bin/python tools/qa_hebrew_voice.py /tmp/qa_he 50
+
+# Transcription on REAL speech: FLEURS clips (google/fleurs on Hugging Face) — stream data/<lang>/audio/dev.tar.gz
+# with Python's tarfile ("r|gz") and stop after N .wav files; references in data/<lang>/dev.tsv (column 4).
+# Concatenate clips (and en/fr alternately for a mixed file) and run dubber.transcribe.transcribe on them.
+
+# Voice removal end to end: a generated music bed + an Edge voice → video → dub with --remove-voice; then Whisper on
+# audio track 1 must hear only the dub language, and the music must be audible before the first line.
+.venv/bin/python -m dubber.cli --translator offline --remove-voice /path/to/clip.mp4
 
 # full pipeline: local file or YouTube URL (needs cookies in the cloud)
 .venv/bin/python -m dubber.cli --lang he --voice female /path/to/video.mp4

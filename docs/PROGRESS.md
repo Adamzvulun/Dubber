@@ -15,6 +15,8 @@ Newest entries at the top. One entry per working session / milestone.
 - **Voice removal (ADR-020):** Demucs v4 ONNX on CPU, switch on the website, CLI `--remove-voice`; verified: no
   words left in the background, music level unchanged, end-to-end dub with music + Russian voice; ≈ +5 min per
   10-min video. UI checked in Chromium (RU/EN, 360 px, dark).
+- PR #6 opened (v0.4.0). Hand-off refreshed: STATUS (branch/PR, sandbox gotchas, how to test), `kanban/next-steps.md`,
+  `dubber-pipeline` skill, CLAUDE.md commands.
 
 ## 2026-10-18 — Session 2f: installer "stuck after Obtaining file", hand-off docs
 - Adam: the installer window seems stuck after "Obtaining file:///…". Not reproducible here (the step takes ~3 s; the

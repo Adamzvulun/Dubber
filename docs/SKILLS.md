@@ -23,7 +23,7 @@ Third-party skills were reviewed line-by-line before installing (see ADR-005). U
 ## Project skills (written for Dubber)
 | Skill | Purpose |
 |---|---|
-| `dubber-pipeline` | How the pipeline works; how to run, debug and extend each stage |
+| `dubber-pipeline` | How the pipeline works; how to run, debug and extend each stage (updated 2026-10-18: voice removal, language choice per video, Claude prompt version, spelling notes) |
 | `dubber-docs` | The "keep docs updated after every change" checklist |
 | `ffmpeg-dubbing` | The ffmpeg recipes we use (extract audio, atempo, ducking, mux, subtitles) |
 

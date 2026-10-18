@@ -27,6 +27,8 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 .venv/bin/python -m dubber.app                                 # the website on http://127.0.0.1:7860
 .venv/bin/python tools/stub_server.py /tmp/stub 7871           # website with a stand-in pipeline (UI work, no network)
 .venv/bin/python tools/qa_languages.py /tmp/qa                 # real dubs of 2 multilingual clips × 12 languages
+.venv/bin/python tools/qa_hebrew_voice.py /tmp/qa_he 50        # Hebrew voice vs gold readings (setup: its docstring)
+.venv/bin/python -m dubber.cli --remove-voice <file>           # dub with music kept, original voice removed
 ```
 
 ## Layout
