@@ -289,6 +289,12 @@ cloned into Russian and Hebrew lines; intelligibility = Whisper `small` transcri
 - **CPU cost for Dubber:** a 10-min video has ≈ 6–8 min of speech → **≈ 2–2.5 h** of voice generation on 4 cores (vs
   seconds with Edge). On an NVIDIA GPU (project's numbers: real-time factor down to 0.025) it would be minutes.
 
+**In Dubber (v0.7.0, ADR-028) — real CPU dub of a 2-speaker clip:** per-line references keep each speaker (male lines
+94–121 Hz, female 176–211 Hz; Whisper reads all lines back). OmniVoice's `RuleDurationEstimator` boosts estimates under
+50 tokens (2 s) with a power curve (`low_threshold`, `boost_strength=3`): "Прекрасно." 1.27 s instead of 0.51 s.
+Planning the pace from boosted estimates made the dub 1.52× fast; with `low_threshold=None` it is 1.02× and lines
+match the speaker's length. `duration=` is followed closely (asked 2.06 s → 2.01 s spoken, after its silence trim).
+
 **Ideas in VoiceStudio worth borrowing without its voice model** (its `docs/competitive-analysis.md`,
 `backend/services/fit_planner.py`):
 1. **Check the dub by listening to it** — transcribe each dubbed line back and flag/redo lines whose words don't match

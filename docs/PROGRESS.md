@@ -2,6 +2,24 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-19 — Session 6b: the original voice «Оригинал» (v0.7.0)
+- Adam: his father's PC has an RTX 3070 (8 GB) + i7-11700 → build an opt-in OmniVoice voice with a "only for such PCs"
+  warning. His choices: each speaker's own voice, Edge for Hebrew, install from the Settings page (ADR-028).
+- Built `dubber/clone.py` (nvidia-smi check, background installer: CUDA PyTorch + `omnivoice==0.2.1` + CUDA check and
+  model download; per-line references from the Demucs vocals; length per line from the model's estimate →
+  `timing.plan_rates` → `duration=`; batches of 4, one-by-one retry; clips levelled), `separate.py` also writes the
+  vocals, pipeline voice `"original"` (separation before TTS, Edge male fallback + `voice_notes`), app `/api/clone`,
+  Settings panel + third voice option + job-card step «Голос диктора», stub server stand-ins, Windows CI job that runs
+  the install commands (`original-voice-install.yml`).
+- **Real end-to-end dub on CPU** (2-speaker 17-s clip: Edge Andrew + Ava, quiet tone; Whisper, Demucs, NLLB offline,
+  real OmniVoice): 436 s, of which OmniVoice ~330 s (7 lines). Each line copied its own speaker (pitch: male lines
+  94–121 Hz, female 176–211 Hz); all 7 lines transcribed back correctly. **Found and fixed:** OmniVoice's length
+  estimate boosts short lines (≤ 2 s) up to 2.5× → the planned pace came out 1.52× and the dub ended long before the
+  speaker; with the unboosted estimate the pace is 1.02× and every line lasts about as long as the speaker's
+  (2.94 vs 2.98 s, 2.93 vs 3.24 s, 1.57 vs 1.74 s), no late or stretched lines.
+- Browser (Chromium, stub server): install flow, the «Оригинал» option and Hebrew hint, step order with the voice split
+  first, RU/EN, 1280/360 px, dark, PC without NVIDIA — no console errors. Not seen on a real NVIDIA card (none here).
+
 ## 2026-10-19 — Session 6: research VoiceStudio / OmniVoice (voice cloning)
 - Adam verified every "not verified" item on his PCs (0.6.1 font + shortcut, clean-PC install, playlists, uploads,
   Claude dubs, voice removal, Google, H.264 playback) — STATUS updated.
