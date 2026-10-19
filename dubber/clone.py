@@ -175,9 +175,11 @@ class OmniVoiceEngine:
                                                     ref_text=text)
 
     def natural_seconds(self, text: str, prompt) -> float:
-        # The model's own estimate (what it does when no duration is given): the reference's speaking speed.
+        # The model's own estimate: the line at the reference's speaking speed. Without its boost for short lines
+        # (low_threshold): that made "Прекрасно." 1.3 s instead of 0.5 s, so the planned pace of the whole video
+        # came out ~1.5x too fast and the dub ended long before the speaker (measured, docs/RESEARCH.md).
         tokens = self.model.duration_estimator.estimate_duration(text, prompt.ref_text,
-                                                                 prompt.ref_audio_tokens.size(-1))
+                                                                 prompt.ref_audio_tokens.size(-1), low_threshold=None)
         return tokens / self.model.audio_tokenizer.config.frame_rate
 
     def speak(self, texts, prompts, durations, lang):
