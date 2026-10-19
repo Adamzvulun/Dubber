@@ -2,6 +2,12 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-19 — Session 5 hand-off
+- Hand-off docs brought up to date for the next session: STATUS (state, git, not verified, next steps, new sandbox
+  gotchas: Node Playwright, PowerShell 7 on Linux, Windows only via CI, BOM-less workflow steps), `kanban/next-steps.md`
+  rewritten, stale cards closed, new cards for 0.6.1 and the README guides, CLAUDE.md layout + README-guide rule,
+  dubber-docs skill, PLAN ticks.
+
 ## 2026-10-18 — Session 5c: step-by-step guides in the README (Russian + Hebrew)
 - Adam: a full, simple install-and-use guide for non-technical users in Russian and Hebrew on the README, committed
   straight to `main` at his request. Top of `README.md`: direct ZIP download link, unpacking, «Start Dubber», the

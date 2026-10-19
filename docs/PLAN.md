@@ -34,7 +34,7 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 ### M2 — Russian web UI + installers
 - [x] ~~Gradio app in Russian~~ (first version; replaced by the custom website in M2.5)
 - [x] Windows `install_windows.bat` / `start_windows.bat` (+ desktop shortcut); Linux/macOS `install.sh` / `start.sh`
-- [ ] Test the Windows installer on a real Windows PC
+- [x] Test the Windows installer on a real Windows PC (CI `windows-install.yml`, ADR-025; Adam runs it at home)
 - [x] `docs/README.ru.md` user guide (Russian)
 - [x] UI checked in Chromium with Playwright (desktop + phone width) → now `docs/images/site-home-*.png`
 
@@ -108,6 +108,8 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [x] Library: one card per video + search (ADR-027)
 - [x] Disk space on the Settings page + clear cache (ADR-027)
 - [x] "What's new" after an update (ADR-027)
+- [x] 0.6.1: readable Russian in the window (Consolas) + shortcut after a self-update — awaiting Adam's confirmation
+- [x] README: step-by-step user guides in Russian and Hebrew covering every function
 - [ ] First run on a clean PC (winget Python + ffmpeg) — Adam
 
 ### M4 — Nice to have
@@ -117,6 +119,7 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [ ] Offline TTS fallback (Silero)
 
 ## Open questions
+- ~~Repo public?~~ — yes (self-update works from GitHub, 2026-10-18).
 - ~~The user's work field~~ — every topic, so tools like the glossary must be general-purpose (Adam, 2026-10-17).
 - Claude key for translation: built (ADR-017); Adam decides whether to buy credit. Estimate at 2026-10 prices: ~$0.10 per 10 min of
   speech on Opus 5.5 ($4/$20 per M tokens), ~$0.05 on Sonnet 5.5, under $0.01 on Haiku 5.5. The key would stay on

@@ -6,22 +6,19 @@ blocked_by: []
 tags: [handoff, next]
 ---
 
-# Next steps (hand-off at the end of session 2)
+# Next steps (hand-off at the end of session 5)
 
 Read `docs/STATUS.md` first. Open items, in order:
-1. Adam updates to 0.3.1 and confirms the footer + Settings page; if the installer stalls, get `install.log`
-   (`kanban/installer-stall.md`, `kanban/updates-and-eta.md`).
-2. Translation/timing regression: his cache files in `dev-uploads/` on an `uploads/…` branch
-   (`kanban/translation-timing-regression.md`).
-3. First real dub with a Claude key (`kanban/claude-translation.md`).
-4. Still unconfirmed from session 1: Google path end-to-end (`translator` in `meta.json`), H.264 playback, desktop
-   shortcut.
-0. Adam makes the repo public and updates the PCs to 0.5.0 one last time by hand (self-update, ADR-024).
-5. Offer: upload a local file from the website (also unlocks cloud hosting, ADR-023); PLAN M3/M4.
-   (Several dubs per video: done in 0.4.1, `kanban/library-per-dub.md`.)
+1. Adam confirms 0.6.1: readable Russian in the black window (Consolas switch); on the second PC the «Дубляж видео»
+   shortcut with the icon appears by itself after its self-update (`kanban/console-font-and-shortcut.md`).
+2. Adam listens to a Hebrew dub and an English dub with Claude (`kanban/claude-translation.md`); voice removal on a
+   real video.
+3. Unverified: first run on a clean PC (winget), real YouTube playlists, multi-GB uploads, Google end-to-end, H.264
+   in a real browser.
+4. Ideas to offer (not chosen yet): voice speed control; Hebrew spelling fix on the free path; Silero offline TTS;
+   Telegram bot; ElevenLabs (`kanban/nice-to-haves.md`, PLAN M4).
 
 ## Narrative
 - 2026-10-17: Created at the end of session 1 as the hand-off list. (by @claude)
-- 2026-10-17: Session 2: item 1 answered (works, but quality/timing worse → `translation-timing-regression.md`);
-  fixed the stale video after a re-dub; work field answered (general glossary). (by @claude)
-- 2026-10-18: Rewritten as the end-of-session-2 hand-off list. (by @claude)
+- 2026-10-18: Rewritten at the end of session 2. (by @claude)
+- 2026-10-19: Rewritten at the end of session 5 (0.6.1 shipped, README guides RU + HE). (by @claude)

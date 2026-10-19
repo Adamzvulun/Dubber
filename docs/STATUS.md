@@ -1,32 +1,38 @@
 # Status — read this first
 
-_Last updated: 2026-10-18 (session 5). Update this page at the end of every session._
+_Last updated: 2026-10-19 (end of session 5). Update this page at the end of every session._
 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video **or a video file** in **any
 spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version **0.6.1** (page footer). The PCs **update themselves from `main`** (ADR-024): merging is shipping.
-Session 5: one-click Windows start (`Start Dubber.cmd` → install + desktop shortcut with its own icon + start; the
-old `?` / missing-shortcut bug reproduced and fixed on real Windows in CI, ADR-025), file upload, several links and
-playlists (ADR-026), grouped library with search, disk space page, "What's new" after updates (ADR-027).
+Current version **0.6.1** on `main`. The repo is **public** and the PCs **update themselves from `main`** at start
+(ADR-024) — merging is shipping. Adam confirmed 0.6.0 arrived on his PC by itself.
+Session 5 (2026-10-18): one-click Windows start `Start Dubber.cmd` with a desktop shortcut and its own icon (the old
+`?`/no-shortcut bug reproduced and fixed on real Windows in CI, ADR-025); upload a file, several links, playlists
+(ADR-026); grouped library + search, disk space page, "What's new" after updates (ADR-027); 0.6.1: console font
+switched to Consolas (Russian showed as `?` in the window) and the shortcut appears by itself after a self-update;
+**README.md now opens with full user guides in Russian and Hebrew** (every function, Claude step by step).
 Earlier: per-dub library entries + self-update (session 4), voice removal and transcription fixes (session 3).
 
 ## Where things are
-- **Git:** `main` = stable and **shipped**: from 0.5.0 the PCs update themselves from `main` (needs the repo
-  public; one last manual ZIP update to reach 0.5.0). Every release must bump the version. Work happens on a branch + PR into `main`; CI (lint + tests)
-  must be green; **Adam reviews and merges**. **Branch rule (Adam, 2026-10-18): a new branch only for a new feature;
-  fixes and follow-ups to the current work go on the same branch** (this session: `claude/inspiring-davinci-4qon8o`).
-  Details: `CONTRIBUTING.md`. Files Adam shares arrive on `uploads/…` branches in `dev-uploads/`.
+- **Git:** `main` = stable and **shipped** (PCs self-update from it; every release bumps the version and adds a
+  `dubber/changelog.json` entry). Code changes: a branch + PR into `main`; CI (`CI` lint + tests, and `Windows install`
+  when scripts/assets/app change) must be green; **Adam reviews and merges**. Use the branch your session's system
+  prompt names (or `feat/…`, CONTRIBUTING). **Doc-only edits went straight to `main` when Adam asked** (README guides,
+  this hand-off, 2026-10-18/19) — only do that when he says so. Old remote branches (`claude/bold-davinci-qfv627`,
+  merged `fix/…`, `feat/…`, `chore/…`, earlier `claude/…`) are history; ignore them. Files Adam shares arrive on
+  `uploads/…` branches in `dev-uploads/`.
 - **Code:** `dubber/` (pipeline stages, `app.py` = server/API/jobs/settings, `eta.py` = time left, `config.py` =
   settings + `save_env`, `separate.py` = voice removal), `dubber/web/` (site; `i18n.js` = all UI text RU/EN),
-  `update.py` = self-update, `changelog.json` = "What's new", `assets/` = logo + Windows icon), `tests/` (127 tests,
+  `update.py` = self-update, `changelog.json` = "What's new", `assets/` = logo + Windows icon), `tests/` (131 tests,
   offline), `tools/` (stub server, 12-language QA, Hebrew voice QA, `make_icon.py`), `Start Dubber.cmd` +
-  `scripts/windows/dubber.ps1` (Windows start, ADR-025), `scripts/` (old launchers, macOS/Linux). Conventions:
-  `CLAUDE.md`.
+  `scripts/windows/dubber.ps1` (Windows start: install, shortcut, font, start; `-NoStart`, `-ShortcutOnly`; ADR-025),
+  `scripts/` (old `.bat` launchers that now call `dubber.ps1`; macOS/Linux scripts), `.github/workflows/`
+  (`ci.yml`, `windows-install.yml`). Conventions: `CLAUDE.md`.
 - **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…027), `DESIGN.md`
-  (design system), `RESEARCH.md` (tools, timing research, 12-language QA), `SKILLS.md`, `README.ru.md` (user's
-  guide: install, update, Claude key, troubleshooting). Task cards: `kanban/` (hand-off list: `kanban/next-steps.md`).
+  (design system), `RESEARCH.md` (tools, timing research, 12-language QA), `SKILLS.md`, `README.ru.md` (longer Russian
+  reference). **User guides (RU + HE) are at the top of `README.md`** — they quote UI labels from `i18n.js`. Task cards: `kanban/` (hand-off list: `kanban/next-steps.md`).
 - **Data on a user's PC (git-ignored):** `.env` (settings saved by the website, incl. the Claude key),
   `glossary.txt`, `install.log` (last installer run), `.venv/dubber-installed` (components installed),
   `work/uploads/<sha>/<name>` = uploaded videos until dubbed, `work/<id>/` = cache per video (`source.mp4`, `info.json`,
@@ -52,6 +58,8 @@ offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 original voice; the voice-free background goes under the dub, ducked while it speaks.
 
 ## What works (verified by running it)
+- **0.6.1:** Windows CI: a program started without the launcher (as after a self-update) makes the desktop shortcut
+  itself; the console-font helper compiles and runs in Windows PowerShell 5.1. Adam: 0.6.0 self-updated on his PC.
 - **0.6.0 — one-click Windows start (ADR-025):** CI on `windows-latest` (Windows PowerShell 5.1): fresh install,
   existing install recognised without reinstalling, desktop + Start menu «Дубляж видео» shortcuts with the icon
   read back, `Start Dubber.cmd` starts the program and it answers. Russian text shows correctly in the window.
@@ -84,22 +92,21 @@ original voice; the voice-free background goes under the dub, ducked while it sp
 - Timing (ADR-013), all 12 dub languages (ADR-014/016: 24 real QA dubs), real YouTube runs (session 1).
 
 ## Not verified yet
-1. **Claude request v2** (ADR-021, spelling notes ADR-019): unit-tested only (no key here). Adam's first dub on 0.4.0
-   with Claude re-translates once (new prompt version) — check quality and `meta.json` cost.
-2. Voice removal speed and quality on Adam's PC and on real videos (music, noise, several speakers).
-3. **Google translation end-to-end** (Google answers this sandbox with HTTP 429; Adam's PC normally gets Google).
-4. H.264 playback in a real Chrome/Edge.
-5. **First run on a clean PC** (winget installing Python + ffmpeg): CI had both preinstalled. Real YouTube playlists
-   (flat extraction) — only mocked here. A large upload (GBs) — only small files tested.
+1. **0.6.1 on Adam's screen:** Russian text in the black window after the Consolas switch (CI has no visible console);
+   the shortcut appearing by itself on the second PC after its self-update.
+2. **First run on a clean PC** (winget installing Python + ffmpeg) — CI has both preinstalled.
+3. Real YouTube playlists (flat extraction mocked here — YouTube blocks the sandbox); multi-GB uploads.
+4. **Claude request v2** (ADR-021, spelling notes ADR-019): unit-tested only (no key here) — quality and cost of a real
+   Claude dub (`meta.json`).
+5. Voice removal speed and quality on real videos (music, noise, several speakers).
+6. Google translation end-to-end (Google answers this sandbox with HTTP 429); H.264 playback in a real Chrome/Edge.
 
 ## Next steps (in order)
-1. **Adam merges PR #9** → both PCs update to 0.6.0 by themselves; the old shortcut (→ `start_windows.bat`) now runs
-   the new script once, which replaces it with the «Дубляж видео» shortcut with the icon. Check: icon on the desktop,
-   "What's new" card, upload a file, a playlist link.
-2. Is the repo public? Self-update needs it (ADR-024).
-3. Still open from session 3: listen to a Hebrew dub and an English Claude dub; voice removal on real videos.
-4. Ideas not yet chosen: voice speed control; Hebrew spelling fix on the free path; offline TTS fallback (Silero).
-5. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;
+1. Adam confirms 0.6.1: readable Russian in the window; on the second PC the shortcut with the icon after its update.
+2. Adam listens to a Hebrew dub and an English dub with Claude; voice removal on a real video.
+3. Ideas not yet chosen (offer, don't build unasked): voice speed control; Hebrew spelling fix on the free path
+   (PLAN M7); offline TTS fallback (Silero) for Edge outages; Telegram bot; ElevenLabs (paid).
+4. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;
    speaker gender unknown to the translator; offline-backup slips (Hebrew "flour" → "acid/vinegar").
 
 ## Gotchas for Claude in the cloud sandbox
@@ -115,8 +122,16 @@ original voice; the voice-free background goes under the dub, ducked while it sp
   `base` (~140 MB); NLLB-200 1.3B int8 (~1.4 GB) only when the offline backup is needed.
 - **Headless Chromium has no H.264.** For real playback make a VP9 copy:
   `ffmpeg -t 70 -i dubbed.mp4 -map 0:v:0 -map 0:a:0 -c:v libvpx-vp9 -b:v 300k -deadline realtime -cpu-used 8 -c:a libopus out.mp4`.
-- **Playwright:** the venv has no playwright; use a separate venv (`python3 -m venv /tmp/pw && /tmp/pw/bin/pip install
-  playwright`) and launch with `executable_path="/opt/pw-browsers/chromium"`; never run `playwright install`.
+- **Playwright:** the venv has no playwright. Use Node: `npm i playwright@1.56.1` in a scratchpad folder and launch
+  with `executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"`; never run `playwright install`.
+  `setInputFiles` with a non-ASCII file *path* fires no change event — pass `{name, mimeType, buffer}` instead.
+- **Windows:** there is none here. Parse/compile `dubber.ps1` with PowerShell 7 for Linux (release tarball from
+  GitHub into the scratchpad). The only real Windows is the `Windows install` CI job — read its logs with the GitHub
+  MCP tools (`actions_list`, `get_job_logs`). GitHub saves workflow `run:` steps without a BOM, so Windows
+  PowerShell 5.1 misreads Cyrillic typed there: build such strings from char codes. CI has no visible console, so
+  how text *renders* (fonts) can only be checked on Adam's PC.
+- **Patch scripts:** a Python script that does several `assert`-guarded replacements stops at the first miss —
+  the earlier replacements are already written; re-run only the rest.
 - **Killing:** `pkill -f X` / `pgrep -f X` also match your own shell command (exit 144) — even inside a wait loop.
   Use the PID (`$!`) or `pgrep -f "python -I .*script"`.
 - **Killing a server:** `pkill -f dubber.app` also kills your own shell (exit 144). Kill by PID
@@ -139,7 +154,8 @@ CI job on the PR (read its log with the GitHub tools). Keep the `.ps1` UTF-8 wit
 DUBBER_NETWORK_TESTS=1 .venv/bin/pytest -m network            # real NLLB model (downloads 1.4 GB once)
 
 # UI work without network: the real website + a stand-in pipeline (6 uneven stages ~31 s; URL with "fail" → error
-# card; settings kept in the data folder; a Claude key ending in "bad" is refused)
+# card; settings kept in the data folder; a Claude key ending in "bad" is refused; playlists are faked: 3 videos,
+# 15 when the list id starts with "BIG"; STUB_UPDATE=9.9.9 shows the update banner)
 .venv/bin/python tools/stub_server.py /tmp/stub 7871 & echo $! > /tmp/stub.pid
 #   copy finished videos into /tmp/stub/out/<id>/ to test library/watch pages; drive with Playwright; kill by PID
 
@@ -157,5 +173,8 @@ DUBBER_NETWORK_TESTS=1 .venv/bin/pytest -m network            # real NLLB model 
 DUBBER_WORK_DIR=/tmp/x/work DUBBER_OUTPUT_DIR=/tmp/x/output DUBBER_PORT=7870 DUBBER_NO_BROWSER=1 \
   .venv/bin/python -m dubber.app
 ```
+README guides: after changing a UI label in `i18n.js`, grep the README (RU + HE guides quote RU and EN labels) and
+`docs/README.ru.md` for the old wording.
+
 Check results with `ffprobe` (expect h264 + aac in the dub language + the original audio + mov_text in the dub
 language; `mul` for a mixed-language original) and `output/<id>/timing.json` (late_lines, rates).

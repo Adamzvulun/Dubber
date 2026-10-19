@@ -37,8 +37,12 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
   settings: Claude key/model/glossary saved to `.env` + `glossary.txt`), `config.py` (settings, `save_env`).
 - `dubber/web/` — the website front-end (plain HTML/CSS/JS, no build step): `index.html`, `styles.css`, `app.js`,
   `i18n.js` (every UI string in RU + EN — never hard-code text elsewhere).
-- `tools/` — developer tools (not shipped): `stub_server.py`, `qa_languages.py`, `qa_hebrew_voice.py` (see
-  docs/STATUS.md "How to test").
+- `dubber/update.py` (self-update from `main`), `dubber/changelog.json` ("What's new"), `dubber/assets/` (logo, Windows
+  icon).
+- `Start Dubber.cmd` → `scripts/windows/dubber.ps1` — the Windows start (install, shortcut, start); `scripts/*.bat`
+  call it too. `.github/workflows/` — `ci.yml` (lint + tests), `windows-install.yml` (real Windows).
+- `tools/` — developer tools (not shipped): `stub_server.py`, `qa_languages.py`, `qa_hebrew_voice.py`, `make_icon.py`
+  (see docs/STATUS.md "How to test").
 - `tests/` — unit tests per stage; network stages are mocked.
 - `docs/` — STATUS (start here), PLAN, RESEARCH, DECISIONS, DESIGN, PROGRESS, SKILLS, README.ru.
 - `kanban/` — task cards (see `kanban-ai` skill).
@@ -52,6 +56,10 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 - Never commit cookies, API keys, `.env`, `glossary.txt`, `work/`, `output/`, or frames/dubs of third-party videos.
 - Tests that save settings must use a temp `env_file`/`glossary_file` (see `tests/test_app.py`), never the real `.env`.
 - `pkill -f dubber.app` kills your own shell — kill by PID (see STATUS).
+- `README.md` opens with the end-user guides in **Russian and Hebrew**; they quote UI labels from `i18n.js` (RU, and EN
+  for the Hebrew guide). When a label or a user-visible behaviour changes, update both guides and `docs/README.ru.md`.
+- Browser tests: Playwright from **Node** (`npm i playwright@1.56.1`, chromium at
+  `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`). No Windows here: the `Windows install` CI job is the test.
 - Every release: bump `__version__` (`dubber/__init__.py`) and `pyproject.toml`; the page links its files by version,
   and the PCs update themselves only when `main` has a **higher** version (`dubber/update.py`, ADR-024).
   Merging into `main` ships to the PCs on their next start. Add the release's user-facing changes (RU + EN) to
@@ -64,5 +72,5 @@ Full rules: `CONTRIBUTING.md`. In short: **`main` is the stable line** — start
 only for a new feature** (`feat/…`) — fixes and follow-ups to the current work stay on the same branch (or the
 session's `claude/…` branch), never one branch per fix (Adam, 2026-10-18); never commit to `main`,
 open a PR into `main` (template in `.github/`), CI (`ruff` + `pytest`, `.github/workflows/ci.yml`) must be green,
-and **Adam reviews and merges**. Files Adam shares arrive on `uploads/…` branches in `dev-uploads/` (see its README);
+and **Adam reviews and merges**. Exception: when Adam explicitly says so, doc-only changes go straight to `main`. Files Adam shares arrive on `uploads/…` branches in `dev-uploads/` (see its README);
 delete them in your next PR after reading. The old `claude/bold-davinci-qfv627` branch is outdated — ignore it.

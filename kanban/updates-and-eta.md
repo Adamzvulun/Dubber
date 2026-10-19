@@ -1,6 +1,6 @@
 ---
 id: 15
-status: doing
+status: done
 priority: High
 blocked_by: []
 tags: [bug, install, web, eta]
@@ -17,3 +17,4 @@ Adam: "I can't see the settings icon nor the model button" after updating to `ma
 - 2026-10-18: Adam updated: old page first, then new page with old styles after refresh. Cause: browsers reuse
   saved CSS/JS on refresh (saved before no-cache existed). Fix v0.3.1: versioned file addresses; clear cached files
   once for this update (Ctrl+F5 didn't help in Opera GX). PR `fix/asset-versions`. (by @claude)
+- 2026-10-19: Closed — updates are automatic since 0.5.0 (self-update, ADR-024); the time-left estimate shipped in 0.3.1. (by @claude)
