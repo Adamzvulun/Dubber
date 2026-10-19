@@ -10,6 +10,8 @@ Settings are saved in DATA_DIR (never the project's .env); a Claude key ending i
 key-shaped one is accepted without calling Anthropic.
 Playlist links get a made-up playlist of 3 videos (15 when the list id starts with "BIG"; no YouTube needed).
 STUB_UPDATE=9.9.9 makes the site offer an update to that version (installing it takes 2 s and changes nothing).
+The original voice (Settings): the stand-in PC has an RTX 3070 (STUB_GPU=none: no NVIDIA card, STUB_GPU=small: 4 GB);
+"Install" walks its 3 steps in ~12 s (STUB_CLONE_FAIL=1: fails at step 2), then "Original" is offered on the form.
 Kill it by PID, never with `pkill -f` (that kills your own shell).
 """
 
@@ -17,13 +19,14 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
 
 import uvicorn
 
-from dubber import app, download, pipeline
+from dubber import app, clone, download, pipeline
 from dubber.config import Settings
 from dubber.translate import TranslatorUnavailable
 
@@ -33,7 +36,9 @@ STAGE_SECONDS = {"download": 3, "transcribe": 14, "translate": 2, "tts": 7, "ali
 
 def runner(url: str, settings: Settings, progress) -> SimpleNamespace:
     done = 0.0
-    for key, label, weight in pipeline.stages(settings.keep_background and settings.remove_voice):
+    use_clone = pipeline.clone_choice(settings)[0]
+    separate = settings.keep_background and settings.remove_voice or use_clone
+    for key, label, weight in pipeline.stages(separate, use_clone):
         steps = STAGE_SECONDS[key] * 4
         for i in range(steps):
             progress(label, done + weight * i / steps)
@@ -70,6 +75,38 @@ class StubUpdater:
         return os.environ["STUB_UPDATE"]
 
 
+class StubClone:
+    """A stand-in graphics card and installer for the original voice."""
+
+    def __init__(self):
+        self.ready = False
+        self.state = {"running": False, "step": "", "error": "", "done": False}
+
+    def status(self) -> dict:
+        gpu = {"none": None, "small": {"name": "NVIDIA GeForce GTX 1650", "vram_gb": 4.0}}.get(
+            os.environ.get("STUB_GPU", ""), {"name": "NVIDIA GeForce RTX 3070", "vram_gb": 8.0})
+        return {"gpu": gpu, "gpu_ok": bool(gpu and gpu["vram_gb"] >= clone.MIN_VRAM_GB), "installed": self.ready,
+                "ready": self.ready, "min_vram_gb": clone.MIN_VRAM_GB, "unsupported": sorted(clone.UNSUPPORTED)}
+
+    def start(self) -> bool:
+        if self.state["running"]:
+            return False
+        self.state.update(running=True, error="", done=False)
+        threading.Thread(target=self._install, daemon=True).start()
+        return True
+
+    def _install(self) -> None:
+        for step in clone.Installer.STEPS:
+            self.state["step"] = step
+            time.sleep(4)
+            if step == "omnivoice" and os.environ.get("STUB_CLONE_FAIL"):
+                self.state.update(running=False, error=step)
+                return
+        self.ready = True
+        clone.ready = lambda: True  # the stand-in pipeline now treats the original voice as installed
+        self.state.update(running=False, done=True)
+
+
 def main() -> None:
     data = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/dubber-stub")
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 7871
@@ -77,7 +114,9 @@ def main() -> None:
                         glossary_file=data / "glossary.txt", claude_key="", translator="auto")
     print(f"Stub Dubber on http://127.0.0.1:{port} (library: {settings.output_dir})", flush=True)
     download.playlist_entries = fake_playlist
-    site = app.create_app(settings, runner=runner, check_key=check_key, updater=StubUpdater())
+    stub_clone = StubClone()
+    site = app.create_app(settings, runner=runner, check_key=check_key, updater=StubUpdater(),
+                          clone_status=stub_clone.status, installer=stub_clone)
     uvicorn.run(site, host="127.0.0.1", port=port, log_level="warning")
 
 

@@ -414,3 +414,47 @@ def test_page_links_its_files_under_new_addresses_for_each_release(tmp_path):
             assert f'/{name}?v={tag}"' in page.text
         assert tag.startswith(__version__)
     assert c.get(f"/app.js?v={app.asset_tag()}").status_code == 200
+
+
+def test_original_voice_job_and_install(tmp_path, monkeypatch):
+    from dubber import clone
+
+    seen, started = [], []
+
+    def runner(url, settings, progress):
+        seen.append(settings.voice)
+        return SimpleNamespace(id="vid1")
+
+    class FakeInstaller:
+        state = {"running": False, "step": "", "error": "", "done": False}
+
+        def start(self):
+            started.append(True)
+            self.state = {**self.state, "running": True, "step": "torch"}
+            return True
+
+    gpu = {"gpu": {"name": "NVIDIA GeForce RTX 3070", "vram_gb": 8.0}, "gpu_ok": True, "installed": False,
+           "ready": False, "min_vram_gb": 6.0, "unsupported": ["he"]}
+    status = dict(gpu)
+    settings = Settings(work_dir=tmp_path / "w", output_dir=tmp_path / "out")
+    c = TestClient(app.create_app(settings, runner=runner, clone_status=lambda: status, installer=FakeInstaller()))
+
+    assert c.get("/api/clone").json()["gpu"]["name"] == "NVIDIA GeForce RTX 3070"
+    answer = c.post("/api/clone/install").json()
+    assert started == [True] and answer["install"]["step"] == "torch"
+    status.update(gpu=None, gpu_ok=False)
+    r = c.post("/api/clone/install")
+    assert r.status_code == 409 and "NVIDIA" in r.json()["detail"]["ru"] and len(started) == 1
+
+    # The voice choice reaches the pipeline as "original"; the job card shows the separation step only when used.
+    monkeypatch.setattr(clone, "ready", lambda: True)
+    for lang, separate in (("ru", True), ("he", False)):
+        job = c.post("/api/jobs", json={"url": "https://youtu.be/x", "voice": "original", "lang": lang}).json()
+        for _ in range(100):
+            job = c.get(f"/api/jobs/{job['id']}").json()
+            if job["status"] == "done":
+                break
+            time.sleep(0.02)
+        assert job["status"] == "done" and job["separate"] is separate and job["clone"] is separate
+    assert seen == ["original", "original"]
+    assert c.post("/api/jobs", json={"url": "https://youtu.be/x", "voice": "robot"}).status_code == 422

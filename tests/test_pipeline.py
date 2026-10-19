@@ -115,11 +115,11 @@ def test_remove_voice_puts_the_voice_free_background_under_the_dub(tmp_path, sam
     assert [s["codec_type"] for s in kinds].count("subtitle") == 1  # inputs shifted by one: subtitles still mapped
 
 
-def test_stages_weights_add_up_with_and_without_voice_removal():
-    for remove_voice in (False, True):
-        active = pipeline.stages(remove_voice)
+def test_stages_weights_add_up_with_and_without_voice_separation():
+    for separate in (False, True):
+        active = pipeline.stages(separate)
         assert abs(sum(w for *_, w in active) - 1) < 1e-9
-        assert ("separate" in [k for k, *_ in active]) is remove_voice
+        assert ("separate" in [k for k, *_ in active]) is separate
 
 
 def test_lines_are_cut_from_word_timings(tmp_path, sample_video):
@@ -364,3 +364,85 @@ def test_dub_id_of_an_unusual_video_id_is_still_a_safe_name():
         name = pipeline.dub_id(vid, "ru", "ru-RU-DmitryNeural", True, False)
         assert re.fullmatch(r"[A-Za-z0-9_-]{1,64}", name), name
     assert pipeline.dub_id("a" * 70, "ru", "v", True, False) != pipeline.dub_id("a" * 71, "ru", "v", True, False)
+
+
+def stub_separator_with_vocals(calls):
+    from dubber.media import run_ffmpeg
+
+    def separator(video, out_wav, progress=None, vocals_wav=None):
+        calls.append(vocals_wav)
+        run_ffmpeg(["-f", "lavfi", "-i", "sine=frequency=900:duration=6", "-ac", "2", "-ar", "44100", str(out_wav)])
+        if vocals_wav:
+            run_ffmpeg(["-f", "lavfi", "-i", "sine=frequency=200:duration=6", "-ac", "2", "-ar", "44100",
+                        str(vocals_wav)])
+        return out_wav
+    return separator
+
+
+def test_original_voice_copies_the_speaker(tmp_path, sample_video):
+    """The opt-in original voice (clone.py): the separated voice track is its reference; the dub gets its own entry."""
+    from dubber import clone
+    from dubber.media import write_wav
+
+    separated, cloned, labels = [], [], []
+
+    def stub_cloner(segments, vocals_wav, lang, clips_dir, max_speedup, progress=None):
+        cloned.append((vocals_wav, lang, clips_dir.name))
+        clips_dir.mkdir(parents=True, exist_ok=True)
+        clips = []
+        for i, _ in enumerate(segments):
+            clips.append(write_wav([0.1] * 24000, clips_dir / f"{i}.wav"))
+        progress(1.0)
+        return clips, [1.0] * len(segments)
+
+    settings = Settings(work_dir=tmp_path / "work", output_dir=tmp_path / "out", voice=clone.VOICE)
+    result = pipeline.run(str(sample_video), settings, progress=lambda label, f: labels.append(label),
+                          translator=StubTranslator(), synth=stub_synth, transcriber=stub_transcriber,
+                          separator=stub_separator_with_vocals(separated), cloner=stub_cloner)
+    assert separated and separated[0].name == "vocals_htdemucs.wav"
+    assert cloned == [(separated[0], "ru", "clips_original_ru")]
+    meta = json.loads((result.folder / "meta.json").read_text(encoding="utf-8"))
+    assert meta["voice"] == clone.VOICE and meta["voice_notes"] == [] and meta["remove_voice"] is False
+    # the voice is separated before the dub is spoken (it is the reference), not after
+    assert labels.index("Убираю оригинальный голос") < labels.index("Озвучиваю")
+    edge = pipeline.run(str(sample_video), Settings(work_dir=tmp_path / "work", output_dir=tmp_path / "out"),
+                        translator=StubTranslator(), synth=stub_synth, transcriber=stub_transcriber)
+    assert edge.id != result.id
+
+
+def test_original_voice_falls_back_to_edge(tmp_path, sample_video, monkeypatch):
+    from dubber import clone
+
+    def broken_cloner(*args, **kwargs):
+        raise RuntimeError("CUDA error: no kernel image is available")
+
+    def run(cloner, **choices):
+        settings = Settings(work_dir=tmp_path / "work", output_dir=tmp_path / "out", voice=clone.VOICE, **choices)
+        result = pipeline.run(str(sample_video), settings, translator=StubTranslator(), synth=stub_synth,
+                              transcriber=stub_transcriber, separator=stub_separator_with_vocals([]), cloner=cloner)
+        return json.loads((result.folder / "meta.json").read_text(encoding="utf-8"))
+
+    hebrew = run(broken_cloner, target_lang="he")  # not offered for Hebrew: the cloner isn't even asked
+    assert hebrew["voice"] == "he-IL-AvriNeural" and hebrew["voice_notes"] == ["clone:language"]
+    failed = run(broken_cloner)
+    assert failed["voice"] == "ru-RU-DmitryNeural" and failed["voice_notes"] == ["clone:failed"]
+
+    def broken_separator(video, out_wav, progress=None, vocals_wav=None):
+        raise OSError("Connection reset while downloading the separation model")
+
+    settings = Settings(work_dir=tmp_path / "w2", output_dir=tmp_path / "o2", voice=clone.VOICE)
+    result = pipeline.run(str(sample_video), settings, translator=StubTranslator(), synth=stub_synth,
+                          transcriber=stub_transcriber, separator=broken_separator, cloner=broken_cloner)
+    no_voice = json.loads((result.folder / "meta.json").read_text(encoding="utf-8"))
+    assert no_voice["voice"] == "ru-RU-DmitryNeural" and no_voice["voice_notes"] == ["clone:failed"]
+
+    monkeypatch.setattr(clone, "ready", lambda: False)
+    missing = run(None)
+    assert missing["voice"] == "ru-RU-DmitryNeural" and missing["voice_notes"] == ["clone:not_installed"]
+
+
+def test_the_voice_is_split_off_first_when_it_is_copied():
+    assert [k for k, *_ in pipeline.stages(True, voice_first=True)] == [
+        "download", "transcribe", "translate", "separate", "tts", "align", "mux"]
+    assert [k for k, *_ in pipeline.stages(True)][-2:] == ["separate", "mux"]
+    assert [k for k, *_ in pipeline.stages(False, voice_first=True)] == [k for k, *_ in pipeline.stages(False)]

@@ -13,6 +13,7 @@
   --live: #E5484D;
   --ok: #1F9D6B;
   --danger: #C5303B;
+  --warn: #B7791F;
   --shadow: 0 1px 2px rgba(13, 27, 46, .06), 0 8px 24px rgba(13, 27, 46, .06);
 
   --font: "Onest", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
@@ -36,6 +37,7 @@
     --live: #FF6369;
     --ok: #3CCB8F;
     --danger: #FF6B75;
+    --warn: #F0B455;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
     color-scheme: dark;
   }
@@ -43,7 +45,7 @@
 :root[data-theme="dark"] {
   --bg: #0B111C; --surface: #121A28; --surface-2: #19233A; --ink: #E8ECF3; --ink-2: #9AA6B8;
   --line: #233047; --accent: #6E8BFF; --accent-ink: #0B111C; --accent-soft: #1B2A55;
-  --live: #FF6369; --ok: #3CCB8F; --danger: #FF6B75; color-scheme: dark;
+  --live: #FF6369; --ok: #3CCB8F; --danger: #FF6B75; --warn: #F0B455; color-scheme: dark;
 }
 
 /* ---------- base ---------- */
@@ -169,6 +171,9 @@ main.wrap { padding-bottom: 80px; }
 .segmented label:hover { color: var(--ink); }
 .segmented input:checked + label { background: var(--surface); color: var(--ink); border-color: var(--line); box-shadow: 0 1px 3px rgba(13, 27, 46, .12); }
 .segmented input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: 1px; }
+.segmented { flex-wrap: wrap; }
+.segmented__track { flex-wrap: wrap; }
+.segmented__hint { flex-basis: 100%; max-width: 440px; }
 
 .switch { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; max-width: 440px; }
 .switch input { position: absolute; opacity: 0; pointer-events: none; }
@@ -312,6 +317,10 @@ main.wrap { padding-bottom: 80px; }
 .settings__options select { width: 100%; }
 .saved-note { color: var(--ok); font-size: 15px; font-weight: 500; }
 .saved-note.is-error { color: var(--danger); }
+.notice { margin: 0 0 14px; padding: 10px 14px; border-radius: 10px; font-size: 15px; line-height: 1.5;
+  background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--ink); }
+.clone-gpu { margin: 0 0 14px; font-weight: 500; }
+.clone-gpu.is-error { color: var(--danger); }
 
 /* ---------- new version banner ---------- */
 .update { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap;
@@ -369,3 +378,4 @@ main.wrap { padding-bottom: 80px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+.option-hint.is-error { color: var(--danger); }

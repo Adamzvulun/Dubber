@@ -50,6 +50,26 @@ def test_voice_is_removed(tmp_path):
     assert float(np.abs(decode_audio(out, 44100)).max()) < 1e-3
 
 
+def test_vocals_are_saved_too(tmp_path):
+    source = stereo_tone(tmp_path / "in.wav", 3)
+
+    def all_voice(chunk):
+        stems = np.zeros((1, 4, *chunk.shape[1:]), dtype=np.float32)
+        stems[0, separate.VOCALS] = chunk[0]
+        return stems
+
+    bg, vocals = tmp_path / "bg.wav", tmp_path / "vocals.wav"
+    separate.separate_background(source, bg, model=all_voice, vocals_wav=vocals)
+    original, voice = decode_audio(source, 44100), decode_audio(vocals, 44100)
+    assert float(np.abs(voice[: len(original)] - original[: len(voice)]).max()) < 2e-3
+
+    # Both files exist: reused. A background without vocals (made before the voice was needed) is made again.
+    assert separate.separate_background(source, bg, model=lambda c: pytest.fail("model called"), vocals_wav=vocals)
+    vocals.unlink()
+    separate.separate_background(source, bg, model=all_voice, vocals_wav=vocals)
+    assert vocals.exists()
+
+
 def test_cancel_leaves_no_file(tmp_path):
     source = stereo_tone(tmp_path / "in.wav", 20)
 

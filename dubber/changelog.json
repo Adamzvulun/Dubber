@@ -1,4 +1,12 @@
 {
+  "0.7.0": {
+    "ru": [
+      "Новый голос «Оригинал» — озвучка голосами самих говорящих: программа копирует голос каждого человека в видео. Только для компьютеров с видеокартой NVIDIA (от 6 ГБ); включается один раз в «Настройках» → «Голос оригинала». Для иврита не работает."
+    ],
+    "en": [
+      "New “Original” voice — the dub in the speakers' own voices: the program copies the voice of each person in the video. Only for computers with an NVIDIA graphics card (6 GB+); turned on once in Settings → “Original voice”. Not for Hebrew."
+    ]
+  },
   "0.6.1": {
     "ru": [
       "Русские буквы в чёрном окне программы больше не превращаются в вопросительные знаки.",

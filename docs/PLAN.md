@@ -117,7 +117,8 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [ ] Telegram bot front-end
 - [ ] ElevenLabs dubbing backend (paid, keeps original voice)
 - [ ] Offline TTS fallback (Silero)
-- [ ] Voice cloning ("original voice", OmniVoice) — researched (ADR-028), needs an NVIDIA GPU; waiting for Adam
+- [x] Voice cloning ("original voice", OmniVoice) — opt-in, NVIDIA GPU only, installed from Settings (v0.7.0, ADR-028)
+- [ ] Adam: install it on the RTX 3070 PC, dub with «Оригинал», report speed and how it sounds
 
 ## Open questions
 - ~~Repo public?~~ — yes (self-update works from GitHub, 2026-10-18).
