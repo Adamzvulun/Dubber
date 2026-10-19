@@ -17,6 +17,10 @@ Newest entries at the top. One entry per working session / milestone.
   estimate boosts short lines (≤ 2 s) up to 2.5× → the planned pace came out 1.52× and the dub ended long before the
   speaker; with the unboosted estimate the pace is 1.02× and every line lasts about as long as the speaker's
   (2.94 vs 2.98 s, 2.93 vs 3.24 s, 1.57 vs 1.74 s), no late or stretched lines.
+- The new Windows CI job ran the test suite on Windows for the first time: both install steps worked (CUDA PyTorch +
+  omnivoice); 2 tests failed reading ffprobe's JSON in the Windows code page (the «Русский» track title is UTF-8, byte
+  0x81 is undefined in cp1252). `media.run_ffmpeg`/`probe`, `clone.gpu_info` and the tests now decode UTF-8 — a
+  Russian title in a user's video could have broken `media.probe` on Windows the same way.
 - Browser (Chromium, stub server): install flow, the «Оригинал» option and Hebrew hint, step order with the voice split
   first, RU/EN, 1280/360 px, dark, PC without NVIDIA — no console errors. Not seen on a real NVIDIA card (none here).
 

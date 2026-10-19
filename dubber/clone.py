@@ -69,7 +69,7 @@ def gpu_info(run=subprocess.run) -> dict | None:
     """The NVIDIA card's name and memory in GB, from the driver's nvidia-smi (None: no NVIDIA card or driver)."""
     try:
         result = run(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
-                     capture_output=True, text=True, timeout=15)
+                     capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15)
     except (OSError, subprocess.SubprocessError):
         return None
     if result.returncode != 0 or not result.stdout.strip():

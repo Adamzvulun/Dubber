@@ -44,7 +44,7 @@ def test_end_to_end_with_local_file(tmp_path, sample_video):
     assert seen[-1] == 1.0 and seen == sorted(seen)
     info = json.loads(subprocess.run(
         ["ffprobe", "-v", "error", "-print_format", "json", "-show_streams", "-show_format", str(result.video)],
-        capture_output=True, text=True, check=True).stdout)
+        capture_output=True, text=True, encoding="utf-8", check=True).stdout)
     kinds = [s["codec_type"] for s in info["streams"]]
     assert kinds.count("video") == 1 and kinds.count("audio") == 2 and kinds.count("subtitle") == 1
     assert abs(float(info["format"]["duration"]) - 6.0) < 0.3
@@ -111,7 +111,7 @@ def test_remove_voice_puts_the_voice_free_background_under_the_dub(tmp_path, sam
     assert abs(freqs[spectrum.argmax()] - 900) < 10  # the separated background, not the original 300 Hz tone
     kinds = json.loads(subprocess.run(
         ["ffprobe", "-v", "error", "-print_format", "json", "-show_streams", str(result.video)],
-        capture_output=True, text=True, check=True).stdout)["streams"]
+        capture_output=True, text=True, encoding="utf-8", check=True).stdout)["streams"]
     assert [s["codec_type"] for s in kinds].count("subtitle") == 1  # inputs shifted by one: subtitles still mapped
 
 
@@ -260,7 +260,7 @@ def test_dub_into_hebrew_from_french(tmp_path, sample_video, monkeypatch):
     assert "FR" in (result.folder / meta["files"]["bilingual"]).read_text(encoding="utf-8")
     info = json.loads(subprocess.run(
         ["ffprobe", "-v", "error", "-print_format", "json", "-show_streams", str(result.video)],
-        capture_output=True, text=True, check=True).stdout)
+        capture_output=True, text=True, encoding="utf-8", check=True).stdout)
     tags = [(s["codec_type"], s.get("tags", {}).get("language")) for s in info["streams"] if s["codec_type"] != "video"]
     assert tags == [("audio", "heb"), ("audio", "fre"), ("subtitle", "heb")]
 
