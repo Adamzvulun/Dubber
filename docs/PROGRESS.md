@@ -2,6 +2,16 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-19 — Session 6: research VoiceStudio / OmniVoice (voice cloning)
+- Adam verified every "not verified" item on his PCs (0.6.1 font + shortcut, clean-PC install, playlists, uploads,
+  Claude dubs, voice removal, Google, H.264 playback) — STATUS updated.
+- Adam asked to research [VoiceStudio](https://github.com/debpalash/voicestudio). Its core is the OmniVoice model
+  (voice cloning, 646 languages, exact line length). Measured here on 4 CPU cores: ≈ 20× slower than real time
+  (≈ 2 h of voice generation per 10-min video), batching doesn't help; Russian clear, Hebrew garbled. Proposal
+  (ADR-028): optional "original voice" only on an NVIDIA GPU; plus three CPU-friendly ideas from its pipeline.
+  Sandbox notes: `download.pytorch.org` is blocked (install torch from PyPI); edge-tts needs the proxy CA
+  (`/root/.ccr/ca-bundle.crt`) patched into `edge_tts.communicate._SSL_CTX` in throwaway scripts.
+
 ## 2026-10-19 — Session 5 hand-off
 - Hand-off docs brought up to date for the next session: STATUS (state, git, not verified, next steps, new sandbox
   gotchas: Node Playwright, PowerShell 7 on Linux, Windows only via CI, BOM-less workflow steps), `kanban/next-steps.md`

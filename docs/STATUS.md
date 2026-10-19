@@ -97,11 +97,13 @@ shortcut after the self-update on the second PC), first run on a clean PC, real 
 Claude dubs (Hebrew, English), voice removal on real videos, Google translation, H.264 playback in Chrome/Edge.
 
 ## Next steps (in order)
-1. Adam confirms 0.6.1: readable Russian in the window; on the second PC the shortcut with the icon after its update.
-2. Adam listens to a Hebrew dub and an English dub with Claude; voice removal on a real video.
-3. Ideas not yet chosen (offer, don't build unasked): voice speed control; Hebrew spelling fix on the free path
+1. **VoiceStudio / OmniVoice research (session 6, ADR-028 proposed):** Adam answers whether his PC has an NVIDIA GPU
+   (≥ 6 GB) — only then is an optional "original voice" (cloning) worth building (≈ 20× slower than real time on
+   CPU, Hebrew poor). Independent of that, he picks among: listen-back check of the dub, slight video slow-down
+   instead of rushed speech, a voice per speaker (`kanban/voicestudio-omnivoice.md`).
+2. Ideas not yet chosen (offer, don't build unasked): voice speed control; Hebrew spelling fix on the free path
    (PLAN M7); offline TTS fallback (Silero) for Edge outages; Telegram bot; ElevenLabs (paid).
-4. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;
+3. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;
    speaker gender unknown to the translator; offline-backup slips (Hebrew "flour" → "acid/vinegar").
 
 ## Gotchas for Claude in the cloud sandbox

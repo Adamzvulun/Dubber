@@ -294,3 +294,14 @@ Newest at the bottom. Format: context → decision → consequences.
   holds each release's user-facing changes (RU+EN, a test requires the current version); the page shows them once
   after an update (localStorage `dubber.seenVersion`, nothing on a first visit). The library groups dubs per
   `video_id` client-side (tag per language; the card opens the newest dub) with a search box.
+
+## ADR-028 — Voice cloning with OmniVoice (from VoiceStudio): only with an NVIDIA GPU; Edge stays the default (2026-10-19, proposed)
+- **Context:** Adam asked whether VoiceStudio (open-source ElevenLabs-like app) can improve the dubbing. Its value for
+  us is the OmniVoice model: the dub in the original speaker's own voice, and lines spoken to an exact length.
+  Research and measurements: `docs/RESEARCH.md` → "VoiceStudio / OmniVoice".
+- **Proposal:** don't adopt the VoiceStudio app (Electron + AGPL, a second program to install and run). If Adam's PC
+  has an NVIDIA GPU (≥ 6 GB), add OmniVoice as an **optional** voice ("Голос оригинала"): `pip install omnivoice`,
+  reference cut from the voice-free track (`separate.py`), `duration=` from the line's slot, for languages with
+  enough training data (not Hebrew). Edge stays the default and the fallback. Without a GPU: no — measured ≈ 20×
+  slower than real time on 4 CPU cores (≈ 2 h per 10-min video).
+- **Status:** waiting for Adam: does the PC have an NVIDIA GPU, and how much memory?

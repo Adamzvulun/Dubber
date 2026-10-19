@@ -261,6 +261,42 @@ Sources: [Spaces overview](https://huggingface.co/docs/hub/en/spaces-overview),
 [ZeroGPU](https://huggingface.co/docs/hub/spaces-zerogpu.md),
 [openai/whisper Space bot-check report](https://huggingface.co/spaces/openai/whisper/discussions/121).
 
+## VoiceStudio / OmniVoice — open-source "ElevenLabs" — research 2026-10-19 (ADR-028)
+Adam asked whether [debpalash/voicestudio](https://github.com/debpalash/voicestudio) can improve or replace parts of
+Dubber. Read the repo (cloned at its 2026-10-19 head) and measured its voice model here.
+
+**What it is.** An Electron desktop app + FastAPI backend (AGPL-3.0) for voice cloning, voice design and video
+dubbing (separation, WhisperX, diarization, LLM translation, per-line cloned TTS, "Smart Fit" timing). Its default
+voice is [k2-fsa/OmniVoice](https://huggingface.co/k2-fsa/OmniVoice): 0.6B parameters, zero-shot cloning from a 3–10 s
+clip, 646 languages, 24 kHz; `pip install omnivoice` (code Apache-2.0, **weights CC-BY-NC** — personal use only).
+`generate()` takes `duration=` (speak the line in exactly N seconds) and `speed=`. Training data per language
+(`docs/languages.md` there): ru 20 338 h, en 206 061 h, es/fr/de/pt/ja/zh ≥ 9 000 h, uk 1 852 h, ar (MSA) 1 484 h,
+**he 13.4 h**. The project says the model needs a GPU with ≥ 6 GB VRAM; a CPU build exists but is "slower".
+
+**Measured here** (4 CPU cores, PyTorch 2.14 CPU, `omnivoice` 0.2.1, float32; English Edge voice as the reference,
+cloned into Russian and Hebrew lines; intelligibility = Whisper `small` transcribing the result back):
+
+| Setting | Compute per ~3.5 s line | × real time |
+|---|---|---|
+| default (32 steps) | 68–77 s | **≈ 20×** |
+| 16 steps | 33–35 s | ≈ 10× (Russian: one word garbled) |
+| 4 lines in one call | 254 s for 12.7 s | ≈ 20× — batching gives nothing on CPU |
+| `duration=3.0` | 3.19 s out | follows the target (≥ 4.5 s gets trimmed by its silence post-processing) |
+
+- **Russian:** transcribed back as the text (same as Edge). Cloned voice keeps the reference timbre.
+- **Hebrew:** clearly worse than Edge — e.g. "היום הנהר עליהם, איך לעפות להם פושת" for "היום אני אראה לכם איך לאפות
+  לחם פשוט"; Edge's Avri came back nearly right. Matches the 13.4 h of Hebrew training data.
+- **CPU cost for Dubber:** a 10-min video has ≈ 6–8 min of speech → **≈ 2–2.5 h** of voice generation on 4 cores (vs
+  seconds with Edge). On an NVIDIA GPU (project's numbers: real-time factor down to 0.025) it would be minutes.
+
+**Ideas in VoiceStudio worth borrowing without its voice model** (its `docs/competitive-analysis.md`,
+`backend/services/fit_planner.py`):
+1. **Check the dub by listening to it** — transcribe each dubbed line back and flag/redo lines whose words don't match
+   (catches TTS glitches and mispronunciations; we did exactly this above).
+2. **Slow the video slightly instead of rushing the voice** — when a line needs > 1.2× speed-up, split the stretch
+   between voice (≤ 1.5×) and a per-line video slow-down (≤ 2×). Needs a video re-encode (minutes on CPU).
+3. **A voice per speaker** — diarization (pyannote, needs PyTorch) to give each speaker their own (male/female) voice.
+
 ## Risks
 - YouTube anti-bot changes → keep yt-dlp updated; cookies-from-browser fallback (see `youtube-downloader` skill references).
 - edge-tts is an unofficial client of a Microsoft service — may break; Silero offline fallback planned.
