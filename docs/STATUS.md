@@ -92,14 +92,9 @@ original voice; the voice-free background goes under the dub, ducked while it sp
 - Timing (ADR-013), all 12 dub languages (ADR-014/016: 24 real QA dubs), real YouTube runs (session 1).
 
 ## Not verified yet
-1. **0.6.1 on Adam's screen:** Russian text in the black window after the Consolas switch (CI has no visible console);
-   the shortcut appearing by itself on the second PC after its self-update.
-2. **First run on a clean PC** (winget installing Python + ffmpeg) — CI has both preinstalled.
-3. Real YouTube playlists (flat extraction mocked here — YouTube blocks the sandbox); multi-GB uploads.
-4. **Claude request v2** (ADR-021, spelling notes ADR-019): unit-tested only (no key here) — quality and cost of a real
-   Claude dub (`meta.json`).
-5. Voice removal speed and quality on real videos (music, noise, several speakers).
-6. Google translation end-to-end (Google answers this sandbox with HTTP 429); H.264 playback in a real Chrome/Edge.
+Nothing open. **Adam verified on 2026-10-19 every item that was listed here:** 0.6.1 (readable Russian in the window,
+shortcut after the self-update on the second PC), first run on a clean PC, real YouTube playlists and large uploads,
+Claude dubs (Hebrew, English), voice removal on real videos, Google translation, H.264 playback in Chrome/Edge.
 
 ## Next steps (in order)
 1. Adam confirms 0.6.1: readable Russian in the window; on the second PC the shortcut with the icon after its update.
