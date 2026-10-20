@@ -1,13 +1,17 @@
 # Status — read this first
 
-_Last updated: 2026-10-19 (end of session 5). Update this page at the end of every session._
+_Last updated: 2026-10-20 (end of session 6). Update this page at the end of every session._
 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video **or a video file** in **any
 spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version **0.6.1** on `main`; **0.7.0 (the original voice) on the PR branch `claude/fervent-curie-x5h1hx`**. The repo is **public** and the PCs **update themselves from `main`** at start
-(ADR-024) — merging is shipping. Adam confirmed 0.6.0 arrived on his PC by itself.
+Current version **0.7.0** on `main` (PR #11 merged 2026-10-20). The repo is **public** and the PCs **update themselves
+from `main`** at start (ADR-024) — merging is shipping.
+**Session 6 (2026-10-19/20):** Adam verified every open item of session 5 on his PCs. Researched VoiceStudio (open-source
+"ElevenLabs"); its OmniVoice model became the opt-in voice **«Оригинал»** — the dub in each speaker's own voice, for
+PCs with an NVIDIA card ≥ 6 GB only (Adam's father's PC: RTX 3070 + i7-11700), installed from Settings (ADR-028,
+`dubber/clone.py`). Also: ffmpeg/ffprobe output is read as UTF-8 (a Russian title broke it on Windows).
 Session 5 (2026-10-18): one-click Windows start `Start Dubber.cmd` with a desktop shortcut and its own icon (the old
 `?`/no-shortcut bug reproduced and fixed on real Windows in CI, ADR-025); upload a file, several links, playlists
 (ADR-026); grouped library + search, disk space page, "What's new" after updates (ADR-027); 0.6.1: console font
@@ -25,12 +29,14 @@ Earlier: per-dub library entries + self-update (session 4), voice removal and tr
   `uploads/…` branches in `dev-uploads/`.
 - **Code:** `dubber/` (pipeline stages, `app.py` = server/API/jobs/settings, `eta.py` = time left, `config.py` =
   settings + `save_env`, `separate.py` = voice removal), `dubber/web/` (site; `i18n.js` = all UI text RU/EN),
-  `update.py` = self-update, `changelog.json` = "What's new", `assets/` = logo + Windows icon), `tests/` (131 tests,
+  `clone.py` = the «Оригинал» voice (OmniVoice; GPU check, installer, per-line voice copying),
+  `update.py` = self-update, `changelog.json` = "What's new", `assets/` = logo + Windows icon), `tests/` (141 tests,
   offline), `tools/` (stub server, 12-language QA, Hebrew voice QA, `make_icon.py`), `Start Dubber.cmd` +
   `scripts/windows/dubber.ps1` (Windows start: install, shortcut, font, start; `-NoStart`, `-ShortcutOnly`; ADR-025),
   `scripts/` (old `.bat` launchers that now call `dubber.ps1`; macOS/Linux scripts), `.github/workflows/`
-  (`ci.yml`, `windows-install.yml`). Conventions: `CLAUDE.md`.
-- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…027), `DESIGN.md`
+  (`ci.yml`; `windows-install.yml` when the start scripts/app change; `original-voice-install.yml` when `clone.py`
+  changes — installs CUDA PyTorch + omnivoice on Windows and runs the tests there). Conventions: `CLAUDE.md`.
+- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…028), `DESIGN.md`
   (design system), `RESEARCH.md` (tools, timing research, 12-language QA), `SKILLS.md`, `README.ru.md` (longer Russian
   reference). **User guides (RU + HE) are at the top of `README.md`** — they quote UI labels from `i18n.js`. Task cards: `kanban/` (hand-off list: `kanban/next-steps.md`).
 - **Data on a user's PC (git-ignored):** `.env` (settings saved by the website, incl. the Claude key),
@@ -39,7 +45,9 @@ Earlier: per-dub library entries + self-update (session 4), voice removal and tr
   `segments_src_v3.json` = what was said with each line's language, `speech_info.json`, `segments_<lang>_v3.json` (free
   engines) / `segments_<lang>_v3_claude_<hash>.json` + `.info.json` (engine, cost, notes), `clips_<voice>/`,
   `dub_track_<voice>_<hash>.wav`, `timing_<voice>_<hash>.json`, `background_htdemucs.wav` = original without the
-  voice, only when that switch was on), `work/stage_times.json` (stage timings of the last
+  voice, only when that switch was on; `vocals_htdemucs.wav` + `vocals_24k.f32` = the voice alone and
+  `clips_original_<lang>/` = copied-voice clips, only for «Оригинал»), `work/omnivoice-install.log` (the «Оригинал»
+  install), `.venv/dubber-omnivoice` (marker: «Оригинал» installed and the card answered), `work/stage_times.json` (stage timings of the last
   10 dubs, for the time-left estimate); `output/<id>/` = what the library shows (`dubbed.mp4`, `meta.json` with
   languages/files/translator/cost, `thumbnail.jpg`, `segments.json`, `timing.json`, subtitles, transcripts).
   One **dub** = one library entry: `output/<video-id>--<lang>-<hash>/` (hash of language, voice, background,
@@ -56,12 +64,17 @@ offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 `timing.plan_rates`) → 5. Align (trim Edge silence, lines on the speaker's start times, ≤1.1× correction) → 6. Mux
 (language tags) + subtitles + meta. Optional before 6: `separate.py` (Demucs ONNX) removes the
 original voice; the voice-free background goes under the dub, ducked while it speaks.
+**«Оригинал» voice** (voice `"original"`, `clone.py`): the voice is split off right after translating (Demucs, also
+writes the vocals), then each line is spoken by OmniVoice copying whoever said it (reference = the same moment of the
+vocals; short lines join neighbours across ≤ 1 s pauses), with a length from the model's *unboosted* estimate →
+`timing.plan_rates` → `duration=`. Hebrew, not installed, or any error → the Edge male voice + `voice_notes`.
 
 ## What works (verified by running it)
 - **0.7.0 — the original voice «Оригинал» (ADR-028, `clone.py`):** unit tests with a stand-in model; the Settings
   panel, install progress, the third voice option, Hebrew hint and job-card step order in Chromium on the stub server
   (RU/EN, 1280/360 px, dark, with/without a GPU); a real end-to-end dub of a 2-speaker clip on **CPU** with the real
-  OmniVoice (see PROGRESS). Not seen on a real NVIDIA card yet.
+  OmniVoice: each line kept its speaker, all lines intelligible, pace 1.02× (PROGRESS session 6b). The install commands
+  work on Windows + Python 3.12 (CI `Original voice install`: CUDA 12.8 PyTorch + omnivoice, then all tests pass).
 - **0.6.1:** Windows CI: a program started without the launcher (as after a self-update) makes the desktop shortcut
   itself; the console-font helper compiles and runs in Windows PowerShell 5.1. Adam: 0.6.0 self-updated on his PC.
 - **0.6.0 — one-click Windows start (ADR-025):** CI on `windows-latest` (Windows PowerShell 5.1): fresh install,
@@ -96,14 +109,20 @@ original voice; the voice-free background goes under the dub, ducked while it sp
 - Timing (ADR-013), all 12 dub languages (ADR-014/016: 24 real QA dubs), real YouTube runs (session 1).
 
 ## Not verified yet
-Nothing open. **Adam verified on 2026-10-19 every item that was listed here:** 0.6.1 (readable Russian in the window,
-shortcut after the self-update on the second PC), first run on a clean PC, real YouTube playlists and large uploads,
-Claude dubs (Hebrew, English), voice removal on real videos, Google translation, H.264 playback in Chrome/Edge.
+1. **«Оригинал» on a real NVIDIA card** (none in the sandbox, none in CI): the install's last step (CUDA check + model
+   download), speed on the RTX 3070 (estimate 0.2–0.4× real time, i.e. a few extra minutes per 10-min video), and how
+   it sounds on real videos (music, several speakers, noisy rooms). Adam will try it on his father's PC.
+2. The install on a Python other than 3.12 (the installer uses an existing Python ≥ 3.10, else installs 3.12).
+
+Everything listed here at the end of session 5 was verified by Adam on 2026-10-19 (0.6.1 window + shortcut, clean-PC
+install, playlists, large uploads, Claude dubs, voice removal, Google, H.264 playback).
 
 ## Next steps (in order)
-1. **0.7.0 on the RTX 3070 PC (father's):** Adam reviews/merges the PR; then Settings → «Голос оригинала» →
-   «Установить» (watch `work/omnivoice-install.log` if it fails: CUDA wheel for his Python, driver too old), dub a
-   short video with «Оригинал», listen, and report the time it took (the job card's clock). Tune `BATCH` / steps if slow.
+1. **Wait for Adam's report on «Оригинал»** (father's RTX 3070 PC): install via Settings → «Голос оригинала» →
+   «Установить», a short dub with «Оригинал», how it sounds and how long it took. If the install failed, ask for
+   `work\omnivoice-install.log` (likely causes: no CUDA wheel for his Python, an old NVIDIA driver). If slow: raise
+   `clone.BATCH`, or pass fewer `num_step` (16 halves the time; one word garbled on CPU — listen first). If a line
+   sounds like the wrong person: look at `clone.reference_lines` (JOIN_GAP, MIN_REF).
 2. Other ideas from the VoiceStudio research, not chosen yet: listen-back check of the dub, slight video slow-down
    instead of rushed speech (`kanban/voicestudio-omnivoice.md`).
 3. Ideas not yet chosen (offer, don't build unasked): voice speed control; Hebrew spelling fix on the free path
@@ -132,6 +151,17 @@ Claude dubs (Hebrew, English), voice removal on real videos, Google translation,
   MCP tools (`actions_list`, `get_job_logs`). GitHub saves workflow `run:` steps without a BOM, so Windows
   PowerShell 5.1 misreads Cyrillic typed there: build such strings from char codes. CI has no visible console, so
   how text *renders* (fonts) can only be checked on Adam's PC.
+- **PyTorch / OmniVoice here:** `download.pytorch.org` is **blocked** by the sandbox network (403) — install `torch`
+  from PyPI (the CPU+CUDA Linux wheel, ~3 GB) into a **separate venv in the scratchpad**, never into `.venv` (CI and
+  the offline tests must not need torch). A real «Оригинал» dub on CPU: venv with `pip install -e . torch torchaudio
+  omnivoice==0.2.1`, write `clone.marker()`, run `pipeline.run(..., Settings(voice="original", translator="offline"))`
+  with `DUBBER_CLONE_DEVICE=cpu` — ~70 s per line on 4 cores, so use a 15–20 s clip. Model download ~2.4 GB.
+- **edge-tts in throwaway scripts** fails TLS here (it pins certifi): set
+  `edge_tts.communicate._SSL_CTX = ssl.create_default_context(cafile="/root/.ccr/ca-bundle.crt")` before use. Edge also
+  answers "No audio" at random — retry. (Dubber's own pipeline passes the proxy and retries by itself.)
+- **Windows text:** read subprocess output with `encoding="utf-8"` — Windows decodes `text=True` output in cp1252 and
+  breaks on Cyrillic (ffprobe's «Русский» track title). The local ffmpeg 6.1 doesn't show that title, Windows' newer
+  one does, so only Windows CI catches it.
 - **Patch scripts:** a Python script that does several `assert`-guarded replacements stops at the first miss —
   the earlier replacements are already written; re-run only the rest.
 - **Killing:** `pkill -f X` / `pgrep -f X` also match your own shell command (exit 144) — even inside a wait loop.
@@ -157,7 +187,8 @@ DUBBER_NETWORK_TESTS=1 .venv/bin/pytest -m network            # real NLLB model 
 
 # UI work without network: the real website + a stand-in pipeline (6 uneven stages ~31 s; URL with "fail" → error
 # card; settings kept in the data folder; a Claude key ending in "bad" is refused; playlists are faked: 3 videos,
-# 15 when the list id starts with "BIG"; STUB_UPDATE=9.9.9 shows the update banner)
+# 15 when the list id starts with "BIG"; STUB_UPDATE=9.9.9 shows the update banner; the stand-in PC has an RTX 3070 for
+# «Оригинал» — STUB_GPU=none / small: no NVIDIA / 4 GB; STUB_CLONE_FAIL=1: the install fails at step 2)
 .venv/bin/python tools/stub_server.py /tmp/stub 7871 & echo $! > /tmp/stub.pid
 #   copy finished videos into /tmp/stub/out/<id>/ to test library/watch pages; drive with Playwright; kill by PID
 
