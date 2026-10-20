@@ -105,7 +105,10 @@
               <label for="voice-male" data-i18n="form.male">Мужской</label>
               <input type="radio" name="voice" id="voice-female" value="female">
               <label for="voice-female" data-i18n="form.female">Женский</label>
+              <input type="radio" name="voice" id="voice-original" value="original" disabled>
+              <label for="voice-original" id="voice-original-label" data-i18n="form.original" hidden>Оригинал</label>
             </div>
+            <span class="option-hint segmented__hint" id="voice-hint" hidden></span>
           </fieldset>
 
           <div class="switch-row">
@@ -254,6 +257,20 @@
           <div class="panel__actions">
             <button class="btn" type="button" id="glossary-save" data-i18n="settings.glossary.save">Сохранить глоссарий</button>
             <span class="saved-note" id="glossary-saved" hidden></span>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="clone-title">
+          <div class="panel__head">
+            <h2 id="clone-title" data-i18n="clone.title">Голос оригинала</h2>
+            <span class="badge" id="clone-badge"></span>
+          </div>
+          <p class="panel__lead" data-i18n="clone.about"></p>
+          <p class="notice" data-i18n="clone.warning"></p>
+          <p class="clone-gpu" id="clone-gpu"></p>
+          <div class="panel__actions">
+            <button class="btn btn--primary" type="button" id="clone-install" data-i18n="clone.install" hidden>Установить</button>
+            <span class="option-hint" id="clone-progress" role="status" aria-live="polite"></span>
           </div>
         </section>
 

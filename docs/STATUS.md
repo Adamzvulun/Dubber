@@ -6,7 +6,7 @@ _Last updated: 2026-10-19 (end of session 5). Update this page at the end of eve
 Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video **or a video file** in **any
 spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version **0.6.1** on `main`. The repo is **public** and the PCs **update themselves from `main`** at start
+Current version **0.6.1** on `main`; **0.7.0 (the original voice) on the PR branch `claude/fervent-curie-x5h1hx`**. The repo is **public** and the PCs **update themselves from `main`** at start
 (ADR-024) — merging is shipping. Adam confirmed 0.6.0 arrived on his PC by itself.
 Session 5 (2026-10-18): one-click Windows start `Start Dubber.cmd` with a desktop shortcut and its own icon (the old
 `?`/no-shortcut bug reproduced and fixed on real Windows in CI, ADR-025); upload a file, several links, playlists
@@ -58,6 +58,10 @@ offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 original voice; the voice-free background goes under the dub, ducked while it speaks.
 
 ## What works (verified by running it)
+- **0.7.0 — the original voice «Оригинал» (ADR-028, `clone.py`):** unit tests with a stand-in model; the Settings
+  panel, install progress, the third voice option, Hebrew hint and job-card step order in Chromium on the stub server
+  (RU/EN, 1280/360 px, dark, with/without a GPU); a real end-to-end dub of a 2-speaker clip on **CPU** with the real
+  OmniVoice (see PROGRESS). Not seen on a real NVIDIA card yet.
 - **0.6.1:** Windows CI: a program started without the launcher (as after a self-update) makes the desktop shortcut
   itself; the console-font helper compiles and runs in Windows PowerShell 5.1. Adam: 0.6.0 self-updated on his PC.
 - **0.6.0 — one-click Windows start (ADR-025):** CI on `windows-latest` (Windows PowerShell 5.1): fresh install,
@@ -92,18 +96,16 @@ original voice; the voice-free background goes under the dub, ducked while it sp
 - Timing (ADR-013), all 12 dub languages (ADR-014/016: 24 real QA dubs), real YouTube runs (session 1).
 
 ## Not verified yet
-1. **0.6.1 on Adam's screen:** Russian text in the black window after the Consolas switch (CI has no visible console);
-   the shortcut appearing by itself on the second PC after its self-update.
-2. **First run on a clean PC** (winget installing Python + ffmpeg) — CI has both preinstalled.
-3. Real YouTube playlists (flat extraction mocked here — YouTube blocks the sandbox); multi-GB uploads.
-4. **Claude request v2** (ADR-021, spelling notes ADR-019): unit-tested only (no key here) — quality and cost of a real
-   Claude dub (`meta.json`).
-5. Voice removal speed and quality on real videos (music, noise, several speakers).
-6. Google translation end-to-end (Google answers this sandbox with HTTP 429); H.264 playback in a real Chrome/Edge.
+Nothing open. **Adam verified on 2026-10-19 every item that was listed here:** 0.6.1 (readable Russian in the window,
+shortcut after the self-update on the second PC), first run on a clean PC, real YouTube playlists and large uploads,
+Claude dubs (Hebrew, English), voice removal on real videos, Google translation, H.264 playback in Chrome/Edge.
 
 ## Next steps (in order)
-1. Adam confirms 0.6.1: readable Russian in the window; on the second PC the shortcut with the icon after its update.
-2. Adam listens to a Hebrew dub and an English dub with Claude; voice removal on a real video.
+1. **0.7.0 on the RTX 3070 PC (father's):** Adam reviews/merges the PR; then Settings → «Голос оригинала» →
+   «Установить» (watch `work/omnivoice-install.log` if it fails: CUDA wheel for his Python, driver too old), dub a
+   short video with «Оригинал», listen, and report the time it took (the job card's clock). Tune `BATCH` / steps if slow.
+2. Other ideas from the VoiceStudio research, not chosen yet: listen-back check of the dub, slight video slow-down
+   instead of rushed speech (`kanban/voicestudio-omnivoice.md`).
 3. Ideas not yet chosen (offer, don't build unasked): voice speed control; Hebrew spelling fix on the free path
    (PLAN M7); offline TTS fallback (Silero) for Edge outages; Telegram bot; ElevenLabs (paid).
 4. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;

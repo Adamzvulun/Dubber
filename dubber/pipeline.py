@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import shutil
 import time
@@ -14,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import align, languages, media, separate, subtitles, timing, transcribe, translate, tts
+from . import align, clone, languages, media, separate, subtitles, timing, transcribe, translate, tts
 from .config import Settings
 from .download import download, fetch_info, is_url, local_video_id
 from .mux import mux
@@ -23,8 +24,11 @@ from .segments import load_segments, merge_into_sentences, save_segments, split_
 # (message in Russian, overall fraction 0..1)
 ProgressFn = Callable[[str, float], None]
 
+log = logging.getLogger(__name__)
+
 # Share of the total progress bar for each stage (transcription is the slow one on CPU). "separate" only runs when
-# the original voice is removed (Settings.remove_voice); `stages()` gives the stages of one run.
+# the original voice is removed (Settings.remove_voice) or copied (the "original" voice, clone.py); `stages()` gives
+# the stages of one run.
 STAGES = [
     ("download", "Скачиваю видео", 0.10),
     ("transcribe", "Распознаю речь", 0.40),
@@ -34,13 +38,22 @@ STAGES = [
     ("separate", "Убираю оригинальный голос", 0.25),
     ("mux", "Собираю итоговое видео", 0.10),
 ]
-# (video, out_wav, progress) -> out_wav: the original soundtrack without the voice
+# (video, out_wav, progress[, vocals_wav]) -> out_wav: the original soundtrack without the voice
 SeparateFn = Callable[..., Path]
+# (segments, vocals_wav, lang, clips_dir, max_speedup, progress) -> (clips, rates): the original voice (clone.py)
+CloneFn = Callable[..., tuple[list, list[float]]]
 
 
-def stages(remove_voice: bool = False) -> list[tuple[str, str, float]]:
-    """The stages one run goes through, with weights that add up to 1."""
-    active = [s for s in STAGES if s[0] != "separate" or remove_voice]
+def stages(separate: bool = False, voice_first: bool = False) -> list[tuple[str, str, float]]:
+    """The stages one run goes through, in order, with weights that add up to 1.
+
+    `separate`: the voice is split off; `voice_first`: before the dub is spoken (the original voice copies it).
+    """
+    active = [s for s in STAGES if s[0] != "separate" or separate]
+    if voice_first and separate:
+        split = next(s for s in active if s[0] == "separate")
+        active.remove(split)
+        active.insert([s[0] for s in active].index("tts"), split)
     total = sum(w for *_, w in active)
     return [(key, label, w / total) for key, label, w in active]
 
@@ -120,11 +133,22 @@ def timing_report(lines: list[dict]) -> dict:
     }
 
 
+def clone_choice(settings: Settings, cloner: CloneFn | None = None) -> tuple[bool, list[str]]:
+    """Whether this run speaks in the original voice, and why not when it was asked for (notes for meta.json)."""
+    if settings.voice != clone.VOICE:
+        return False, []
+    if not clone.supports(settings.target_lang):
+        return False, ["clone:language"]
+    if cloner is None and not clone.ready():
+        return False, ["clone:not_installed"]
+    return True, []
+
+
 class _Progress:
-    def __init__(self, callback: ProgressFn | None, remove_voice: bool = False):
+    def __init__(self, callback: ProgressFn | None, separate: bool = False, voice_first: bool = False):
         self.callback = callback
         self.done = 0.0
-        self.stages = stages(remove_voice)
+        self.stages = stages(separate, voice_first)
 
     def stage(self, key: str):
         label, weight = next((lbl, w) for k, lbl, w in self.stages if k == key)
@@ -163,11 +187,13 @@ def run(
     synth: tts.SynthFn | None = None,
     transcriber: Callable[[Path], list] | None = None,
     separator: SeparateFn | None = None,
+    cloner: CloneFn | None = None,
 ) -> Result:
     """Dub `source` (YouTube URL or local file). Backends can be injected (used by tests)."""
     media.require_ffmpeg()
     remove_voice = settings.keep_background and settings.remove_voice  # nothing to remove without a background
-    p = _Progress(progress, remove_voice)
+    use_clone, voice_notes = clone_choice(settings, cloner)
+    p = _Progress(progress, remove_voice or use_clone, voice_first=use_clone)
 
     # 1. Download into work/<id>/ (skipped when a previous run already has the video).
     report = p.stage("download")
@@ -180,7 +206,9 @@ def run(
     report(1.0)
 
     target = languages.get(settings.target_lang)
-    voice = languages.voice_for(target.code, settings.voice)
+    # The original voice falls back to the language's Edge voice (male: the speaker's gender is unknown).
+    voice = clone.VOICE if use_clone else languages.voice_for(
+        target.code, "male" if settings.voice == clone.VOICE else settings.voice)
 
     # 2. Transcribe (any language, several per video)
     report = p.stage("transcribe")
@@ -236,21 +264,64 @@ def run(
     translation = translation_info(dub_json)
     report(1.0)
 
-    # 4. Text to speech
-    report = p.stage("tts")
-    # Two passes: speak every line at natural speed to measure it, plan one steady pace for the video
-    # (timing.plan_rates), then speak again at the planned rates — Edge scales duration exactly by the rate.
-    clips_dir = work / f"clips_{voice}"
-    natural = tts.synthesize(segments, clips_dir, voice, synth=synth, progress=lambda f: report(f / 2))
-    lengths = [align.speech_seconds(c) if c else None for c in natural]
-    rates = timing.plan_rates(segments, lengths, settings.max_speedup)
-    clips = tts.synthesize(segments, clips_dir, voice, synth=synth, rates=rates,
-                           progress=lambda f: report(0.5 + f / 2))
+    # 4. Optional: split the original voice from the rest (cached per video, any dub language reuses it). Before the
+    # dub is spoken when the voice is copied (it is the reference), else only the background is needed, for the mux.
+    background_audio = None
+    background_wav, vocals_wav = work / "background_htdemucs.wav", work / "vocals_htdemucs.wav"
+    separated = False
 
-    # 5. Align clips into one dubbed track (the voice name already identifies the language)
+    def split_voice(vocals: bool) -> Path | None:
+        nonlocal separated
+        separated = True
+        report = p.stage("separate")
+        if not media.has_audio(video):
+            return None
+        extra = {"vocals_wav": vocals_wav} if vocals else {}
+        return (separator or separate.separate_background)(video, background_wav, progress=report, **extra)
+
+    if use_clone:
+        try:
+            background = split_voice(vocals=True)
+        except Exception:  # e.g. the separation model couldn't be downloaded (a cancel raises again below)
+            log.exception("Separating the voice failed; using the Edge voice")
+            background = None
+        if background is None:
+            use_clone, voice_notes = False, ["clone:failed"]
+            voice = languages.voice_for(target.code, "male")
+        elif remove_voice:
+            background_audio = background
+
+    # 5. Text to speech
+    report = p.stage("tts")
+    clips: list[Path | None] = []
+    if use_clone:
+        try:
+            clips, rates = (cloner or clone.synthesize)(
+                segments, vocals_wav, target.code, work / f"clips_{voice}_{target.code}", settings.max_speedup,
+                progress=report)
+        except Exception:
+            # e.g. the graphics card's driver is too old: the Edge voice instead, and the watch page says so.
+            # (A cancelled job raises again from the Edge voice's first progress report.)
+            log.exception("The original voice failed; using the Edge voice")
+            use_clone, voice_notes = False, ["clone:failed"]
+            voice = languages.voice_for(target.code, "male")
+    if not use_clone:
+        # Two passes: speak every line at natural speed to measure it, plan one steady pace for the video
+        # (timing.plan_rates), then speak again at the planned rates — Edge scales duration exactly by the rate.
+        clips_dir = work / f"clips_{voice}"
+        natural = tts.synthesize(segments, clips_dir, voice, synth=synth, progress=lambda f: report(f / 2))
+        lengths = [align.speech_seconds(c) if c else None for c in natural]
+        rates = timing.plan_rates(segments, lengths, settings.max_speedup)
+        clips = tts.synthesize(segments, clips_dir, voice, synth=synth, rates=rates,
+                               progress=lambda f: report(0.5 + f / 2))
+
+    # 6. Align clips into one dubbed track (an Edge voice's name already identifies the language)
     report = p.stage("align")
-    # Keyed by the lines' timing and text: any change to them can never reuse a stale track.
-    key = hashlib.sha1(json.dumps([(s.start, s.end, s.ru) for s in segments]).encode()).hexdigest()[:10]
+    # Keyed by the lines' timing and text (and, for the original voice, the clips): never a stale track.
+    track_lines = [(s.start, s.end, s.ru) for s in segments]
+    if use_clone:
+        track_lines.append([c.name if c else None for c in clips])
+    key = hashlib.sha1(json.dumps(track_lines).encode()).hexdigest()[:10]
     track = work / f"dub_track_{voice}_{key}.wav"
     timing_json = work / f"timing_{voice}_{key}.json"
     if not track.exists() or not timing_json.exists():
@@ -260,15 +331,11 @@ def run(
             line["rate"] = round(rates[line["index"]], 3)
         timing_json.write_text(json.dumps(timing_report(lines), ensure_ascii=False, indent=1), encoding="utf-8")
 
-    # 6. Optional: the original soundtrack without the speaker's voice (cached per video, any dub language reuses it)
-    background_audio = None
-    if remove_voice:
-        report = p.stage("separate")
-        if media.has_audio(video):
-            background_audio = (separator or separate.separate_background)(
-                video, work / "background_htdemucs.wav", progress=report)
+    # 7. Optional: the original soundtrack without the speaker's voice
+    if remove_voice and not separated:
+        background_audio = split_voice(vocals=False)
 
-    # 7. Subtitles + final video, all in output/<dub id>/ (what the website's library reads)
+    # 8. Subtitles + final video, all in output/<dub id>/ (what the website's library reads)
     report = p.stage("mux")
     dub = dub_id(video_id, target.code, voice, settings.keep_background, background_audio is not None)
     folder = settings.output_dir / dub
@@ -295,6 +362,7 @@ def run(
         "source": source if is_url(source) else "",
         "duration": round(media.duration(video), 2),
         "voice": voice,
+        "voice_notes": voice_notes,  # why the original voice wasn't used (clone:language/not_installed/failed)
         "background": settings.keep_background,
         "remove_voice": background_audio is not None,
         "target_lang": target.code,

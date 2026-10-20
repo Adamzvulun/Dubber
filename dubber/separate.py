@@ -51,28 +51,33 @@ def _loudness(mix, block: int = 10 * SAMPLE_RATE) -> tuple[float, float]:
 
 def separate_background(
     video: Path, out_wav: Path, model: SeparateFn | None = None, progress: Callable[[float], None] | None = None,
+    vocals_wav: Path | None = None,
 ) -> Path:
     """Write the background (the original audio minus the voice) of `video` to `out_wav` (44.1 kHz stereo).
 
+    With `vocals_wav`, the voice alone is written there too (the references for the original-voice dub, clone.py).
     `progress(fraction)` is called after every window; raising from it stops the work (used to cancel a job).
-    A finished file is reused; a half-written one is never left behind.
+    Finished files are reused; a half-written one is never left behind.
     """
     import numpy as np
 
-    if out_wav.exists() and out_wav.stat().st_size > 0:
+    wanted = [out_wav] + ([vocals_wav] if vocals_wav else [])
+    if all(f.exists() and f.stat().st_size > 0 for f in wanted):
         return out_wav
     model = model or load_model()
     out_wav.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=out_wav.parent, ignore_cleanup_errors=True) as tmp:
-        raw_in, raw_out = Path(tmp) / "mix.f32", Path(tmp) / "background.f32"
+        raw_in, raw_out, raw_voice = Path(tmp) / "mix.f32", Path(tmp) / "background.f32", Path(tmp) / "vocals.f32"
         run_ffmpeg(["-i", str(video), "-vn", "-ac", "2", "-ar", str(SAMPLE_RATE), "-f", "f32le", str(raw_in)])
         if raw_in.stat().st_size == 0:
             raise MediaError(f"No audio in {video}")
-        mix = out = None
+        mix = out = voice = None
         try:
             mix = np.memmap(raw_in, dtype=np.float32, mode="r").reshape(-1, 2).T  # (2, samples)
             total = mix.shape[1]
             out = np.memmap(raw_out, dtype=np.float32, mode="w+", shape=(total, 2)).T
+            if vocals_wav:
+                voice = np.memmap(raw_voice, dtype=np.float32, mode="w+", shape=(total, 2)).T
             mean, std = _loudness(mix)
             ramp = np.linspace(0, 1, OVERLAP, dtype=np.float32)
             stride = WINDOW - OVERLAP
@@ -91,14 +96,21 @@ def separate_background(
                 if end < total:
                     w[-OVERLAP:] = ramp[::-1]
                 out[:, start:end] += background * w
+                if voice is not None:
+                    voice[:, start:end] += stems[VOCALS][:, : end - start] * std * w
                 if progress:
                     progress((i + 1) / windows)
             out.flush()
+            if voice is not None:
+                voice.flush()
         finally:
-            mix = out = None  # close the memory-mapped files (Windows can't delete open ones)
-        partial = out_wav.with_name(out_wav.stem + ".partial.wav")
-        run_ffmpeg(["-f", "f32le", "-ar", str(SAMPLE_RATE), "-ac", "2", "-i", str(raw_out),
-                    "-c:a", "pcm_s16le", str(partial)])
-        partial.replace(out_wav)
+            mix = out = voice = None  # close the memory-mapped files (Windows can't delete open ones)
+        for raw, wav in ((raw_out, out_wav), (raw_voice, vocals_wav)):
+            if wav is None:
+                continue
+            partial = wav.with_name(wav.stem + ".partial.wav")
+            run_ffmpeg(["-f", "f32le", "-ar", str(SAMPLE_RATE), "-ac", "2", "-i", str(raw),
+                        "-c:a", "pcm_s16le", str(partial)])
+            partial.replace(wav)
     return out_wav
 

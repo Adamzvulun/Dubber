@@ -16,6 +16,11 @@ description: How the Dubber dubbing pipeline (any spoken language → 12 dub lan
 | 5 | Trim clip silence, place lines at their start, ≤1.1× atempo correction, build track | `align.py` | `dub_track_<voice>_<hash>.wav`, `timing_<voice>_<hash>.json` |
 | 6 | Subtitles + final MP4 | `subtitles.py`, `mux.py` | `output/<id>/` (dubbed.mp4, meta.json with `target_lang`/`source_lang(s)`/`files`, thumbnail.jpg, segments.json, `subtitles_<lang>/src.*`, `transcript_<lang>.txt`, `transcript_src_<lang>.txt`) |
 
+Optional stages: **voice removal** (`separate.py`, Demucs ONNX → `background_htdemucs.wav`, before the mux) and the
+**original voice** (`clone.py`, voice `"original"`, OmniVoice on an NVIDIA GPU, installed from Settings): the voice is
+split off *before* TTS (`vocals_htdemucs.wav` → `vocals_24k.f32`), each line copies whoever said it, clips in
+`clips_original_<lang>/`; Hebrew, not installed or any error → the Edge male voice + `voice_notes` in meta.json (ADR-028).
+
 **Resume/cache rule:** a stage is skipped if its cache file exists. To redo a stage, delete its file
 and everything after it (e.g. new translation → delete `segments_<lang>_v3.json`; the track is keyed by the lines' content, clips by their text).
 `Segment.ru` holds the translation in whatever the dub language is (name kept for compatibility).

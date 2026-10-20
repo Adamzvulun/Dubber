@@ -294,3 +294,24 @@ Newest at the bottom. Format: context → decision → consequences.
   holds each release's user-facing changes (RU+EN, a test requires the current version); the page shows them once
   after an update (localStorage `dubber.seenVersion`, nothing on a first visit). The library groups dubs per
   `video_id` client-side (tag per language; the card opens the newest dub) with a search box.
+
+## ADR-028 — Voice cloning with OmniVoice (from VoiceStudio): only with an NVIDIA GPU; Edge stays the default (2026-10-19)
+- **Context:** Adam asked whether VoiceStudio (open-source ElevenLabs-like app) can improve the dubbing. Its value for
+  us is the OmniVoice model: the dub in the original speaker's own voice, and lines spoken to an exact length.
+  Research and measurements: `docs/RESEARCH.md` → "VoiceStudio / OmniVoice".
+- **Proposal:** don't adopt the VoiceStudio app (Electron + AGPL, a second program to install and run). If Adam's PC
+  has an NVIDIA GPU (≥ 6 GB), add OmniVoice as an **optional** voice ("Голос оригинала"): `pip install omnivoice`,
+  reference cut from the voice-free track (`separate.py`), `duration=` from the line's slot, for languages with
+  enough training data (not Hebrew). Edge stays the default and the fallback. Without a GPU: no — measured ≈ 20×
+  slower than real time on 4 CPU cores (≈ 2 h per 10-min video).
+- **Decision (Adam, 2026-10-19):** his father's PC has an RTX 3070 (8 GB) + i7-11700 → build it as an opt-in voice
+  «Оригинал» (`dubber/clone.py`, v0.7.0). His choices: **each line copies whoever said it** (reference = the same
+  moment of the Demucs vocals stem, short lines joined with neighbours across pauses ≤ 1 s up to 3–15 s); **Hebrew →
+  Edge** (male voice, note on the watch page); **installed from the Settings page** (nvidia-smi check ≥ 6 GB, then
+  `pip install torch torchaudio --index-url …/cu128`, `omnivoice==0.2.1`, a CUDA check + model download in a separate
+  Python; marker `.venv/dubber-omnivoice`). Lengths: the model's own estimate per line → `timing.plan_rates` (same
+  steady-pace rules as Edge) → `duration=` per line; 4 lines per model call (one by one after a failure); clips
+  levelled to RMS 0.1. With the original voice the voice is split off **before** TTS (stage order changes on the job
+  card and in the time-left estimate). Any failure → Edge male voice + `voice_notes` in meta.json, never a failed dub.
+- **Not verified here:** speed and quality on a real NVIDIA card (no GPU in the sandbox; estimate 0.2–0.4× real time
+  on the 3070 from the authors' H100 numbers). The CUDA install path is the first thing to check on Adam's PC.

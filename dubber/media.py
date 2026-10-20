@@ -20,14 +20,14 @@ def require_ffmpeg() -> None:
 
 def run_ffmpeg(args: list[str]) -> None:
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *args]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode != 0:
         raise MediaError(f"ffmpeg failed: {' '.join(cmd)}\n{result.stderr.strip()}")
 
 
 def probe(path: Path) -> dict:
     cmd = ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path)]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode != 0:
         raise MediaError(f"ffprobe failed on {path}: {result.stderr.strip()}")
     return json.loads(result.stdout)

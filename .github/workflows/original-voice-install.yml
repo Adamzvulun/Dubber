@@ -1,0 +1,40 @@
+name: Original voice install
+
+# The original voice («Оригинал», dubber/clone.py) is installed from the Settings page with pip: PyTorch for CUDA
+# from download.pytorch.org + omnivoice. CI has no graphics card, so this checks the part that can break without one:
+# the exact install commands on Windows with the Python the installer sets up, and that Dubber still works after.
+on:
+  pull_request:
+    paths:
+      - "dubber/clone.py"
+      - "pyproject.toml"
+      - ".github/workflows/original-voice-install.yml"
+  workflow_dispatch:
+
+jobs:
+  install:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: ffmpeg
+        run: choco install ffmpeg -y --no-progress
+      - name: Dubber
+        run: |
+          python -m venv .venv
+          .venv\Scripts\python -m pip install --upgrade pip
+          .venv\Scripts\python -m pip install -e ".[dev]"
+      - name: The Settings page's install steps (without the graphics card check and model download)
+        run: |
+          .venv\Scripts\python -c "import subprocess; from pathlib import Path; from dubber import clone; [subprocess.run(cmd, check=True) for step, cmd in clone.Installer(Path('omnivoice-install.log')).commands() if step != 'model']"
+      - name: CUDA PyTorch and OmniVoice import; the pipeline loads the engine class
+        run: |
+          .venv\Scripts\python -c "import torch, omnivoice; from dubber import clone; print(torch.__version__, torch.version.cuda); assert torch.version.cuda and torch.version.cuda.startswith('12.8'), torch.version.cuda; assert clone.installed()"
+      - name: Tests with the original voice's components installed
+        run: .venv\Scripts\python -m pytest -q
+      - name: Install log
+        if: always()
+        run: if (Test-Path omnivoice-install.log) { Get-Content omnivoice-install.log -Tail 40 }

@@ -3,7 +3,7 @@
 Run: `python -m dubber.app` → opens http://127.0.0.1:7860
 
 API
-- POST /api/jobs {url | file, voice: "male"|"female", background: bool, lang, remove_voice: bool} → start dubbing
+- POST /api/jobs {url | file, voice: "male"|"female"|"original", background: bool, lang, remove_voice: bool} → start
   (jobs run one after another); remove_voice keeps the music under the dub but not the speaker's voice
 - POST /api/upload?name=<file name> (body: the file) → {file, name}: a video from this computer, for /api/jobs
 - POST /api/playlist {url}                                           → {title, entries: [{url, title}]} (no download)
@@ -20,6 +20,8 @@ API
 - GET  /api/changelog                                               → [{version, ru, en}] newest first ("What's new")
 - GET  /api/update                                                  → {current, latest, available, enabled}
 - POST /api/update                                                  → install the newest `main` and restart (update.py)
+- GET  /api/clone, POST /api/clone/install                          → the original voice (clone.py): graphics card,
+  installed or not, install progress; install it (only with an NVIDIA card of 6 GB+)
 
 Requests that change something are refused when they come from another website (Origin check): the server listens
 on this computer only, but a page open in the same browser could otherwise send them.
@@ -53,7 +55,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import __version__, download, eta, languages, pipeline, translate, update
+from . import __version__, clone, download, eta, languages, pipeline, translate, update
 from .config import Settings, load_settings, save_env
 from .download import is_url
 
@@ -166,7 +168,7 @@ def friendly_error(exc: Exception, lang: str = "ru") -> str:
 class Job:
     id: str
     url: str
-    voice: str  # "male" | "female"
+    voice: str  # "male" | "female" | "original" (the speaker's own voice, clone.py)
     background: bool
     lang: str = languages.DEFAULT  # dub language
     remove_voice: bool = False  # keep music and sounds, remove the speaker's voice (Demucs)
@@ -182,6 +184,8 @@ class Job:
     created: float = field(default_factory=time.time)
     started: float = 0.0  # when it left the queue (the job card's clock starts here)
     cancel_requested: bool = False
+    separate: bool = False  # the voice is split off (removed or copied): one more step on the job card
+    clone: bool = False  # spoken in the original voice: the voice is split off before the dub is spoken
     _tracker: eta.Tracker | None = field(default=None, repr=False)  # stage timings → time left
     _shares: dict = field(default_factory=dict, repr=False)
 
@@ -240,13 +244,15 @@ class JobRunner:
             if job.status == "cancelled":
                 continue
             job.status, job.label, job.started = "running", "Начинаю", time.time()
-            job._tracker = eta.Tracker(
-                [(key, weight) for key, _, weight in pipeline.stages(job.remove_voice)], self.clock)
-            job._shares = eta.load_shares(self.history)
             settings = dataclasses.replace(
-                self.settings, target_lang=job.lang, voice=languages.voice_for(job.lang, job.voice),
-                keep_background=job.background, remove_voice=job.remove_voice,
+                self.settings, target_lang=job.lang, keep_background=job.background, remove_voice=job.remove_voice,
+                voice=job.voice if job.voice == clone.VOICE else languages.voice_for(job.lang, job.voice),
             )
+            job.clone = pipeline.clone_choice(settings)[0]
+            job.separate = job.remove_voice or job.clone
+            job._tracker = eta.Tracker(
+                [(key, weight) for key, _, weight in pipeline.stages(job.separate, job.clone)], self.clock)
+            job._shares = eta.load_shares(self.history)
 
             def progress(label: str, fraction: float, job: Job = job) -> None:
                 # Called at the start of every stage and often inside long ones (download, Whisper, TTS).
@@ -385,9 +391,12 @@ def create_app(
     clock: Callable[[], float] = time.monotonic,
     updater: update.Updater | None = None,
     restart: Callable[[], None] | None = None,
+    clone_status: Callable[[], dict] = clone.status,
+    installer: clone.Installer | None = None,
 ) -> FastAPI:
     """`restart` (given by main()) stops this server so main() can start the version an update installed."""
     settings = settings or load_settings()
+    installer = installer or clone.Installer(settings.work_dir / "omnivoice-install.log")
     jobs = JobRunner(settings, runner, clock)
     updater = updater or update.Updater()
     newest: dict = {"version": None, "checked": None}  # GitHub is asked at most once an hour
@@ -423,7 +432,7 @@ def create_app(
         elif not is_url(url):
             raise HTTPException(422, _detail("Вставьте ссылку на видео — она начинается с https://",
                                              "Paste a video link — it starts with https://"))
-        if req.voice not in ("male", "female"):
+        if req.voice not in ("male", "female", clone.VOICE):
             raise HTTPException(422, _detail("Неизвестный голос", "Unknown voice"))
         if req.lang not in languages.LANGUAGES:
             raise HTTPException(422, _detail("Неизвестный язык", "Unknown language"))
@@ -683,6 +692,22 @@ def create_app(
         settings.claude_key = ""
         save_env(settings.env_file, {"ANTHROPIC_API_KEY": None})
         return settings_view()
+
+    @app.get("/api/clone")
+    def get_clone() -> dict:
+        return {**clone_status(), "install": installer.state}
+
+    @app.post("/api/clone/install")
+    def install_clone() -> dict:
+        state = clone_status()
+        if not state["gpu_ok"]:
+            raise HTTPException(409, _detail(
+                f"Нужна видеокарта NVIDIA с памятью от {clone.MIN_VRAM_GB:g} ГБ — на этом компьютере её нет.",
+                f"This needs an NVIDIA graphics card with {clone.MIN_VRAM_GB:g} GB of memory or more — "
+                "this computer doesn't have one."))
+        if not state["ready"]:
+            installer.start()
+        return {**state, "install": installer.state}
 
     @app.get("/files/{video_id}/{name}")
     def get_file(video_id: str, name: str, download: bool = False) -> FileResponse:

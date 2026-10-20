@@ -75,6 +75,7 @@ function langName(code) {
 /** "ru-RU-DmitryNeural" → "Дмитрий" (Russian UI) / "Dmitry"; "he-IL-HilaNeural" → "Hila". */
 function voiceName(voice) {
   if (!voice) return "";
+  if (voice === "original") return t("voice.original");
   if (uiLang === "ru" && RU_VOICE_NAMES[voice]) return RU_VOICE_NAMES[voice];
   const m = voice.match(/^[a-z]{2}-[A-Z]{2}-(.+?)(?:Multilingual)?Neural$/);
   return m ? m[1] : voice;
@@ -103,6 +104,7 @@ function route() {
     $('[data-nav="settings"]').setAttribute("aria-current", "page");
     document.title = t("title.settings");
     loadSettings();
+    loadClone();
     loadStorage();
   } else if (page === "library") {
     $("#view-library").hidden = false;
@@ -201,6 +203,7 @@ function jobStatusText(job) {
   if (job.status === "cancelled") return t("job.cancelled");
   if (job.cancel_requested) return t("job.stopping");
   if (job.status === "queued") return t("job.queued");
+  if (job.stage === "separate" && !job.remove_voice) return `${t("stage.separateCopy")}…`; // copying, not removing
   return `${job.stage ? t(`stage.${job.stage}`) : t("job.starting")}…`;
 }
 
@@ -209,9 +212,14 @@ function jobSignature(job) {
 }
 
 function jobCard(job) {
-  // "separate" (removing the original voice) is a step only when the job asked for it.
-  const keys = STEP_KEYS.filter((k) => k !== "separate" || job.remove_voice);
-  const labels = t("steps").filter((_, i) => STEP_KEYS[i] !== "separate" || job.remove_voice);
+  // "separate" (removing or copying the original voice) is a step only when the job needs it; for the original
+  // voice it comes before the voice-over (the separated voice is what gets copied).
+  const separate = job.separate || job.remove_voice;
+  let order = STEP_KEYS.filter((k) => k !== "separate" || separate);
+  if (job.clone) order = [...order.filter((k) => k !== "separate" && k !== "tts" && k !== "align" && k !== "mux"),
+    "separate", "tts", "align", "mux"];
+  const keys = order;
+  const labels = keys.map((k) => k === "separate" && !job.remove_voice ? t("steps.voiceCopy") : t("steps")[STEP_KEYS.indexOf(k)]);
   const activeIndex = keys.indexOf(job.stage);
   const running = job.status === "running" || job.status === "queued";
   const started = job.status === "running";
@@ -582,6 +590,7 @@ function renderWatchDetails() {
     video.channel, clock(video.duration), langName(video.target_lang), t("watch.voice", voiceName(video.voice)),
     video.background === false ? t("watch.noBackground") : null,
     video.remove_voice ? t("watch.noVoice") : null,
+    ...(video.voice_notes || []).map((note) => t(`watch.voiceNote.${note}`)),
     ...translatorLabels(video), dateLabel(video.created),
   ].filter(Boolean).map((text) => el("span", { text })));
 
@@ -669,6 +678,18 @@ function fillLanguageSelect() {
   select.value = language(state.dubLang) ? state.dubLang : "ru";
 }
 
+/** The "Original" voice: offered once it is installed (Settings); its hint says what it does, and that Hebrew can't. */
+function updateVoiceOption() {
+  const ready = Boolean(state.clone?.ready), radio = $("#voice-original");
+  radio.disabled = !ready;
+  $("#voice-original-label").hidden = !ready;
+  if (!ready && radio.checked) $("#voice-male").checked = true;
+  const hint = $("#voice-hint");
+  hint.hidden = !radio.checked;
+  const unsupported = (state.clone?.unsupported || []).includes($("#lang").value);
+  hint.textContent = radio.checked ? t(unsupported ? "form.original.he" : "form.original.hint") : "";
+}
+
 function updateBackgroundHint() {
   const background = $("#background").checked, removeVoice = $("#remove-voice");
   $("#background-hint").textContent = t(background ? "form.background.on" : "form.background.off");
@@ -686,7 +707,9 @@ function applyUiLang() {
   document.querySelectorAll("[data-ui-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.uiLang === uiLang)));
   fillLanguageSelect();
   updateBackgroundHint();
+  updateVoiceOption();
   renderJobs();
+  renderClone();
   renderLibrary();
   renderSettings();
   renderVersion();
@@ -744,6 +767,50 @@ async function clearCache(path, confirmText) {
   note.hidden = false;
   $("#storage-title").focus(); // the pressed button may disappear with its row
   loadStorage();
+}
+
+/* ---------- the original voice (clone.py): graphics card check and install ---------- */
+const CLONE_STEPS = ["torch", "omnivoice", "model"];
+let clonePoll = null;
+
+async function loadClone() {
+  try { state.clone = await api("/api/clone"); } catch (_) { return; }
+  renderClone();
+  updateVoiceOption();
+  clearTimeout(clonePoll);
+  if (state.clone.install?.running) clonePoll = setTimeout(loadClone, 3000);
+}
+
+function renderClone() {
+  const c = state.clone;
+  if (!c) return;
+  const install = c.install || {}, working = Boolean(install.running);
+  const badge = $("#clone-badge");
+  badge.textContent = t(working ? "clone.badge.working" : c.ready ? "clone.badge.ready" : "clone.badge.no");
+  badge.className = `badge${c.ready && !working ? " badge--on" : ""}`;
+  const gpu = $("#clone-gpu");
+  gpu.textContent = !c.gpu ? t("clone.gpu.none") : c.gpu_ok ? t("clone.gpu.ok", c.gpu.name, c.gpu.vram_gb)
+    : t("clone.gpu.small", c.gpu.name, c.gpu.vram_gb, c.min_vram_gb);
+  gpu.classList.toggle("is-error", !c.gpu_ok);
+  const button = $("#clone-install");
+  button.hidden = !c.gpu_ok || (c.ready && !working);
+  button.disabled = working;
+  button.textContent = t(install.error ? "clone.retry" : "clone.install");
+  const step = (key) => t(`clone.step.${key}`);
+  $("#clone-progress").textContent = working
+    ? t("clone.step", CLONE_STEPS.indexOf(install.step) + 1, CLONE_STEPS.length, step(install.step || "torch"))
+    : install.error ? t("clone.error", step(install.error)) : c.ready && install.done ? t("clone.ready") : "";
+  $("#clone-progress").classList.toggle("is-error", Boolean(install.error) && !working);
+}
+
+async function installClone() {
+  $("#clone-install").disabled = true;
+  try { state.clone = await api("/api/clone/install", { method: "POST" }); } catch (e) {
+    $("#clone-progress").textContent = e.message; $("#clone-install").disabled = false; return;
+  }
+  renderClone();
+  clearTimeout(clonePoll);
+  clonePoll = setTimeout(loadClone, 3000);
 }
 
 async function loadSettings() {
@@ -893,6 +960,7 @@ async function saveSettings(changes, savedNote) {
 }
 
 function initSettings() {
+  $("#clone-install").addEventListener("click", installClone);
   $("#storage-clear-all").addEventListener("click", () =>
     clearCache("/api/storage/cache", t("storage.confirmAll", sizeLabel(state.storage?.cache))));
   $("#key-form").addEventListener("submit", async (e) => {
@@ -961,6 +1029,7 @@ async function init() {
   try { state.dubLang = localStorage.getItem("dubber.dubLang") || "ru"; } catch (_) {}
   $("#lang").addEventListener("change", (e) => {
     state.dubLang = e.target.value;
+    updateVoiceOption();
     try { localStorage.setItem("dubber.dubLang", e.target.value); } catch (_) {}
   });
   $("#url").addEventListener("input", () => { if (!$("#form-error").hidden) showFormError(""); });
@@ -968,6 +1037,7 @@ async function init() {
   $(".skip").addEventListener("click", (e) => { e.preventDefault(); $("#main").focus(); });
   $("#library-search").addEventListener("input", renderLibrary);
   $("#background").addEventListener("change", updateBackgroundHint);
+  document.querySelectorAll('input[name="voice"]').forEach((r) => r.addEventListener("change", updateVoiceOption));
   $("#remove-voice").addEventListener("change", updateBackgroundHint);
   document.querySelectorAll("[data-ui-lang]").forEach((b) => b.addEventListener("click", () => {
     setUiLang(b.dataset.uiLang); applyUiLang();
@@ -985,6 +1055,7 @@ async function init() {
   window.addEventListener("hashchange", route);
   route();
   if (!state.settings) loadSettings(); // the note under the dub form says which translator is used
+  if (!state.clone) loadClone(); // the "Original" voice is offered once it is installed
   try { state.version = (await api("/api/version")).version; renderVersion(); checkNews(); } catch (_) {}
   $("#news-close").addEventListener("click", () => { state.news = []; renderNews(); markNewsSeen(); });
   $("#update-btn").addEventListener("click", installUpdate);
