@@ -29,7 +29,7 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [x] unit tests + offline end-to-end test (network services stubbed)
 - [x] real end-to-end run with YouTube + Whisper + translation + TTS (2 real TED-Ed videos, CLI + web UI; offline translator because Google blocks the cloud server)
 - [x] offline translator fallback, cookies option, deno runtime
-- [ ] real run with Google translation (needs a non-datacenter connection — first run on a home connection)
+- [x] real run with Google translation (Adam, home connection, 2026-10-19)
 
 ### M2 — Russian web UI + installers
 - [x] ~~Gradio app in Russian~~ (first version; replaced by the custom website in M2.5)
@@ -45,7 +45,7 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [x] Live job card: 6 steps, progress, elapsed time; jobs survive closing the page
 - [x] Option: dub without the original sound in the background
 - [x] Light + dark mode, phone layout; verified in Chromium (incl. real playback with a VP9 copy)
-- [ ] Verify H.264 playback in Chrome/Edge on a real PC
+- [x] Verify H.264 playback in Chrome/Edge on a real PC (Adam, 2026-10-19)
 - [x] `main` branch + PR workflow + CI (lint + tests) + `dev-uploads/` (2026-10-17); Adam sets `main` as default
 
 ### M3 — Quality
@@ -82,7 +82,7 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
   (`kanban/translation-timing-regression.md`; waiting for his files in `dev-uploads/`)
 - [x] Claude translation from the website: key/model/glossary on a Settings page, whole-video context, dub-length
   lines, fallback chain Claude → Google → offline, cost on the watch page (ADR-017)
-- [ ] Adam's first real dub with a Claude key (end-to-end check; compare timing with the free path)
+- [x] Adam's first real dub with a Claude key (verified 2026-10-19)
   — Adam used it: "still off sometimes" → ADR-021 fixes; re-check with v0.4.0
 
 ### M7 — Session 3 (Adam, 2026-10-18)
@@ -90,7 +90,7 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [x] Transcription: video-level languages, wider run margins; turbo measured, not adopted (ADR-021)
 - [x] Claude request v2: topic, ASR-aware, sentence-aware, effort medium, prompt version in cache key (ADR-021)
 - [x] Voice removal switch (Demucs ONNX) (ADR-020)
-- [ ] Adam: re-dub a Hebrew video and an English one with Claude on v0.4.0 and listen
+- [x] Adam: re-dub a Hebrew video and an English one with Claude and listen (2026-10-19)
 - [ ] Spelling fixes for the free path (Google/offline) if Hebrew misspellings show up there too
 - [x] Updates always visible: no-cache site files, version in the footer, "already running" check (ADR-018)
 - [x] Time left on the job card, learned from this PC's past dubs (ADR-018)
@@ -108,9 +108,9 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [x] Library: one card per video + search (ADR-027)
 - [x] Disk space on the Settings page + clear cache (ADR-027)
 - [x] "What's new" after an update (ADR-027)
-- [x] 0.6.1: readable Russian in the window (Consolas) + shortcut after a self-update — awaiting Adam's confirmation
+- [x] 0.6.1: readable Russian in the window (Consolas) + shortcut after a self-update — confirmed by Adam 2026-10-19
 - [x] README: step-by-step user guides in Russian and Hebrew covering every function
-- [ ] First run on a clean PC (winget Python + ffmpeg) — Adam
+- [x] First run on a clean PC (winget Python + ffmpeg) — Adam, 2026-10-19
 
 ### M4 — Nice to have
 - [x] Queue of several links / playlists (v0.6.0)

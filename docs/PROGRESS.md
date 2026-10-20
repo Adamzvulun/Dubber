@@ -2,6 +2,13 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-20 — Session 6 hand-off
+- Adam merged PR #11: **0.7.0 is on `main`** and reaches the PCs at their next start. He'll test «Оригинал» on his
+  father's RTX 3070 PC later. Hand-off docs brought up to date: STATUS (summary, layout, data files, how «Оригинал»
+  works, not verified = real NVIDIA card, next steps, new sandbox gotchas: PyTorch index blocked, edge-tts TLS in
+  scripts, Windows UTF-8), `kanban/next-steps.md` rewritten, Claude card closed, PLAN ticks for what Adam verified,
+  CLAUDE.md workflow list.
+
 ## 2026-10-19 — Session 6b: the original voice «Оригинал» (v0.7.0)
 - Adam: his father's PC has an RTX 3070 (8 GB) + i7-11700 → build an opt-in OmniVoice voice with a "only for such PCs"
   warning. His choices: each speaker's own voice, Edge for Hebrew, install from the Settings page (ADR-028).

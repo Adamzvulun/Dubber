@@ -1,6 +1,6 @@
 ---
 id: 14
-status: doing
+status: done
 priority: High
 blocked_by: []
 tags: [translation, claude, settings, web]
@@ -16,3 +16,4 @@ Design: ADR-017. PR: `feat/claude-translation`.
   and a first real dub with his key (then compare timing with the free path and calibrate chars/second). (by @claude)
 - 2026-10-18: Adam set a key and used Opus: "still off sometimes" → prompt v2 + transcription fixes (ADR-021). (by @claude)
 - 2026-10-19: Still open: a real dub with a Claude key (quality, cost in `meta.json`); the README guides now explain the setup step by step. (by @claude)
+- 2026-10-19: Adam verified real Claude dubs (Hebrew, English) on his PC. Done. (by @claude)

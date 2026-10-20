@@ -41,7 +41,8 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 - `dubber/update.py` (self-update from `main`), `dubber/changelog.json` ("What's new"), `dubber/assets/` (logo, Windows
   icon).
 - `Start Dubber.cmd` → `scripts/windows/dubber.ps1` — the Windows start (install, shortcut, start); `scripts/*.bat`
-  call it too. `.github/workflows/` — `ci.yml` (lint + tests), `windows-install.yml` (real Windows).
+  call it too. `.github/workflows/` — `ci.yml` (lint + tests), `windows-install.yml` (real Windows),
+  `original-voice-install.yml` (the «Оригинал» install commands + tests on Windows, when `clone.py` changes).
 - `tools/` — developer tools (not shipped): `stub_server.py`, `qa_languages.py`, `qa_hebrew_voice.py`, `make_icon.py`
   (see docs/STATUS.md "How to test").
 - `tests/` — unit tests per stage; network stages are mocked.

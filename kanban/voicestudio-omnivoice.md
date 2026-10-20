@@ -20,3 +20,4 @@ improve the dub. Findings: `docs/RESEARCH.md` → "VoiceStudio / OmniVoice"; pro
   Chose: each speaker's own voice (per-line references from the Demucs vocals), Edge for Hebrew, install from
   Settings. Built `dubber/clone.py` + pipeline/app/UI (v0.7.0, ADR-028); verified with stand-ins, in Chromium and with a
   real CPU dub; waiting for the first run on the 3070. (by @claude)
+- 2026-10-20: PR #11 merged (0.7.0). Adam will test it on the RTX 3070 PC later. (by @claude)
