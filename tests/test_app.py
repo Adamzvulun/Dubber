@@ -52,6 +52,7 @@ def test_library_watch_files_and_delete(tmp_path):
 
     one = c.get("/api/videos/abc_123").json()
     assert one["segments"][0]["ru"] == "Привет"
+    assert one["spoken"] == [None]  # no timing.json (older dubs): the page uses the line's own times
 
     r = c.get("/files/abc_123/subtitles_ru.srt?download=1")
     assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
@@ -458,3 +459,17 @@ def test_original_voice_job_and_install(tmp_path, monkeypatch):
         assert job["status"] == "done" and job["separate"] is separate and job["clone"] is separate
     assert seen == ["original", "original"]
     assert c.post("/api/jobs", json={"url": "https://youtu.be/x", "voice": "robot"}).status_code == 422
+
+
+def test_spoken_times_follow_the_dub_voice(tmp_path):
+    timing = tmp_path / "timing.json"
+    timing.write_text(json.dumps({"lines": 2, "detail": [
+        {"index": 0, "start": 1.0, "delay": 0.0, "spoken": 2.5},
+        {"index": 2, "start": 4.0, "delay": 0.4, "spoken": 1.25},  # started late: pushed by the line before
+        {"index": 9, "start": 9.0, "delay": 0.0, "spoken": 1.0},  # not a line of this video
+        {"index": 1},  # broken entry
+    ]}))
+    assert app.spoken_times(timing, 3) == [[1.0, 3.5], None, [4.4, 5.65]]
+    timing.write_text("not json")
+    assert app.spoken_times(timing, 2) == [None, None]
+    assert app.spoken_times(tmp_path / "missing.json", 1) == [None]

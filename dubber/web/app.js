@@ -546,14 +546,96 @@ async function showVideo(id) {
     $("#view-watch").hidden = true; $("#view-missing").hidden = false; document.title = t("missing.title"); return;
   }
   state.video = video;
-  const player = $("#player"), files = video.files || {}, src = (name) => `/files/${video.id}/${name}`;
-  player.replaceChildren(
-    el("source", { src: video.video, type: "video/mp4" }),
-    files.dub_vtt ? el("track", { kind: "subtitles", srclang: video.target_lang, src: src(files.dub_vtt), "data-label": "dub" }) : null,
-    files.src_vtt ? el("track", { kind: "subtitles", srclang: video.source_lang || "und", src: src(files.src_vtt), "data-label": "src" }) : null);
+  const player = $("#player");
+  // Subtitles come from renderCaptions (the switches under the player), not from <track> files.
+  player.replaceChildren(el("source", { src: video.video, type: "video/mp4" }));
   player.poster = video.thumbnail;
   player.load();
   renderWatchDetails();
+  renderCaptions();
+}
+
+/* ---------- on-screen subtitles ---------- */
+// One text track that the browser draws over the video itself, so the subtitles also show in full screen and on
+// phones. Rebuilt from the two switches: the dub language follows the dub voice (video.spoken, from timing.json),
+// the original follows the speaker.
+let liveTrack = null;
+
+function captionsTrack() {
+  if (!liveTrack) liveTrack = $("#player").addTextTrack("subtitles", "Dubber", "");
+  return liveTrack;
+}
+
+// Each line in a "first strong" bidi isolate: a cue takes one direction from its first letter, so under a Hebrew
+// line an English one would be laid out right to left (its full stop on the left) without it.
+const cueEscape = (text) => `\u2068${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}\u2069`;
+
+/** [start, end] list → the same, each shown at least 1.2 s and held over short gaps (< 0.8 s) so lines don't flicker. */
+function smoothTimes(times) {
+  return times.map((t, i) => {
+    if (!t) return null;
+    const next = times.slice(i + 1).find(Boolean);
+    let end = Math.max(t[1], t[0] + 1.2);
+    if (next && next[0] - end < 0.8) end = next[0];
+    return [t[0], next ? Math.min(end, Math.max(next[0], t[0] + 0.1)) : end];
+  });
+}
+
+function renderCaptions() {
+  const video = state.video, player = $("#player");
+  if (!video) return;
+  const dub = $("#cc-dub").checked, src = $("#cc-src").checked;
+  const track = captionsTrack();
+  for (const cue of [...(track.cues || [])]) track.removeCue(cue);
+  const segments = video.segments || [], spoken = video.spoken || [];
+  // A line already said in the dub language is not repeated as the original
+  const original = (seg) => seg.text && !(dub && seg.text.trim() === (seg.ru || "").trim());
+  const lines = [
+    ...(dub ? smoothTimes(segments.map((seg, i) => seg.ru ? spoken[i] || [seg.start, seg.end] : null))
+      .map((time, i) => time && { time, text: cueEscape(segments[i].ru), dub: true }) : []),
+    ...(src ? smoothTimes(segments.map((seg) => original(seg) ? [seg.start, seg.end] : null))
+      .map((time, i) => time && { time, text: `<c.src>${cueEscape(segments[i].text)}</c>` }) : []),
+  ].filter(Boolean);
+  // The dub line and the original have their own times; the browser would stack two cues in either order, so each
+  // stretch of time gets one cue: the dub line on top, the original under it.
+  const edges = [...new Set(lines.flatMap((l) => l.time))].sort((a, b) => a - b);
+  let last = null;
+  for (let k = 0; k + 1 < edges.length; k++) {
+    const mid = (edges[k] + edges[k + 1]) / 2;
+    const now = lines.filter((l) => l.time[0] <= mid && mid < l.time[1]).sort((a, b) => Number(Boolean(b.dub)) - Number(Boolean(a.dub)));
+    const text = now.map((l) => l.text).join("\n");
+    if (!text) { last = null; continue; }
+    if (last && last.text === text && last.endTime === edges[k]) { last.endTime = edges[k + 1]; continue; }
+    last = new VTTCue(edges[k], edges[k + 1], text);
+    track.addCue(last);
+  }
+  track.mode = dub || src ? "showing" : "hidden";
+  player.dataset.captions = track.mode;
+}
+
+/** The two switches: their labels, remembered choice (dub language on by default), and the browser's own CC menu. */
+function initCaptions() {
+  const dub = $("#cc-dub"), src = $("#cc-src"), player = $("#player");
+  try {
+    dub.checked = localStorage.getItem("dubber.ccDub") !== "0";
+    src.checked = localStorage.getItem("dubber.ccSrc") === "1";
+  } catch (_) { dub.checked = true; }
+  const save = () => {
+    try {
+      localStorage.setItem("dubber.ccDub", dub.checked ? "1" : "0");
+      localStorage.setItem("dubber.ccSrc", src.checked ? "1" : "0");
+    } catch (_) {}
+  };
+  for (const box of [dub, src]) box.addEventListener("change", () => { save(); renderCaptions(); });
+  // Subtitles switched on or off in the player's own menu (CC button, full screen): the switches follow.
+  player.textTracks.addEventListener("change", () => {
+    if (!liveTrack || !state.video) return;
+    const showing = liveTrack.mode === "showing";
+    if (showing === (player.dataset.captions === "showing")) return;
+    if (showing) { dub.checked = true; } else { dub.checked = false; src.checked = false; }
+    save();
+    renderCaptions();
+  });
 }
 
 /** "claude-opus-5-5" → "Opus 5.5". */
@@ -582,9 +664,7 @@ function renderWatchDetails() {
   const video = state.video;
   if (!video) return;
   document.title = `${video.title} — ${t("app.name")}`;
-  for (const track of $("#player").querySelectorAll("track")) {
-    track.label = track.dataset.label === "dub" ? t("watch.subs", langName(video.target_lang)) : t("watch.subsOriginal");
-  }
+  $("#cc-dub-text").textContent = langName(video.target_lang);
   $("#watch-title").textContent = video.title;
   $("#watch-meta").replaceChildren(...[
     video.channel, clock(video.duration), langName(video.target_lang), t("watch.voice", voiceName(video.voice)),
@@ -1049,6 +1129,7 @@ async function init() {
   showEn.addEventListener("change", () => { applyEn(); try { localStorage.setItem("dubber.showEn", showEn.checked ? "1" : "0"); } catch (_) {} });
   applyEn();
 
+  initCaptions();
   initSettings();
   applyUiLang(); // interface language first, before waiting for the server (no flash of the other language)
   try { state.languages = await api("/api/languages"); fillLanguageSelect(); renderLibrary(); } catch (_) {}

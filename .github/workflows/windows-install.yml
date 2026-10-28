@@ -9,6 +9,8 @@ on:
       - "scripts/**"
       - "dubber/assets/**"
       - "dubber/app.py"
+      - "dubber/config.py"
+      - "dubber/deps.py"
       - "pyproject.toml"
       - ".github/workflows/windows-install.yml"
   workflow_dispatch:
@@ -90,3 +92,56 @@ jobs:
           if (-not $v) { throw "the program did not answer" }
           Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*dubber.app*' } |
             ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+
+  # A PC like a fresh Windows 11: no winget yet, so Python, ffmpeg and the Microsoft C++ runtime are downloaded
+  # directly (DUBBER_SETUP_TEST=1 makes the script skip winget and install all three even though this image has them),
+  # in a folder with a Russian name. Then the components must load and Whisper must read its model from a folder with
+  # a Russian name (a Russian user name puts the model cache there).
+  clean-pc:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install without winget, in a folder with a Russian name
+        shell: powershell
+        env:
+          DUBBER_SETUP_TEST: "1"
+        run: |
+          # GitHub saves this step without a BOM: Cyrillic built from char codes ("Дубляж")
+          $dir = Join-Path $env:RUNNER_TEMP ((-join [char[]](0x0414,0x0443,0x0431,0x043B,0x044F,0x0436)) + ' test')
+          New-Item -ItemType Directory $dir | Out-Null
+          Get-ChildItem -Force | Where-Object { $_.Name -ne '.git' } | Copy-Item -Destination $dir -Recurse
+          Set-Location -LiteralPath $dir
+          # A program folder from a failed earlier install, made with the newest Python here ("py -3": 3.15 on this
+          # image in October 2026, which onnxruntime has no build for): it must be rebuilt with a supported one
+          py -0p
+          py -3 -m venv .venv
+          .venv\Scripts\python.exe -c "import sys; print('old venv:', sys.version)"
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dubber.ps1 -NoStart
+          $code = $LASTEXITCODE
+          if (Test-Path install.log) { Get-Content install.log -Tail 15 }
+          if ($code -ne 0) { throw "dubber.ps1 failed: $code" }
+          if (-not (Test-Path ffmpeg\bin\ffmpeg.exe)) { throw "ffmpeg was not downloaded into the program folder" }
+          .venv\Scripts\python.exe -m dubber.deps
+          if ($LASTEXITCODE -ne 0) { throw "components missing or not loading" }
+          .venv\Scripts\python.exe -c "import sys; print(sys.version); assert (3, 10) <= sys.version_info[:2] <= (3, 14)"
+          if ($LASTEXITCODE -ne 0) { throw "the program's Python is not a supported version" }
+      - name: Whisper reads its model from a folder with a Russian name; ffmpeg found without PATH
+        shell: powershell
+        run: |
+          $name = -join [char[]](0x0414,0x0443,0x0431,0x043B,0x044F,0x0436)
+          Set-Location -LiteralPath (Join-Path $env:RUNNER_TEMP "$name test")
+          $env:HF_HOME = Join-Path $env:RUNNER_TEMP "$name models"
+          $env:Path = ($env:Path -split ';' | Where-Object { $_ -notmatch 'ffmpeg' }) -join ';'
+          .venv\Scripts\python.exe -c "import numpy as np; from dubber import config, media; media.require_ffmpeg(); from faster_whisper import WhisperModel; m = WhisperModel('tiny', device='cpu', compute_type='int8'); segs, info = m.transcribe(np.zeros(32000, dtype=np.float32)); list(segs); print('whisper ok', info.language)"
+          if ($LASTEXITCODE -ne 0) { throw "Whisper or ffmpeg failed" }
+      - name: A second start installs nothing and repairs a removed component
+        shell: powershell
+        run: |
+          $name = -join [char[]](0x0414,0x0443,0x0431,0x043B,0x044F,0x0436)
+          Set-Location -LiteralPath (Join-Path $env:RUNNER_TEMP "$name test")
+          .venv\Scripts\python.exe -m pip uninstall -y edge-tts
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dubber.ps1 -NoStart
+          if ($LASTEXITCODE -ne 0) { throw "dubber.ps1 failed: $LASTEXITCODE" }
+          .venv\Scripts\python.exe -m dubber.deps
+          if ($LASTEXITCODE -ne 0) { throw "the removed component was not reinstalled" }

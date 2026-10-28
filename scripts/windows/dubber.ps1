@@ -94,6 +94,14 @@ $Log = Join-Path $Root 'install.log'
 $VenvPython = Join-Path $Root '.venv\Scripts\python.exe'
 $Stamp = Join-Path $Root '.venv\dubber-installed'  # written only after the components installed completely
 
+$LocalFfmpeg = Join-Path $Root 'ffmpeg\bin'  # ffmpeg downloaded here when winget is missing (dubber/config.py)
+# CI only: no winget, and Python, ffmpeg and the C++ runtime downloaded directly (the path a PC without winget takes)
+$TestMode = $env:DUBBER_SETUP_TEST -eq '1'
+$PythonUrl = 'https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe'  # 3.12's last release with an installer
+$FfmpegUrls = @('https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip',
+    'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip')
+$VCRedistUrl = 'https://aka.ms/vs/17/release/vc_redist.x64.exe'
+
 function Say([string]$Text) { Write-Host $Text }
 
 function Stop-WithError([string]$Text) {
@@ -109,34 +117,137 @@ function Update-PathFromSystem {
     $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
     $user = [Environment]::GetEnvironmentVariable('Path', 'User')
     $env:Path = "$machine;$user"
+    if (Test-Path -LiteralPath $LocalFfmpeg) { $env:Path = "$LocalFfmpeg;$env:Path" }
+}
+
+# Python versions the components have Windows builds for. A newer Python than this (3.15 came out in October 2026,
+# onnxruntime had no build for it) made the install fail with "No matching distribution found for onnxruntime".
+# Raise the top only after checking that every component has a win_amd64 wheel for it.
+$PythonMin = [version]'3.10'
+$PythonMax = [version]'3.14'
+
+function Test-PythonVersion([string]$Text) {
+    try { $v = [version]$Text } catch { return $false }
+    return $v -ge $PythonMin -and $v -le $PythonMax
 }
 
 function Find-Python {
-    # The "py" launcher first (python.org and winget installs), then "python" (not the Microsoft Store stub, which
-    # fails the version check below).
-    $candidates = @(
-        @{ Exe = 'py'; Args = @('-3') },
-        @{ Exe = 'python'; Args = @() }
+    # The "py" launcher asked for each version (3.12 first: the one the installer installs; "py -3" would take the
+    # newest, maybe too new), then "python" (not the Microsoft Store stub, which fails the check below), then where
+    # the python.org installer puts 3.12 for this user.
+    # Only 64-bit Intel/AMD Python: Whisper has no build for ARM or 32-bit Windows (an ARM PC runs x64 Python fine).
+    $candidates = @('3.12', '3.13', '3.11', '3.14', '3.10' | ForEach-Object { @{ Exe = 'py'; Args = @("-$_") } }) + @(
+        @{ Exe = 'python'; Args = @() },
+        @{ Exe = (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'); Args = @() }
     )
     foreach ($c in $candidates) {
         if (-not (Get-Command $c.Exe -ErrorAction SilentlyContinue)) { continue }
         try {
-            $out = & $c.Exe @($c.Args) -c "import sys; print('%d.%d' % sys.version_info[:2]); print(sys.executable)" 2>$null
-        } catch { continue }
-        if ($LASTEXITCODE -ne 0 -or -not $out -or $out.Count -lt 2) { continue }
-        if ([version]$out[0] -ge [version]'3.10') { return $out[1] }
+            $ErrorActionPreference = 'Continue'
+            $out = & $c.Exe @($c.Args) -c "import sys, sysconfig; print('%d.%d' % sys.version_info[:2]); print(sys.executable); print(sysconfig.get_platform())" 2>$null
+        } catch { continue } finally { $ErrorActionPreference = 'Stop' }
+        if ($LASTEXITCODE -ne 0 -or -not $out -or $out.Count -lt 3) { continue }
+        if ((Test-PythonVersion $out[0]) -and $out[2] -eq 'win-amd64') { return $out[1] }
     }
     return $null
 }
 
-function Install-WithWinget([string]$Id, [string]$Name) {
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        Stop-WithError ("Не найдена программа winget, через которую устанавливается $Name. " +
-            'Установите «Установщик приложений» (App Installer) из Microsoft Store и запустите «Дубляж» снова.')
-    }
+function Test-Winget { return (-not $TestMode) -and [bool](Get-Command winget -ErrorAction SilentlyContinue) }
+
+function Install-WithWinget([string]$Id, [string]$Name, [string[]]$Extra = @()) {
+    # A fresh Windows 11 may not have winget yet (it comes with a Microsoft Store update): the callers then download
+    # the program directly.
+    if (-not (Test-Winget)) { return }
     Say "Устанавливаю $Name (один раз, несколько минут)…"
-    & winget install -e --id $Id --accept-package-agreements --accept-source-agreements --disable-interactivity
+    & winget install -e --id $Id @Extra --accept-package-agreements --accept-source-agreements --disable-interactivity
     Update-PathFromSystem
+}
+
+function Save-Download([string]$Url, [string]$File) {
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $ProgressPreference = 'SilentlyContinue'  # its progress bar makes downloads many times slower in PowerShell 5.1
+        Invoke-WebRequest -Uri $Url -OutFile $File -UseBasicParsing
+        return $true
+    } catch {
+        Add-Content -LiteralPath $Log -Value "download failed: $Url $($_.Exception.Message)" -ErrorAction SilentlyContinue
+        return $false
+    }
+}
+
+function Install-Python {
+    Install-WithWinget 'Python.Python.3.12' 'Python' @('--architecture', 'x64')
+    if ((Find-Python) -and -not $TestMode) { return }
+    Say 'Скачиваю и устанавливаю Python (один раз, пару минут)…'
+    $exe = Join-Path $env:TEMP 'python-3.12.10-amd64.exe'
+    if (-not (Save-Download $PythonUrl $exe)) {
+        Stop-WithError 'Не удалось скачать Python. Проверьте интернет и запустите «Дубляж» снова.'
+    }
+    # For this user only: no administrator rights needed
+    $p = Start-Process -FilePath $exe -Wait -PassThru -ArgumentList @('/quiet', 'InstallAllUsers=0', 'PrependPath=1',
+        'Include_launcher=1', 'InstallLauncherAllUsers=0', 'Include_test=0')
+    Remove-Item -LiteralPath $exe -Force -ErrorAction SilentlyContinue
+    Update-PathFromSystem
+    # The caller checks that a usable Python is there now (a non-zero code can also mean "already installed")
+    if ($p.ExitCode -ne 0) { Add-Content -LiteralPath $Log -Value "python installer exit $($p.ExitCode)" -ErrorAction SilentlyContinue }
+}
+
+function Install-Ffmpeg {
+    Install-WithWinget 'Gyan.FFmpeg' 'ffmpeg'
+    if ((Get-Command ffmpeg -ErrorAction SilentlyContinue) -and -not $TestMode) { return }
+    Say 'Скачиваю ffmpeg (один раз, около 100 МБ)…'
+    $zip = Join-Path $env:TEMP 'dubber-ffmpeg.zip'
+    $unpack = Join-Path $env:TEMP 'dubber-ffmpeg'
+    $ok = $false
+    foreach ($url in $FfmpegUrls) { if (Save-Download $url $zip) { $ok = $true; break } }
+    if (-not $ok) { Stop-WithError 'Не удалось скачать ffmpeg. Проверьте интернет и запустите «Дубляж» снова.' }
+    Remove-Item -LiteralPath $unpack -Recurse -Force -ErrorAction SilentlyContinue
+    Expand-Archive -LiteralPath $zip -DestinationPath $unpack -Force
+    $exe = Get-ChildItem -LiteralPath $unpack -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+    if (-not $exe -or -not (Test-Path -LiteralPath (Join-Path $exe.DirectoryName 'ffprobe.exe'))) {
+        Stop-WithError 'В скачанном архиве нет ffmpeg. Запустите «Дубляж» снова.'
+    }
+    $target = Join-Path $Root 'ffmpeg'
+    Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction SilentlyContinue
+    Move-Item -LiteralPath $exe.Directory.Parent.FullName -Destination $target  # <top>\bin\ffmpeg.exe -> ffmpeg\bin
+    Remove-Item -LiteralPath $zip, $unpack -Recurse -Force -ErrorAction SilentlyContinue
+    Update-PathFromSystem
+}
+
+function Test-VCRuntime {
+    # Whisper and the offline translator (ctranslate2, onnxruntime) need the Microsoft Visual C++ runtime, which
+    # Python doesn't bring and a fresh Windows may not have: without it every dub fails ("DLL load failed").
+    # Version 14.40+: older ones crash programs built with the current Visual Studio.
+    if ($TestMode -and -not $script:VCInstalled) { return $false }
+    $system = Join-Path $env:SystemRoot $(if ([Environment]::Is64BitProcess) { 'System32' } else { 'Sysnative' })
+    foreach ($dll in 'msvcp140.dll', 'msvcp140_1.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+        if (-not (Test-Path -LiteralPath (Join-Path $system $dll))) { return $false }
+    }
+    $v = (Get-Item -LiteralPath (Join-Path $system 'msvcp140.dll')).VersionInfo
+    return [version]('{0}.{1}.{2}' -f $v.FileMajorPart, $v.FileMinorPart, $v.FileBuildPart) -ge [version]'14.40.0'
+}
+
+function Install-VCRuntime {
+    Say 'Устанавливаю библиотеки Microsoft Visual C++ (один раз). Если Windows спросит разрешение, нажмите «Да».'
+    Install-WithWinget 'Microsoft.VCRedist.2015+.x64' 'Microsoft Visual C++'
+    if ($TestMode -or -not (Test-VCRuntime)) {
+        $exe = Join-Path $env:TEMP 'vc_redist.x64.exe'
+        if (-not (Save-Download $VCRedistUrl $exe)) {
+            Stop-WithError 'Не удалось скачать библиотеки Microsoft Visual C++. Проверьте интернет и запустите «Дубляж» снова.'
+        }
+        try {
+            $p = Start-Process -FilePath $exe -Wait -PassThru -ArgumentList @('/install', '/passive', '/norestart')
+        } catch {
+            Stop-WithError 'Без разрешения Windows библиотеки Microsoft Visual C++ не установить. Запустите «Дубляж» снова и нажмите «Да».'
+        }
+        Remove-Item -LiteralPath $exe -Force -ErrorAction SilentlyContinue
+        # 0 = installed, 1638 = a newer version is already there, 3010 = installed, restart suggested
+        if ($p.ExitCode -notin 0, 1638, 3010) { Add-Content -LiteralPath $Log -Value "vc_redist exit $($p.ExitCode)" }
+    }
+    $script:VCInstalled = $true
+    if (-not (Test-VCRuntime)) {
+        Stop-WithError 'Не удалось установить библиотеки Microsoft Visual C++. Перезагрузите компьютер и запустите «Дубляж» снова.'
+    }
 }
 
 
@@ -168,10 +279,35 @@ try {
         Unblock-File -ErrorAction SilentlyContinue
 } catch {}
 
-# 1. Python
+if (Test-Path -LiteralPath $LocalFfmpeg) { $env:Path = "$LocalFfmpeg;$env:Path" }
+
+# A first install in a deep folder: some component files have names so long that the full path passes Windows' old
+# limit of 260 characters, and the install would fail halfway with a puzzling error. Say it plainly instead.
+if (-not (Test-Path -LiteralPath $Stamp) -and $Root.Length -gt 90) {
+    $long = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -ErrorAction SilentlyContinue).LongPathsEnabled
+    if ($long -ne 1) {
+        Stop-WithError ("Папка программы лежит слишком глубоко ($($Root.Length) символов): $Root`n" +
+            'Перенесите папку программы ближе к началу диска, например в C:\Dubber, и запустите «Start Dubber» оттуда.')
+    }
+}
+
+# The program's own Python stops working when the Python it was made from is removed or upgraded, and one made from
+# a too new Python can't get its components (an earlier version of this script took any Python 3.10+): start afresh.
+if (Test-Path -LiteralPath $VenvPython) {
+    $ErrorActionPreference = 'Continue'
+    $venvVersion = & $VenvPython -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
+    $venvOk = $LASTEXITCODE -eq 0 -and (Test-PythonVersion "$venvVersion")
+    $ErrorActionPreference = 'Stop'
+    if (-not $venvOk) {
+        Say "Окружение Python не подходит ($venvVersion) — устанавливаю компоненты заново."
+        Remove-Item -LiteralPath (Join-Path $Root '.venv') -Recurse -Force
+    }
+}
+
+# 1. Python (64-bit, 3.10 or newer)
 $python = Find-Python
-if (-not $python -and -not (Test-Path -LiteralPath $VenvPython)) {
-    Install-WithWinget 'Python.Python.3.12' 'Python'
+if ((-not $python -and -not (Test-Path -LiteralPath $VenvPython)) -or ($TestMode -and -not (Test-Path -LiteralPath $Stamp))) {
+    Install-Python
     $python = Find-Python
     if (-not $python) {
         Stop-WithError 'Python установлен, но это окно его пока не видит. Закройте окно и запустите «Дубляж» ещё раз.'
@@ -179,12 +315,15 @@ if (-not $python -and -not (Test-Path -LiteralPath $VenvPython)) {
 }
 
 # 2. ffmpeg (makes the video)
-if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
-    Install-WithWinget 'Gyan.FFmpeg' 'ffmpeg'
-    if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or ($TestMode -and -not (Test-Path -LiteralPath $LocalFfmpeg))) {
+    Install-Ffmpeg
+    if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
         Stop-WithError 'ffmpeg установлен, но это окно его пока не видит. Закройте окно и запустите «Дубляж» ещё раз.'
     }
 }
+
+# 2b. The Microsoft Visual C++ runtime (Whisper and the offline translator need it)
+if (-not (Test-VCRuntime)) { Install-VCRuntime }
 
 # 3. The program's components (once; later versions install their own when the program updates itself)
 if (-not (Test-Path -LiteralPath $Stamp) -and (Test-Path -LiteralPath $VenvPython)) {
@@ -208,6 +347,31 @@ if (-not (Test-Path -LiteralPath $Stamp)) {
     & $VenvPython -m pip install --upgrade yt-dlp --log $Log | Out-Null
     Set-Content -LiteralPath $Stamp -Value (Get-Date -Format s) -Encoding ASCII
     Say 'Компоненты установлены.'
+}
+
+function Test-Components {
+    # stderr not captured: with ErrorActionPreference Stop, Windows PowerShell turns a redirected warning into an error
+    $ErrorActionPreference = 'Continue'
+    $out = & $VenvPython -m dubber.deps
+    return ($out -join ' ')
+}
+
+# 3b. Every start: every component there and loading (an interrupted install or update, a file an antivirus took,
+# a component a newer version needs). dubber/deps.py: exit 1 = missing (reinstall), 2 = doesn't load (C++ runtime).
+$problem = Test-Components
+if ($LASTEXITCODE -eq 1) {
+    Say "Доустанавливаю недостающие компоненты: $problem"
+    & $VenvPython -m pip install --upgrade --no-build-isolation --log $Log -e $Root
+    $problem = Test-Components
+}
+if ($LASTEXITCODE -eq 2) {
+    Add-Content -LiteralPath $Log -Value "components don't load: $problem" -ErrorAction SilentlyContinue
+    Install-VCRuntime
+    $problem = Test-Components
+}
+if ($LASTEXITCODE -ne 0) {
+    Add-Content -LiteralPath $Log -Value "dubber.deps: $problem" -ErrorAction SilentlyContinue
+    Stop-WithError "Не удалось установить компоненты программы ($problem). Проверьте интернет и запустите «Дубляж» снова."
 }
 
 # YouTube changes often and a fresh downloader (yt-dlp) fixes most "couldn't download" errors: refresh it every few days.

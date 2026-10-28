@@ -384,6 +384,24 @@ class _FreshStaticFiles(StaticFiles):
         return response
 
 
+def spoken_times(timing_file: Path, count: int) -> list[list[float] | None]:
+    """[start, end] of each line's dub voice in the video (None: no voice for that line), from timing.json: the
+    on-screen subtitles in the dub language follow the voice, which can start a little after the speaker."""
+    spoken: list[list[float] | None] = [None] * count
+    try:
+        detail = json.loads(timing_file.read_text(encoding="utf-8")).get("detail", [])
+    except (OSError, ValueError, AttributeError):
+        return spoken
+    for line in detail:
+        try:
+            i, start = int(line["index"]), float(line["start"]) + float(line.get("delay", 0))
+            if 0 <= i < count:
+                spoken[i] = [round(start, 2), round(start + float(line["spoken"]), 2)]
+        except (KeyError, TypeError, ValueError):
+            continue
+    return spoken
+
+
 def create_app(
     settings: Settings | None = None,
     runner=pipeline.run,
@@ -573,6 +591,7 @@ def create_app(
             raise HTTPException(404)
         segments_file = folder / "segments.json"
         meta["segments"] = json.loads(segments_file.read_text(encoding="utf-8")) if segments_file.exists() else []
+        meta["spoken"] = spoken_times(folder / "timing.json", len(meta["segments"]))
         # Other dubs of the same video (another language or voice), for the watch page's switcher.
         meta["siblings"] = [{k: m.get(k) for k in ("id", "target_lang", "voice", "background", "remove_voice")}
                             for m in list_videos() if m["video_id"] == meta["video_id"] and m["id"] != meta["id"]]

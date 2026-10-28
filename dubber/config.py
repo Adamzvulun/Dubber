@@ -9,6 +9,19 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
+
+def use_local_ffmpeg(root: Path = PROJECT_ROOT) -> None:
+    """Put ffmpeg the Windows launcher downloaded into the program folder (when winget is missing) on PATH: found at
+    every start, also after a self-update restarts the program without the launcher."""
+    local = root / "ffmpeg" / "bin"
+    path = os.environ.get("PATH", "")
+    if local.is_dir() and str(local) not in path.split(os.pathsep):
+        os.environ["PATH"] = str(local) + os.pathsep + path
+
+
+use_local_ffmpeg()
+
+
 def _load_dotenv(path: Path) -> None:
     """Minimal .env loader (KEY=VALUE lines) so users don't need extra packages."""
     if not path.is_file():

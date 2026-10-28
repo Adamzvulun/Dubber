@@ -1,4 +1,14 @@
 {
+  "0.8.0": {
+    "ru": [
+      "Субтитры прямо на видео: под плеером два переключателя — язык озвучки и оригинал. Можно включить один, оба (озвучка сверху, оригинал под ней) или ни одного; выбор запоминается. Субтитры озвучки идут точно вместе с голосом и видны и во весь экран.",
+      "Установка на новом компьютере с Windows 11 стала надёжнее: программа сама ставит недостающие библиотеки Microsoft Visual C++, обходится без winget и при каждом запуске проверяет и доустанавливает свои компоненты."
+    ],
+    "en": [
+      "Subtitles right on the video: two switches under the player — the dub language and the original. Turn on one, both (the dub on top, the original under it) or none; the choice is remembered. The dub subtitles follow the voice exactly and also show in full screen.",
+      "Installing on a new Windows 11 PC is more reliable: the program installs the missing Microsoft Visual C++ libraries itself, works without winget, and checks and repairs its components at every start."
+    ]
+  },
   "0.7.0": {
     "ru": [
       "Новый голос «Оригинал» — озвучка голосами самих говорящих: программа копирует голос каждого человека в видео. Только для компьютеров с видеокартой NVIDIA (от 6 ГБ); включается один раз в «Настройках» → «Голос оригинала». Для иврита не работает."
