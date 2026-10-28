@@ -2,6 +2,23 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-28 — Session 7: Windows 11 install audit + on-screen subtitles (v0.8.0)
+- Adam: father's PC has an RTX 3050 (4 GB) — too small for «Оригинал»; he'll try it on his own PC later. He hit "some
+  package was missing" installing a few days ago.
+- Install audit: Windows wheels exist for every component on Python 3.10–3.14 (resolved with `pip --platform
+  win_amd64`); onnxruntime and ctranslate2 import `MSVCP140.dll`/`MSVCP140_1.dll`, which Python doesn't bring and
+  the CI image already has → a fresh PC could fail every dub. Launcher now: C++ runtime check (14.40+) + install,
+  direct downloads when winget is missing, 64-bit Python only, broken venv rebuilt, too-deep folder reported,
+  `dubber/deps.py` check + repair at every start, local `ffmpeg/` on PATH (`config.use_local_ffmpeg`). New CI job
+  `clean-pc` (no winget, Cyrillic folder, Whisper model in a Cyrillic folder, repair after removing a component).
+- The Windows CI reproduced an install failure: pip on Windows "No matching distribution found for
+  onnxruntime>=1.17 (from versions: none)" while the index lists Windows wheels (ADR-029).
+- On-screen subtitles: two switches under the player (dub language / original), one browser-drawn text track,
+  dub line timed by the dub voice (`spoken` from `timing.json`), both lines in one cue (dub on top), bidi isolates
+  (ADR-030). Chromium: RU/EN, 1280/360 px, dark, Hebrew + English lines, CC-menu sync, no console errors.
+- Future work cards (Adam): phone version (`kanban/phone-app.md`), Facebook/Instagram/TikTok
+  (`kanban/more-video-sites.md`).
+
 ## 2026-10-19 — Session 6b: the original voice «Оригинал» (v0.7.0)
 - Adam: his father's PC has an RTX 3070 (8 GB) + i7-11700 → build an opt-in OmniVoice voice with a "only for such PCs"
   warning. His choices: each speaker's own voice, Edge for Hebrew, install from the Settings page (ADR-028).

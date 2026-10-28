@@ -1,12 +1,12 @@
 # Status — read this first
 
-_Last updated: 2026-10-19 (end of session 5). Update this page at the end of every session._
+_Last updated: 2026-10-28 (session 7). Update this page at the end of every session._
 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video **or a video file** in **any
 spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version **0.6.1** on `main`; **0.7.0 (the original voice) on the PR branch `claude/fervent-curie-x5h1hx`**. The repo is **public** and the PCs **update themselves from `main`** at start
+Current version **0.7.0** on `main` (the original voice); **0.8.0 on PR #13 (`claude/blissful-bell-14f4au`)**: Windows install fixes (Python 3.15 broke new installs, ADR-029) and on-screen subtitles (ADR-030). The repo is **public** and the PCs **update themselves from `main`** at start
 (ADR-024) — merging is shipping. Adam confirmed 0.6.0 arrived on his PC by itself.
 Session 5 (2026-10-18): one-click Windows start `Start Dubber.cmd` with a desktop shortcut and its own icon (the old
 `?`/no-shortcut bug reproduced and fixed on real Windows in CI, ADR-025); upload a file, several links, playlists
@@ -58,6 +58,9 @@ offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 original voice; the voice-free background goes under the dub, ducked while it speaks.
 
 ## What works (verified by running it)
+- **0.8.0 (PR #13):** Windows CI: install without winget in a folder with a Russian name, venv from a too-new Python
+  rebuilt, Whisper model in a Russian-named folder, component repair; on-screen subtitles in Chromium (RU/EN,
+  1280/360 px, dark, Hebrew + English lines, CC-menu sync). Not yet on a real Windows 11 PC.
 - **0.7.0 — the original voice «Оригинал» (ADR-028, `clone.py`):** unit tests with a stand-in model; the Settings
   panel, install progress, the third voice option, Hebrew hint and job-card step order in Chromium on the stub server
   (RU/EN, 1280/360 px, dark, with/without a GPU); a real end-to-end dub of a 2-speaker clip on **CPU** with the real
@@ -101,7 +104,10 @@ shortcut after the self-update on the second PC), first run on a clean PC, real 
 Claude dubs (Hebrew, English), voice removal on real videos, Google translation, H.264 playback in Chrome/Edge.
 
 ## Next steps (in order)
-1. **0.7.0 on the RTX 3070 PC (father's):** Adam reviews/merges the PR; then Settings → «Голос оригинала» →
+0. **0.8.0:** Adam reviews/merges PR #13; then a fresh install on a Windows 11 PC (the father's), and watching a dub
+   with both subtitle switches. Future work (Adam, not started): phone version (`kanban/phone-app.md`), Facebook /
+   Instagram / TikTok (`kanban/more-video-sites.md`).
+1. **0.7.0 on an NVIDIA PC (Adam's own; the father's has an RTX 3050 4 GB — below the 6 GB minimum):** then Settings → «Голос оригинала» →
    «Установить» (watch `work/omnivoice-install.log` if it fails: CUDA wheel for his Python, driver too old), dub a
    short video with «Оригинал», listen, and report the time it took (the job card's clock). Tune `BATCH` / steps if slow.
 2. Other ideas from the VoiceStudio research, not chosen yet: listen-back check of the dub, slight video slow-down
@@ -112,6 +118,12 @@ Claude dubs (Hebrew, English), voice removal on real videos, Google translation,
    speaker gender unknown to the translator; offline-backup slips (Hebrew "flour" → "acid/vinegar").
 
 ## Gotchas for Claude in the cloud sandbox
+- **New Python releases break installs:** components without a build for the newest Python fail as "No matching
+  distribution found for onnxruntime". The launchers accept only 3.10–3.14 (ADR-029); check wheels with
+  `pip install --dry-run --target X --platform win_amd64 --python-version 3.N --only-binary=:all: -e .`-style
+  resolution before raising the limit.
+- **Playwright's Chromium** is now at `/opt/pw-browsers/chromium-1243/chrome-linux64/chrome` (the path changes with
+  the image: `ls /opt/pw-browsers`).
 - **Network:** the environment needs these hosts allowed (or "Full" access): `youtube.com`, `*.youtube.com`,
   `*.googlevideo.com`, `*.ytimg.com`, `youtubei.googleapis.com`, `huggingface.co`, `*.huggingface.co`, `*.hf.co`,
   `translate.googleapis.com`, `speech.platform.bing.com`. Fonts load from Google Fonts (optional).
@@ -125,7 +137,7 @@ Claude dubs (Hebrew, English), voice removal on real videos, Google translation,
 - **Headless Chromium has no H.264.** For real playback make a VP9 copy:
   `ffmpeg -t 70 -i dubbed.mp4 -map 0:v:0 -map 0:a:0 -c:v libvpx-vp9 -b:v 300k -deadline realtime -cpu-used 8 -c:a libopus out.mp4`.
 - **Playwright:** the venv has no playwright. Use Node: `npm i playwright@1.56.1` in a scratchpad folder and launch
-  with `executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"`; never run `playwright install`.
+  with `executablePath: "/opt/pw-browsers/chromium-1243/chrome-linux64/chrome"`; never run `playwright install`.
   `setInputFiles` with a non-ASCII file *path* fires no change event — pass `{name, mimeType, buffer}` instead.
 - **Windows:** there is none here. Parse/compile `dubber.ps1` with PowerShell 7 for Linux (release tarball from
   GitHub into the scratchpad). The only real Windows is the `Windows install` CI job — read its logs with the GitHub

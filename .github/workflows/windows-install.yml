@@ -102,21 +102,6 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: TEMP diagnostics (onnxruntime on Windows)
-        shell: powershell
-        continue-on-error: true
-        run: |
-          $ErrorActionPreference = 'Continue'
-          py -0p
-          python -m venv d
-          d\Scripts\python -m pip install -q --upgrade pip
-          d\Scripts\python -m pip --version
-          d\Scripts\python -m pip config debug
-          d\Scripts\python -m pip debug --verbose 2>&1 | Select-Object -First 25
-          d\Scripts\python -m pip download onnxruntime --no-deps -d dl -v 2>&1 | Select-String -Pattern 'onnxruntime-1\.(31|30|23)\.\d+-cp3' | Select-Object -First 30
-          d\Scripts\python -m pip download onnxruntime==1.23.2 --no-deps -d dl 2>&1 | Select-Object -Last 5
-          d\Scripts\python -m pip download "https://files.pythonhosted.org/packages/py3/o/onnxruntime/" --no-deps -d dl 2>&1 | Select-Object -Last 3
-          Invoke-RestMethod https://pypi.org/simple/onnxruntime/ -Headers @{Accept='application/vnd.pypi.simple.v1+json'} | ForEach-Object { "files: $($_.files.Count)"; $_.files | Where-Object { $_.filename -like '*cp312-win_amd64*' } | Select-Object -Last 3 | ForEach-Object { "$($_.filename) yanked=$($_.yanked) rp=$($_.'requires-python')" } }
       - name: Install without winget, in a folder with a Russian name
         shell: powershell
         env:
@@ -127,6 +112,11 @@ jobs:
           New-Item -ItemType Directory $dir | Out-Null
           Get-ChildItem -Force | Where-Object { $_.Name -ne '.git' } | Copy-Item -Destination $dir -Recurse
           Set-Location -LiteralPath $dir
+          # A program folder from a failed earlier install, made with the newest Python here ("py -3": 3.15 on this
+          # image in October 2026, which onnxruntime has no build for): it must be rebuilt with a supported one
+          py -0p
+          py -3 -m venv .venv
+          .venv\Scripts\python.exe -c "import sys; print('old venv:', sys.version)"
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dubber.ps1 -NoStart
           $code = $LASTEXITCODE
           if (Test-Path install.log) { Get-Content install.log -Tail 15 }
@@ -134,7 +124,8 @@ jobs:
           if (-not (Test-Path ffmpeg\bin\ffmpeg.exe)) { throw "ffmpeg was not downloaded into the program folder" }
           .venv\Scripts\python.exe -m dubber.deps
           if ($LASTEXITCODE -ne 0) { throw "components missing or not loading" }
-          .venv\Scripts\python.exe -c "import sys; print(sys.version)"
+          .venv\Scripts\python.exe -c "import sys; print(sys.version); assert (3, 10) <= sys.version_info[:2] <= (3, 14)"
+          if ($LASTEXITCODE -ne 0) { throw "the program's Python is not a supported version" }
       - name: Whisper reads its model from a folder with a Russian name; ffmpeg found without PATH
         shell: powershell
         run: |

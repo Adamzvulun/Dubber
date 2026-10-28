@@ -60,11 +60,13 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 - `README.md` opens with the end-user guides in **Russian and Hebrew**; they quote UI labels from `i18n.js` (RU, and EN
   for the Hebrew guide). When a label or a user-visible behaviour changes, update both guides and `docs/README.ru.md`.
 - Browser tests: Playwright from **Node** (`npm i playwright@1.56.1`, chromium at
-  `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`). No Windows here: the `Windows install` CI job is the test.
+  `/opt/pw-browsers/chromium-1243/chrome-linux64/chrome`). No Windows here: the `Windows install` CI job is the test.
 - Every release: bump `__version__` (`dubber/__init__.py`) and `pyproject.toml`; the page links its files by version,
   and the PCs update themselves only when `main` has a **higher** version (`dubber/update.py`, ADR-024).
   Merging into `main` ships to the PCs on their next start. Add the release's user-facing changes (RU + EN) to
   `dubber/changelog.json` — the page shows them once after the update (a test checks the current version is there).
+- Python **3.10–3.14** only (`$PythonMax` in `dubber.ps1`, `scripts/install.sh`): 3.15 has no onnxruntime build yet
+  (ADR-029). Every start runs `python -m dubber.deps` (missing components → reinstall).
 - Windows start: `Start Dubber.cmd` → `scripts/windows/dubber.ps1` (UTF-8 **with BOM**; keep Russian text out of
   `.bat`/`.cmd`; shortcuts via IShellLinkW, not WScript.Shell — ADR-025). CI job `windows-install.yml` tests it.
 

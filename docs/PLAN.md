@@ -112,13 +112,22 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [x] README: step-by-step user guides in Russian and Hebrew covering every function
 - [ ] First run on a clean PC (winget Python + ffmpeg) — Adam
 
+### M9 — Session 7 (Adam, 2026-10-28)
+- [ ] Windows install on clean Windows 11 PCs: C++ runtime, no-winget fallback, component self-check (v0.8.0, ADR-029)
+- [ ] On-screen subtitles on the watch page: two switches, dub language / original (v0.8.0, ADR-030)
+- [ ] Adam: fresh install on a Windows 11 PC; watch a dub with both subtitle switches
+
+### M10 — Future (Adam, 2026-10-28; not started)
+- [ ] Phone version: fully usable on iPhone and Samsung (`kanban/phone-app.md`)
+- [ ] Dub videos from Facebook, Instagram, TikTok (`kanban/more-video-sites.md`)
+
 ### M4 — Nice to have
 - [x] Queue of several links / playlists (v0.6.0)
 - [ ] Telegram bot front-end
 - [ ] ElevenLabs dubbing backend (paid, keeps original voice)
 - [ ] Offline TTS fallback (Silero)
 - [x] Voice cloning ("original voice", OmniVoice) — opt-in, NVIDIA GPU only, installed from Settings (v0.7.0, ADR-028)
-- [ ] Adam: install it on the RTX 3070 PC, dub with «Оригинал», report speed and how it sounds
+- [ ] Adam: install it on his own NVIDIA PC (father's has an RTX 3050 4 GB — too small), dub with «Оригинал», report
 
 ## Open questions
 - ~~Repo public?~~ — yes (self-update works from GitHub, 2026-10-18).

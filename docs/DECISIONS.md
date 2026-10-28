@@ -315,3 +315,36 @@ Newest at the bottom. Format: context → decision → consequences.
   card and in the time-left estimate). Any failure → Edge male voice + `voice_notes` in meta.json, never a failed dub.
 - **Not verified here:** speed and quality on a real NVIDIA card (no GPU in the sandbox; estimate 0.2–0.4× real time
   on the 3070 from the authors' H100 numbers). The CUDA install path is the first thing to check on Adam's PC.
+
+## ADR-029 — Windows install: supported Python 3.10–3.14 only, C++ runtime, no-winget fallback, self-repair (2026-10-28)
+- **Context:** Adam: "some package was missing" installing a few days ago. The Windows CI reproduced it: pip "No
+  matching distribution found for onnxruntime>=1.17 (from versions: none)". **Cause:** Python 3.15 came out in
+  October 2026; the launcher took any Python ≥ 3.10 and `py -3` picks the newest, and onnxruntime has no 3.15 build
+  yet (same message with `pip --platform win_amd64 --python-version 3.15`; a plain venv on 3.12 on the same runner
+  downloads it fine). The audit also found: onnxruntime and ctranslate2 import `MSVCP140.dll`/`MSVCP140_1.dll`
+  (Python doesn't ship them; the CI image has them, so CI couldn't notice); a fresh Windows 11 may have no winget yet.
+- **Decision:** `dubber.ps1` uses only 64-bit Python **3.10–3.14** (`$PythonMax`; `py -3.12` first), installs 3.12
+  when none fits, and rebuilds a `.venv` made from an unsupported or missing Python. Raise `$PythonMax` (and
+  `scripts/install.sh`) only after checking every component has a win_amd64 wheel for the new version. The Microsoft
+  Visual C++ runtime (≥ 14.40) is checked every start and installed (winget, else `aka.ms/vs/17/release/vc_redist`,
+  UAC prompt). Without winget Python (python.org 3.12.10, per user) and ffmpeg (gyan.dev, else BtbN, into
+  `ffmpeg/` in the program folder — `config.use_local_ffmpeg` puts it on PATH; kept by the updater) are downloaded.
+  Every start runs `python -m dubber.deps` (exit 1: components missing → `pip install -e .`; exit 2: a native module
+  doesn't load → C++ runtime). A first install in a folder deeper than 90 characters without long paths enabled
+  stops with a plain message. CI: new `clean-pc` job (`DUBBER_SETUP_TEST=1`: no winget, everything downloaded, folder
+  and model cache with Russian names, a too-new venv rebuilt, a removed component repaired).
+
+## ADR-030 — On-screen subtitles: two switches, one browser-drawn text track (2026-10-28)
+- **Context:** Adam asked for real-time subtitles on the dubbed video. The video had hidden `<track>` files only
+  reachable through the player's small CC menu, one language at a time.
+- **Decision (Adam's choice):** two switches under the player — the **dub language** and **«Оригинал»** — any of
+  one, both or none (dub on by default, choice in localStorage `dubber.ccDub` / `dubber.ccSrc`). Built as **one
+  `addTextTrack` track with `VTTCue`s** made from `segments.json`, not an HTML overlay: the browser draws it, so it
+  shows in full screen and in iOS's native player (future phone version). The dub line follows the **dub voice**
+  (`/api/videos/{id}` → `spoken` from `timing.json`: start + delay … + spoken), the original follows the speaker;
+  each line shown ≥ 1.2 s and held over gaps < 0.8 s. With both on, the timeline is cut at every line edge and each
+  piece gets **one** cue (dub line on top, original under it in yellow `::cue(.src)`) — two overlapping cues are
+  stacked in an order that depends on line wrapping. Each line is wrapped in a bidi first-strong isolate (an English
+  line under Hebrew would otherwise be laid out right to left). The player's own CC menu stays in sync with the
+  switches. The `<track>` files are no longer attached (they'd duplicate in the CC menu); the `.srt`/`.vtt` files
+  and the MP4's soft subtitles are unchanged.

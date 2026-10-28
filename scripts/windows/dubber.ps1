@@ -120,22 +120,34 @@ function Update-PathFromSystem {
     if (Test-Path -LiteralPath $LocalFfmpeg) { $env:Path = "$LocalFfmpeg;$env:Path" }
 }
 
+# Python versions the components have Windows builds for. A newer Python than this (3.15 came out in October 2026,
+# onnxruntime had no build for it) made the install fail with "No matching distribution found for onnxruntime".
+# Raise the top only after checking that every component has a win_amd64 wheel for it.
+$PythonMin = [version]'3.10'
+$PythonMax = [version]'3.14'
+
+function Test-PythonVersion([string]$Text) {
+    try { $v = [version]$Text } catch { return $false }
+    return $v -ge $PythonMin -and $v -le $PythonMax
+}
+
 function Find-Python {
-    # The "py" launcher first (python.org and winget installs), then "python" (not the Microsoft Store stub, which
-    # fails the version check below), then where the python.org installer puts it for this user.
+    # The "py" launcher asked for each version (3.12 first: the one the installer installs; "py -3" would take the
+    # newest, maybe too new), then "python" (not the Microsoft Store stub, which fails the check below), then where
+    # the python.org installer puts 3.12 for this user.
     # Only 64-bit Intel/AMD Python: Whisper has no build for ARM or 32-bit Windows (an ARM PC runs x64 Python fine).
-    $candidates = @(
-        @{ Exe = 'py'; Args = @('-3') },
+    $candidates = @('3.12', '3.13', '3.11', '3.14', '3.10' | ForEach-Object { @{ Exe = 'py'; Args = @("-$_") } }) + @(
         @{ Exe = 'python'; Args = @() },
         @{ Exe = (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'); Args = @() }
     )
     foreach ($c in $candidates) {
         if (-not (Get-Command $c.Exe -ErrorAction SilentlyContinue)) { continue }
         try {
+            $ErrorActionPreference = 'Continue'
             $out = & $c.Exe @($c.Args) -c "import sys, sysconfig; print('%d.%d' % sys.version_info[:2]); print(sys.executable); print(sysconfig.get_platform())" 2>$null
-        } catch { continue }
+        } catch { continue } finally { $ErrorActionPreference = 'Stop' }
         if ($LASTEXITCODE -ne 0 -or -not $out -or $out.Count -lt 3) { continue }
-        if ([version]$out[0] -ge [version]'3.10' -and $out[2] -eq 'win-amd64') { return $out[1] }
+        if ((Test-PythonVersion $out[0]) -and $out[2] -eq 'win-amd64') { return $out[1] }
     }
     return $null
 }
@@ -165,7 +177,7 @@ function Save-Download([string]$Url, [string]$File) {
 
 function Install-Python {
     Install-WithWinget 'Python.Python.3.12' 'Python' @('--architecture', 'x64')
-    if (Find-Python) { return }
+    if ((Find-Python) -and -not $TestMode) { return }
     Say 'Скачиваю и устанавливаю Python (один раз, пару минут)…'
     $exe = Join-Path $env:TEMP 'python-3.12.10-amd64.exe'
     if (-not (Save-Download $PythonUrl $exe)) {
@@ -279,13 +291,15 @@ if (-not (Test-Path -LiteralPath $Stamp) -and $Root.Length -gt 90) {
     }
 }
 
-# The program's own Python stops working when the Python it was made from is removed or upgraded: start it afresh.
+# The program's own Python stops working when the Python it was made from is removed or upgraded, and one made from
+# a too new Python can't get its components (an earlier version of this script took any Python 3.10+): start afresh.
 if (Test-Path -LiteralPath $VenvPython) {
     $ErrorActionPreference = 'Continue'
-    & $VenvPython -c "pass" 2>$null
+    $venvVersion = & $VenvPython -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
+    $venvOk = $LASTEXITCODE -eq 0 -and (Test-PythonVersion "$venvVersion")
     $ErrorActionPreference = 'Stop'
-    if ($LASTEXITCODE -ne 0) {
-        Say 'Окружение Python повреждено — устанавливаю компоненты заново.'
+    if (-not $venvOk) {
+        Say "Окружение Python не подходит ($venvVersion) — устанавливаю компоненты заново."
         Remove-Item -LiteralPath (Join-Path $Root '.venv') -Recurse -Force
     }
 }
