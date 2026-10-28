@@ -400,3 +400,22 @@ main.wrap { padding-bottom: 80px; }
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 .option-hint.is-error { color: var(--danger); }
+
+/* ---------- the phone (phone mode: the app opened from the mailbox, see app.js PHONE) ---------- */
+.is-phone .nav__settings, .is-phone .composer__note .link { display: none; }
+.phone-bar { margin: 20px 0 0; padding: 14px 16px; border-radius: var(--r-card); background: var(--surface);
+  border: 1px solid var(--line); display: grid; gap: 12px; }
+.phone-bar__state { display: flex; align-items: flex-start; gap: 10px; font-size: 15px; line-height: 1.45; margin: 0; }
+.phone-bar__dot { flex: none; width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; background: var(--ink-2); }
+.phone-bar.is-on .phone-bar__dot { background: var(--ok); }
+.phone-bar.is-off .phone-bar__dot { background: var(--warn); }
+.phone-bar__install { display: grid; gap: 8px; justify-items: start; }
+.phone-queue__title { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+.phone-queue__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.phone-queue__item { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 6px 0 6px 12px;
+  border-radius: 10px; background: var(--surface-2); font-size: 14px; }
+.phone-queue__link { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phone-queue__lang { flex: none; }
+.pair { display: flex; flex-wrap: wrap; align-items: center; gap: 20px 28px; }
+.pair__qr { flex: none; width: 196px; height: 196px; padding: 8px; border-radius: 12px; background: #fff; }
+.pair__steps { flex: 1 1 260px; margin: 0; padding-left: 22px; display: grid; gap: 8px; font-size: 15px; line-height: 1.5; }

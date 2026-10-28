@@ -2,6 +2,25 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-28 — Session 8b: phone version (v0.10.0, ADR-033)
+- Adam: same flow as on the PC (scroll TikTok/Instagram/Facebook/YouTube, copy, paste into Dubber on the phone);
+  Samsung for both, iPhone must work; anywhere; dub at once if the PC is on, else send-and-forget; home-screen icon;
+  install as simple as possible (one click, the install fetches what's needed) → Tailscale dropped for a Cloudflare
+  quick tunnel (no account) + a mailbox Worker on Adam's account.
+- Built: `dubber/phone.py` (token, cloudflared download, tunnel, mailbox client, `PhoneBridge`), app.py tunnel gate
+  (token, `PHONE_ROUTES`, CORS, `/api/phone`, QR via `segno`), `cloud/worker/` (Worker + KV + Node tests),
+  `cloud/build.py`, `deploy-phone.yml`, phone mode in `app.js` (PC on/off bar, mailbox queue, paste, share target,
+  install prompt, iPhone hint, media through the tunnel with the token), manifest + service worker + icons
+  (`tools/make_phone_icons.js`), Settings → «Телефон» with the QR code, `tools/phone_dev.mjs` (local Cloudflare
+  stand-in) + stub server hook, Windows CI step (real cloudflared + tunnel: 401 without the token, 200 with it),
+  worker tests in CI. Guides RU/HE (section 9), README.ru, changelog.
+- Verified here: 182 Python + 5 Node tests; end-to-end in Chromium (Samsung/iPhone sizes, RU/EN, dark) with the
+  stand-in: pairing, dub with the PC on, library/video/download through the tunnel, PC off → queued → PC back →
+  dubbed in the chosen language, share target, paste, offline app shell. Found and fixed on the way: the QR SVG had
+  no xmlns (blank image), a restarted PC made a new token when its .env was not loaded, the full "What's new"
+  history popped up on the phone.
+- Waiting for Adam: Cloudflare account + secrets + the workers.dev address (then `phone.MAILBOX_URL`).
+
 ## 2026-10-28 — Session 8: phone version
 - Adam merged PR #14 (0.9.0). He: the Settings window is squeezed — fix it and check it on a PC; then start the phone
   version.

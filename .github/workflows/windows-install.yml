@@ -11,6 +11,7 @@ on:
       - "dubber/app.py"
       - "dubber/config.py"
       - "dubber/deps.py"
+      - "dubber/phone.py"
       - "pyproject.toml"
       - ".github/workflows/windows-install.yml"
   workflow_dispatch:
@@ -79,6 +80,33 @@ jobs:
           Stop-Process -Id $p.Id -Force
           if (-not (Test-Path -LiteralPath $lnk)) { throw "the program did not make the shortcut" }
           "shortcut made by the program"
+      - name: The phone connection - cloudflared downloaded, tunnel up, refused without the household token
+        shell: powershell
+        run: |
+          $env:DUBBER_NO_BROWSER = '1'; $env:DUBBER_AUTO_UPDATE = '0'
+          $env:DUBBER_MAILBOX_URL = 'https://mailbox.invalid'   # no real mailbox: its calls fail harmlessly
+          $p = Start-Process .venv\Scripts\python.exe -ArgumentList '-m', 'dubber.app' -PassThru -WindowStyle Hidden
+          for ($i = 0; $i -lt 90; $i++) {
+            try { $s = Invoke-RestMethod http://127.0.0.1:7860/api/phone -TimeoutSec 2; if ($s.status -eq 'ready') { break } }
+            catch {}
+            Start-Sleep 2
+          }
+          "phone: $($s.status) $($s.address)"
+          if (-not (Test-Path cloudflared\cloudflared.exe)) { throw "cloudflared was not downloaded" }
+          if ($s.status -ne 'ready') { throw "the tunnel did not start" }
+          $code = 0
+          for ($i = 0; $i -lt 30; $i++) {   # a new tunnel address can take a few seconds to resolve
+            try { Invoke-WebRequest "$($s.address)/api/version" -UseBasicParsing -TimeoutSec 10 | Out-Null; $code = 200 }
+            catch { $code = [int]$_.Exception.Response.StatusCode }
+            if ($code -eq 401 -or $code -eq 200) { break }
+            Start-Sleep 3
+          }
+          if ($code -ne 401) { throw "through the tunnel without the token: $code (expected 401)" }
+          $token = (Select-String -Path .env -Pattern '^DUBBER_PHONE_TOKEN=(.+)$').Matches[0].Groups[1].Value
+          $v = Invoke-RestMethod "$($s.address)/api/version" -Headers @{ 'X-Dubber-Token' = $token } -TimeoutSec 10
+          "through the tunnel with the token: $($v.version)"
+          Stop-Process -Id $p.Id -Force
+          Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
       - name: Start Dubber.cmd starts the program
         shell: powershell
         run: |

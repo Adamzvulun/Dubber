@@ -27,6 +27,8 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
 .venv/bin/python -m dubber.app                                 # the website on http://127.0.0.1:7860
 .venv/bin/python tools/stub_server.py /tmp/stub 7871           # website with a stand-in pipeline (UI work, no network)
 .venv/bin/python tools/qa_languages.py /tmp/qa                 # real dubs of 2 multilingual clips × 12 languages
+node --test cloud/worker/worker.test.mjs                       # phone mailbox worker tests
+node tools/phone_dev.mjs 7871                                  # local Cloudflare stand-in for the phone (see STATUS)
 ```
 
 ## Layout
@@ -34,10 +36,13 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
   removal), `mux`, `subtitles`), orchestrated by
   `pipeline.py`; `languages.py` (the 12 dub languages: voices, codes), `timing.py` (pace planner), `segments.py`
   (lines from word timings), `sites.py` (TikTok/Instagram/Facebook, the «Вход на сайты» login file — ADR-031), `clone.py` (optional «Оригинал» voice: OmniVoice voice cloning, NVIDIA GPU only, installed
-  from Settings — ADR-028), `hub.py` (model downloads), `cli.py`, `app.py` (FastAPI server + JSON API, jobs, cancel,
+  from Settings — ADR-028), `phone.py` (the phone: cloudflared quick tunnel + mailbox — ADR-033), `hub.py` (model downloads), `cli.py`, `app.py` (FastAPI server + JSON API, jobs, cancel,
   settings: Claude key/model/glossary saved to `.env` + `glossary.txt`), `config.py` (settings, `save_env`).
 - `dubber/web/` — the website front-end (plain HTML/CSS/JS, no build step): `index.html`, `styles.css`, `app.js`,
-  `i18n.js` (every UI string in RU + EN — never hard-code text elsewhere).
+  `i18n.js` (every UI string in RU + EN — never hard-code text elsewhere). The same files are the phone app
+  (`manifest.webmanifest`, `sw.js`, `icons/`; phone mode in `app.js` under `/p/<token>/`): keep file addresses relative.
+- `cloud/` — the phone mailbox Cloudflare Worker (`cloud/worker/`, Node tests) and `build.py` (phone app build);
+  deployed by `.github/workflows/deploy-phone.yml` on merges to `main`.
 - `dubber/update.py` (self-update from `main`), `dubber/changelog.json` ("What's new"), `dubber/assets/` (logo, Windows
   icon).
 - `Start Dubber.cmd` → `scripts/windows/dubber.ps1` — the Windows start (install, shortcut, start); `scripts/*.bat`

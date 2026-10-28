@@ -42,6 +42,7 @@ import contextlib
 import dataclasses
 import hashlib
 import hmac
+import io
 import json
 import os
 import queue
@@ -77,7 +78,7 @@ UPLOAD_TYPES = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v", ".wmv", ".flv",
 UPLOAD_MTIME = 1_000_000_000  # every upload gets this time stamp: the same file again → the same video id → cache
 # What a phone may ask for through the tunnel: dubbing, the job cards, the library and its files.
 PHONE_ROUTES = [(methods, re.compile(path)) for methods, path in (
-    ({"GET"}, r"/api/(version|languages|changelog|settings|jobs|videos)"),
+    ({"GET"}, r"/api/(version|languages|changelog|settings|clone|jobs|videos)"),
     ({"GET"}, r"/api/jobs/[0-9a-f]{12}"),
     ({"POST"}, r"/api/(jobs|upload|playlist)"),
     ({"POST"}, r"/api/jobs/[0-9a-f]{12}/cancel"),
@@ -850,7 +851,7 @@ def create_app(
     @app.get("/api/phone")
     def phone_state() -> dict:
         if bridge is None:
-            return {"status": "off", "pair_url": None, "connected": False}
+            return {"status": "off", "pair_url": None, "connected": False, "address": None}
         return bridge.public()
 
     @app.get("/api/phone/qr")
@@ -859,8 +860,10 @@ def create_app(
 
         if bridge is None or not bridge.public()["pair_url"]:
             raise HTTPException(404)
-        svg = segno.make(bridge.public()["pair_url"], error="m").svg_inline(scale=6, border=2, dark="#0B111C")
-        return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
+        svg = io.BytesIO()  # a whole SVG file (with xmlns), so <img> can show it
+        segno.make(bridge.public()["pair_url"], error="m").save(svg, kind="svg", scale=6, border=2, dark="#0B111C",
+                                                                 xmldecl=False)
+        return Response(svg.getvalue(), media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
 
     @app.get("/files/{video_id}/{name}")
     def get_file(video_id: str, name: str, download: bool = False) -> FileResponse:

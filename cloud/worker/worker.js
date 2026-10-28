@@ -61,7 +61,10 @@ async function box(request, env, path) {
   if (path === "/api/box/pc" && request.method === "PUT") {
     const body = await readJson(request);
     const url = httpUrl(body?.url);
-    if (!url || !url.startsWith("https://")) return json({ error: "url" }, 422);
+    // https only (the tunnel); plain http just for a test PC on this very machine (tools/phone_dev.mjs)
+    if (!url || !(url.startsWith("https://") || /^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(url))) {
+      return json({ error: "url" }, 422);
+    }
     const pc = { url: url.replace(/\/$/, ""), version: String(body.version || "").slice(0, 20),
                  seen: new Date().toISOString() };
     await env.BOX.put(`pc:${hash}`, JSON.stringify(pc), { expirationTtl: PC_DAYS * 86400 });

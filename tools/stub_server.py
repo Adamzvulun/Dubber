@@ -12,6 +12,8 @@ Playlist links get a made-up playlist of 3 videos (15 when the list id starts wi
 STUB_UPDATE=9.9.9 makes the site offer an update to that version (installing it takes 2 s and changes nothing).
 The original voice (Settings): the stand-in PC has an RTX 3070 (STUB_GPU=none: no NVIDIA card, STUB_GPU=small: 4 GB);
 "Install" walks its 3 steps in ~12 s (STUB_CLONE_FAIL=1: fails at step 2), then "Original" is offered on the form.
+The phone (phone.py): STUB_MAILBOX=<mailbox address> STUB_TUNNEL=<tunnel address> connects the stand-in PC to the
+local stand-in for Cloudflare, `node tools/phone_dev.mjs` (no cloudflared: the tunnel address is reported at once).
 Kill it by PID, never with `pkill -f` (that kills your own shell).
 """
 
@@ -26,7 +28,7 @@ from types import SimpleNamespace
 
 import uvicorn
 
-from dubber import app, clone, download, pipeline
+from dubber import app, clone, download, phone, pipeline
 from dubber.config import Settings
 from dubber.translate import TranslatorUnavailable
 
@@ -116,8 +118,27 @@ def main() -> None:
     print(f"Stub Dubber on http://127.0.0.1:{port} (library: {settings.output_dir})", flush=True)
     download.playlist_entries = fake_playlist
     stub_clone = StubClone()
+    bridge = None
+    if os.environ.get("STUB_MAILBOX"):
+        os.environ["DUBBER_MAILBOX_URL"] = os.environ["STUB_MAILBOX"]
+        phone.PULL_EVERY = float(os.environ.get("STUB_PULL", phone.PULL_EVERY))  # seconds between mailbox checks
+        tunnel_url = os.environ.get("STUB_TUNNEL", f"http://127.0.0.1:{port}")
+
+        class StubTunnel:
+            def __init__(self, exe, port, on_url):
+                self.on_url = on_url
+
+            def run(self):
+                self.on_url(tunnel_url)
+
+            def stop(self):
+                pass
+
+        def bridge(submit):
+            return phone.PhoneBridge(settings.env_file, port, submit, tools=data / "cf", tunnel_factory=StubTunnel,
+                                     download=lambda tools: Path("cloudflared")).start()
     site = app.create_app(settings, runner=runner, check_key=check_key, updater=StubUpdater(),
-                          clone_status=stub_clone.status, installer=stub_clone)
+                          clone_status=stub_clone.status, installer=stub_clone, phone_bridge=bridge)
     uvicorn.run(site, host="127.0.0.1", port=port, log_level="warning")
 
 

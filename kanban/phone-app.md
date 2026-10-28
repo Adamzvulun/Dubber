@@ -1,12 +1,12 @@
 ---
 id: 31
-status: backlog
+status: review
 priority: Normal
 blocked_by: []
 tags: [future, mobile]
 ---
 
-# Phone version: fully usable on iPhone and Samsung (Android)
+# Phone version: fully usable on iPhone and Samsung (Android) — v0.10.0, ADR-033
 
 Adam (2026-10-28): port the app to phones and make it fully usable on iPhone / Samsung. Later — not started.
 
@@ -17,3 +17,7 @@ Safari (the on-screen subtitles are native text tracks, so they already show in 
 
 ## Narrative
 - 2026-10-28: Card created at Adam's request as future work. (by @claude)
+- 2026-10-28: Brainstorm with Adam: same flow as on the PC; anywhere; dub at once or queue while the PC is off
+  (send-and-forget); home-screen icon; one-click install, no accounts for users. Built 0.10.0: Cloudflare quick
+  tunnel + mailbox Worker + the same website as a PWA (ADR-033), PR #15. Next: Adam's Cloudflare account + secrets,
+  `phone.MAILBOX_URL`, then a real Samsung/iPhone test. (by @claude)

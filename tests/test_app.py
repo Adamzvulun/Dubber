@@ -412,7 +412,7 @@ def test_page_links_its_files_under_new_addresses_for_each_release(tmp_path):
         assert "__ASSETS__" not in page.text
         tag = app.asset_tag()
         for name in ("styles.css", "i18n.js", "app.js"):
-            assert f'/{name}?v={tag}"' in page.text
+            assert f'"{name}?v={tag}"' in page.text  # relative: the phone app serves the same page under /p/<token>/
         assert tag.startswith(__version__)
     assert c.get(f"/app.js?v={app.asset_tag()}").status_code == 200
 

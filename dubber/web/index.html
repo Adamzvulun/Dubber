@@ -11,7 +11,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=__ASSETS__">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Дубляж">
+  <link rel="stylesheet" href="styles.css?v=__ASSETS__">
 </head>
 <body>
   <a class="skip" href="#main" data-i18n="skip">Перейти к содержимому</a>
@@ -36,6 +41,18 @@
   </header>
 
   <main id="main" class="wrap" tabindex="-1">
+    <!-- On the phone only (phone mode): is the home PC reachable, install the app, links waiting for the PC -->
+    <section class="phone-bar" id="phone-bar" aria-live="polite" hidden>
+      <p class="phone-bar__state" id="phone-state"><span class="phone-bar__dot" aria-hidden="true"></span><span id="phone-state-text"></span></p>
+      <div class="phone-bar__install" id="phone-install-box" hidden>
+        <button class="btn btn--primary" type="button" id="phone-install" data-i18n="phone.install" hidden>Установить на телефон</button>
+        <p class="option-hint" id="phone-ios" data-i18n="phone.ios" hidden></p>
+      </div>
+      <div class="phone-queue" id="phone-queue-box" hidden>
+        <h2 class="phone-queue__title" data-i18n="phone.queueTitle">Ждут компьютера</h2>
+        <ul class="phone-queue__list" id="phone-queue"></ul>
+      </div>
+    </section>
     <div class="update" id="update" hidden>
       <p class="update__text" id="update-text" role="status"></p>
       <button class="btn btn--primary" type="button" id="update-btn" data-i18n="update.button">Обновить</button>
@@ -62,6 +79,7 @@
             <textarea id="url" name="url" rows="1" inputmode="url" autocomplete="off" spellcheck="false"
                    placeholder="https://www.youtube.com/… · tiktok.com/… · instagram.com/… · facebook.com/…" required aria-describedby="url-hint form-error"></textarea>
           </div>
+          <button class="btn btn--lg" type="button" id="paste" data-i18n="phone.paste" hidden>Вставить</button>
           <button class="btn btn--primary btn--lg" type="submit" id="submit" data-i18n="form.submit">Озвучить</button>
         </div>
         <div class="composer__alt">
@@ -318,6 +336,23 @@
           </div>
         </section>
 
+        <section class="panel" aria-labelledby="phone-title" id="phone">
+          <div class="panel__head">
+            <h2 id="phone-title" data-i18n="phone.title">Телефон</h2>
+            <span class="badge" id="phone-badge"></span>
+          </div>
+          <p class="panel__lead" data-i18n="phone.about"></p>
+          <div class="pair" id="pair" hidden>
+            <img class="pair__qr" id="pair-qr" alt="" width="196" height="196">
+            <ol class="pair__steps">
+              <li data-i18n="phone.step1"></li>
+              <li data-i18n="phone.step2"></li>
+              <li data-i18n="phone.step3"></li>
+            </ol>
+          </div>
+          <p class="option-hint" id="phone-note" role="status"></p>
+        </section>
+
         <section class="panel" aria-labelledby="storage-title">
           <div class="panel__head">
             <h2 id="storage-title" tabindex="-1" data-i18n="storage.title">Место на диске</h2>
@@ -352,7 +387,7 @@
     </a>
   </template>
 
-  <script src="/i18n.js?v=__ASSETS__" defer></script>
-  <script src="/app.js?v=__ASSETS__" defer></script>
+  <script src="i18n.js?v=__ASSETS__" defer></script>
+  <script src="app.js?v=__ASSETS__" defer></script>
 </body>
 </html>

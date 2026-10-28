@@ -15,12 +15,14 @@ def no_real_settings(monkeypatch):
     monkeypatch.setenv("DUBBER_MAILBOX_URL", "https://dubber.example.workers.dev")
 
 
-def test_household_token_is_made_once_and_kept(tmp_path):
+def test_household_token_is_made_once_and_kept(tmp_path, monkeypatch):
     env = tmp_path / ".env"
     env.write_text("ANTHROPIC_API_KEY=x\n", encoding="utf-8")
     token = phone.household_token(env)
     assert len(token) >= 43 and f"{phone.TOKEN_KEY}={token}" in env.read_text(encoding="utf-8")
     assert "ANTHROPIC_API_KEY=x" in env.read_text(encoding="utf-8")
+    assert phone.household_token(env) == token
+    monkeypatch.delenv(phone.TOKEN_KEY)  # a new start that did not load this .env: still the same household
     assert phone.household_token(env) == token
     assert phone.pair_url(token) == f"https://dubber.example.workers.dev/p/{token}/"
 
@@ -165,7 +167,7 @@ def test_bridge_without_a_mailbox_is_unconfigured(tmp_path, monkeypatch):
     monkeypatch.setenv("DUBBER_MAILBOX_URL", "")
     monkeypatch.setattr(phone, "MAILBOX_URL", "")
     b = phone.PhoneBridge(tmp_path / ".env", 7860, lambda link: None, tools=tmp_path / "cf").start()
-    assert b.public() == {"status": "unconfigured", "pair_url": None, "connected": False}
+    assert b.public() == {"status": "unconfigured", "pair_url": None, "connected": False, "address": None}
 
 
 def test_bridge_downloads_cloudflared_then_starts_the_tunnel(tmp_path):
@@ -278,7 +280,7 @@ def test_the_phone_may_only_dub_and_watch(tmp_path, monkeypatch):
 def test_tunnel_requests_are_refused_without_the_phone(tmp_path, monkeypatch):
     c, _, _ = phone_client(tmp_path, monkeypatch, with_bridge=False)
     assert c.get("/api/videos", headers=TUNNEL).status_code == 403
-    assert c.get("/api/phone").json() == {"status": "off", "pair_url": None, "connected": False}
+    assert c.get("/api/phone").json() == {"status": "off", "pair_url": None, "connected": False, "address": None}
 
 
 def test_phone_state_and_qr_code_on_this_computer(tmp_path, monkeypatch):
@@ -286,7 +288,7 @@ def test_phone_state_and_qr_code_on_this_computer(tmp_path, monkeypatch):
     state = c.get("/api/phone").json()
     assert state["pair_url"] == f"{ORIGIN}/p/{made['bridge'].token}/"
     qr = c.get("/api/phone/qr")
-    assert qr.headers["content-type"].startswith("image/svg+xml") and qr.text.startswith("<svg")
+    assert qr.headers["content-type"].startswith("image/svg+xml") and qr.text.startswith('<svg xmlns="http://www.w3.org/2000/svg"')
 
 
 def test_links_left_by_a_phone_become_dubs(tmp_path, monkeypatch):

@@ -9,7 +9,8 @@ tags: [handoff, next]
 # Next steps (hand-off at the end of session 7, 2026-10-28)
 
 Read `docs/STATUS.md` first. Open items, in order:
-1. **Phone version** (PR #15, `kanban/phone-app.md`). (0.9.0 = PR #14 is merged.)
+1. **Phone version 0.10.0** (PR #15, `kanban/phone-app.md`, ADR-033): Adam creates the Cloudflare account + GitHub
+   secrets and sends the workers.dev address → set `phone.MAILBOX_URL` → merge → pair his Samsung. (0.9.0 merged.)
 2. **Adam tests real links without a login:** a public TikTok, an Instagram Reel, a Facebook video. Ask what the
    job card said for any failure. Login-only/private → «Вход на сайты» (cookies file); "rate limit" → wait an hour.
    If Instagram needs a login often → propose the in-program login window (`docs/RESEARCH.md` → option 5,
@@ -18,7 +19,7 @@ Read `docs/STATUS.md` first. Open items, in order:
    switches (`kanban/install-and-subtitles.md`).
 4. **«Оригинал» voice** on Adam's own NVIDIA PC (≥ 6 GB; the father's RTX 3050 4 GB is too small)
    (`kanban/voicestudio-omnivoice.md`).
-5. **Phone version** for iPhone/Samsung (`kanban/phone-app.md`) — brainstorm started in session 8.
+5. Phone: after Adam's first real use — named tunnel if quick tunnels prove flaky (ADR-033 "Risks").
 6. Ideas to offer, don't build unasked: voice speed control; Hebrew spelling fix on the free path; Silero offline
    TTS; Telegram bot; ElevenLabs (`kanban/nice-to-haves.md`, PLAN M4).
 

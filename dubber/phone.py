@@ -54,8 +54,12 @@ def mailbox_url() -> str:
 def household_token(env_file: Path) -> str:
     """This household's secret (43 letters), made on the first start and kept in .env."""
     token = os.environ.get(TOKEN_KEY, "")
+    if not token and env_file.is_file():  # .env is read at start, but not when settings live elsewhere (tests, stub)
+        found = re.search(rf"^{TOKEN_KEY}=(\S+)", env_file.read_text(encoding="utf-8"), re.M)
+        token = found.group(1) if found else ""
     if not re.fullmatch(r"[A-Za-z0-9_-]{32,64}", token):
         token = secrets.token_urlsafe(32)
+        env_file.parent.mkdir(parents=True, exist_ok=True)
         save_env(env_file, {TOKEN_KEY: token})
     return token
 
@@ -204,7 +208,7 @@ class PhoneBridge:
 
     def public(self) -> dict:
         return {"status": self.status, "pair_url": pair_url(self.token) if self.mailbox else None,
-                "connected": self.url is not None}
+                "connected": self.url is not None, "address": self.url}
 
     def start(self) -> PhoneBridge:
         if self.mailbox is None:
