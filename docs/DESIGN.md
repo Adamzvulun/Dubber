@@ -52,8 +52,6 @@ Watch:   ‹ Назад в библиотеку
          title ................................ Удалить (quiet)
          meta: duration · language · voice · date
          Скачать: [Видео (.mp4)] [Субтитры (.srt)] [Текст перевода (.txt)] [Текст с оригиналом (.txt)]
-Settings: two columns from 1000 px (Claude, glossary, disk space | site logins, original voice), whole content
-         width; site tiles 4 in a row when the panel has room, else 2×2.
 Mobile:  single column; transcript below the video; header shows the logo mark only; selects full width.
 ```
 Left-aligned text throughout; content max width 1120 px.

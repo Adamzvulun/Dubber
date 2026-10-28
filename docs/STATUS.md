@@ -6,8 +6,8 @@ _Last updated: 2026-10-28 (session 8). Update this page at the end of every sess
 Dubber is a local website (FastAPI + hand-built front-end) that turns a **YouTube, TikTok, Instagram or Facebook**
 video **or a video file** in **any spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version **0.9.0** on `main` (PR #14 merged); **0.9.1** (Settings page in two columns on a PC) on branch
-`claude/focused-fermat-9gqp5q`. Session 8 also starts the **phone version** (brainstorm, `kanban/phone-app.md`). The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
+Current version **0.9.0** on `main` (PR #14 merged); session 8 builds the **phone version** on branch
+`claude/focused-fermat-9gqp5q` (PR #15; plan in `kanban/phone-app.md`, ADR-033). The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
 shipping. Adam confirmed 0.6.0 arrived on his PC by itself.
 Session 7 (2026-10-28): **0.8.0 (merged, PR #13)** — the Windows install broke for anyone with Python 3.15 (released
 Oct 2026; no onnxruntime build) → launchers use only Python 3.10–3.14, Microsoft C++ runtime installed, no-winget
@@ -125,8 +125,7 @@ original voice; the voice-free background goes under the dub, ducked while it sp
   voice removal, Google, H.264 playback).
 
 ## Next steps (in order)
-0. **0.9.1 PR** (Settings layout): Adam reviews/merges. **Phone version**: brainstorm in progress (session 8,
-   `kanban/phone-app.md`). Adam (0.9.0 is merged) dubs a real TikTok, an Instagram Reel and a Facebook video **without** a login;
+0. **Phone version** (session 8, PR #15, `kanban/phone-app.md`). Adam (0.9.0 is merged) dubs a real TikTok, an Instagram Reel and a Facebook video **without** a login;
    if one fails, read the job card's message (login-only → «Вход на сайты»; rate limit → wait an hour). Ask him
    whether Instagram worked without a login; if not reliably, propose the in-program login window (ADR-032 "Next").
    Also open: fresh 0.8.0 install on the father's Windows 11 PC, a dub with both subtitle switches.

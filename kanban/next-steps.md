@@ -9,8 +9,7 @@ tags: [handoff, next]
 # Next steps (hand-off at the end of session 7, 2026-10-28)
 
 Read `docs/STATUS.md` first. Open items, in order:
-1. **0.9.1 PR** (Settings page in two columns, `kanban/settings-layout.md`) — Adam reviews and merges. (0.9.0 = PR #14
-   is merged.)
+1. **Phone version** (PR #15, `kanban/phone-app.md`). (0.9.0 = PR #14 is merged.)
 2. **Adam tests real links without a login:** a public TikTok, an Instagram Reel, a Facebook video. Ask what the
    job card said for any failure. Login-only/private → «Вход на сайты» (cookies file); "rate limit" → wait an hour.
    If Instagram needs a login often → propose the in-program login window (`docs/RESEARCH.md` → option 5,

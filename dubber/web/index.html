@@ -224,7 +224,6 @@
       </div>
       <p class="visually-hidden" id="settings-status" role="status" aria-live="polite"></p>
       <div class="settings">
-        <div class="settings__col">
         <section class="panel" aria-labelledby="claude-title">
           <div class="panel__head">
             <h2 id="claude-title" data-i18n="settings.claude.title">Перевод с Claude</h2>
@@ -277,19 +276,6 @@
           </div>
         </section>
 
-        <section class="panel settings__last" aria-labelledby="storage-title">
-          <div class="panel__head">
-            <h2 id="storage-title" tabindex="-1" data-i18n="storage.title">Место на диске</h2>
-            <button class="btn" type="button" id="storage-clear-all" data-i18n="storage.clearAll" hidden>Очистить весь кэш</button>
-          </div>
-          <p class="panel__lead" data-i18n="storage.about"></p>
-          <dl class="stats" id="storage-totals"></dl>
-          <ul class="storage-list" id="storage-list"></ul>
-          <p class="saved-note" id="storage-note" role="status" hidden></p>
-        </section>
-        </div>
-
-        <div class="settings__col">
         <section class="panel" aria-labelledby="logins-title" id="logins">
           <div class="panel__head">
             <h2 id="logins-title" data-i18n="logins.title">Вход на сайты</h2>
@@ -332,7 +318,16 @@
           </div>
         </section>
 
-        </div>
+        <section class="panel" aria-labelledby="storage-title">
+          <div class="panel__head">
+            <h2 id="storage-title" tabindex="-1" data-i18n="storage.title">Место на диске</h2>
+            <button class="btn" type="button" id="storage-clear-all" data-i18n="storage.clearAll" hidden>Очистить весь кэш</button>
+          </div>
+          <p class="panel__lead" data-i18n="storage.about"></p>
+          <dl class="stats" id="storage-totals"></dl>
+          <ul class="storage-list" id="storage-list"></ul>
+          <p class="saved-note" id="storage-note" role="status" hidden></p>
+        </section>
       </div>
     </section>
 
