@@ -82,6 +82,10 @@ class Settings:
     glossary_file: Path = field(
         default_factory=lambda: Path(_env("DUBBER_GLOSSARY_FILE", str(PROJECT_ROOT / "glossary.txt")))
     )
+    # The login file for YouTube/TikTok/Instagram/Facebook (Netscape cookies.txt), written by the Settings page
+    cookies_file: Path = field(
+        default_factory=lambda: Path(_env("DUBBER_COOKIES", str(PROJECT_ROOT / "cookies.txt"))).expanduser()
+    )
     # Language of the dub (code from dubber/languages.py: ru, en, he, uk, es, fr, de, it, pt, ar, zh, ja)
     target_lang: str = field(default_factory=lambda: _env("DUBBER_LANG", "ru"))
     # Edge voice, or "male"/"female"; a voice that doesn't speak target_lang is replaced by that language's voice

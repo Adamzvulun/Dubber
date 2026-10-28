@@ -1,6 +1,6 @@
 ---
 id: 33
-status: doing
+status: done
 priority: High
 blocked_by: []
 tags: [windows, install, subtitles, v0.8.0]
@@ -20,3 +20,4 @@ PC is Windows 11; then real-time subtitles on the dubbed video.
   build for it. Launchers now use 3.10–3.14 only and rebuild a venv from a too-new Python (ADR-029). (by @claude)
 - 2026-10-28: Subtitles: two switches under the player (Adam's choice), browser-drawn text track (ADR-030); checked
   in Chromium (RU/EN, 1280/360 px, dark, Hebrew RTL + English, CC-menu sync). (by @claude)
+- 2026-10-28: Merged as PR #13 (v0.8.0). Real Windows 11 install still to be confirmed by Adam. (by @claude)

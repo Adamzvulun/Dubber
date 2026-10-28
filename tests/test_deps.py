@@ -41,3 +41,22 @@ def test_main_exit_codes(monkeypatch, capsys):
     assert deps.main() == 2
     monkeypatch.setattr(deps, "broken", lambda: [])
     assert deps.main() == 0
+
+
+def test_extras_we_ask_for_are_checked_too(tmp_path):
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[project]\ndependencies = [\n    # a comment with "quotes"\n'
+                         '    "yt-dlp[default,curl-cffi]>=2026.10.21",\n]\n', encoding="utf-8")
+    assert deps.requirements(pyproject) == [("yt-dlp", "2026.10.21")]
+    extras = deps.extra_components(pyproject)
+    assert "curl-cffi" in extras  # what lets TikTok and Instagram download without a login
+    assert "pytest" not in extras
+
+
+def test_browser_impersonation_is_available():
+    import yt_dlp
+
+    with yt_dlp.YoutubeDL({"quiet": True}) as ydl:
+        from yt_dlp.networking.impersonate import ImpersonateTarget
+
+        assert ydl._impersonate_target_available(ImpersonateTarget("chrome"))

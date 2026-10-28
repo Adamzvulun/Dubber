@@ -60,7 +60,7 @@
           <div class="field">
             <svg class="field__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
             <textarea id="url" name="url" rows="1" inputmode="url" autocomplete="off" spellcheck="false"
-                   placeholder="https://www.youtube.com/watch?v=…" required aria-describedby="url-hint form-error"></textarea>
+                   placeholder="https://www.youtube.com/… · tiktok.com/… · instagram.com/… · facebook.com/…" required aria-describedby="url-hint form-error"></textarea>
           </div>
           <button class="btn btn--primary btn--lg" type="submit" id="submit" data-i18n="form.submit">Озвучить</button>
         </div>
@@ -273,6 +273,34 @@
           <div class="panel__actions">
             <button class="btn" type="button" id="glossary-save" data-i18n="settings.glossary.save">Сохранить глоссарий</button>
             <span class="saved-note" id="glossary-saved" hidden></span>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="logins-title" id="logins">
+          <div class="panel__head">
+            <h2 id="logins-title" data-i18n="logins.title">Вход на сайты</h2>
+            <span class="badge" id="logins-badge"></span>
+          </div>
+          <p class="panel__lead" data-i18n="logins.about"></p>
+          <ul class="logins" id="logins-list"></ul>
+          <details class="howto">
+            <summary data-i18n="logins.how">Если видео не скачивается: как добавить вход (Chrome или Edge)</summary>
+            <ol>
+              <li><span data-i18n="logins.step1"></span>
+                <a class="link" href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc"
+                   target="_blank" rel="noopener">Get cookies.txt LOCALLY</a>.
+                <span data-i18n="logins.step1b"></span></li>
+              <li data-i18n="logins.step2"></li>
+              <li data-i18n="logins.step3"></li>
+              <li data-i18n="logins.step4"></li>
+            </ol>
+          </details>
+          <p class="notice" data-i18n="logins.warning"></p>
+          <div class="panel__actions">
+            <input type="file" id="logins-file" accept=".txt,.json,text/plain,application/json" hidden>
+            <button class="btn btn--primary" type="button" id="logins-add" data-i18n="logins.add">Добавить файл входа</button>
+            <button class="btn btn--quiet btn--danger" type="button" id="logins-remove" data-i18n="logins.remove" hidden>Удалить все входы</button>
+            <span class="option-hint" id="logins-note" role="status" aria-live="polite"></span>
           </div>
         </section>
 

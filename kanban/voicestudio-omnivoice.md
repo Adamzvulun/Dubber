@@ -2,7 +2,7 @@
 id: 30
 status: doing
 priority: High
-blocked_by: [Adam: test on the RTX 3070 PC]
+blocked_by: [Adam: test on his own NVIDIA PC (≥ 6 GB)]
 tags: [research, quality, voice]
 ---
 
@@ -20,3 +20,4 @@ improve the dub. Findings: `docs/RESEARCH.md` → "VoiceStudio / OmniVoice"; pro
   Chose: each speaker's own voice (per-line references from the Demucs vocals), Edge for Hebrew, install from
   Settings. Built `dubber/clone.py` + pipeline/app/UI (v0.7.0, ADR-028); verified with stand-ins, in Chromium and with a
   real CPU dub; waiting for the first run on the 3070. (by @claude)
+- 2026-10-28: The father's PC has an RTX 3050 with 4 GB (not a 3070) — below the 6 GB minimum. Adam will try it on his own PC later; not urgent. (by @claude)

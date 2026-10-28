@@ -303,6 +303,44 @@ match the speaker's length. `duration=` is followed closely (asked 2.06 s → 2.
    between voice (≤ 1.5×) and a per-line video slow-down (≤ 2×). Needs a video re-encode (minutes on CPU).
 3. **A voice per speaker** — diarization (pyannote, needs PyTorch) to give each speaker their own (male/female) voice.
 
+## TikTok, Instagram, Facebook without a login — research 2026-10-28 (ADR-031, ADR-032)
+Adam: the cookies-file route (browser extension → file → upload) is too much work for the user; find a way to get
+these videos **without logging in**. Findings (the sandbox can't reach the three sites, so this is from sources and
+yt-dlp's code, not from live downloads):
+
+| Site | Without a login | What it needs | Confidence |
+|---|---|---|---|
+| **TikTok** | public videos: yes | yt-dlp's TikTok extractor requests pages with `impersonate=True`; without **curl_cffi** TikTok answers with a bot-challenge page (several projects hit exactly this and fixed it by installing `yt-dlp[curl-cffi]`) | high |
+| **Instagram** | public reels/posts: yes, with limits | yt-dlp (2026.10.26, `extractor/instagram.py`) sends the logged-out GraphQL query `PolarisLoggedOutDesktopWWWPostRootContentQuery` **only `if self._can_impersonate`**; without curl_cffi it skips it and Instagram redirects to the login page. yt-dlp maintainer in issue 17074 (2026-06-29): without cookies the curl-cffi dependency is required. Instagram rate-limits anonymous access per IP ("exceeded the rate-limit for accessing posts anonymously") — fine for a few videos from a home connection, not for bulk | medium (unverified live) |
+| **Facebook** | public videos/reels: yes | plain yt-dlp; reels can use impersonation too | medium |
+| any | private / followers-only / age-gated posts | a login (cookies) — no way around it | high |
+
+Ways considered to avoid the login entirely:
+1. **Install yt-dlp's `curl-cffi` extra** (browser TLS fingerprint) — **chosen** (ADR-032). Free, no user effort,
+   Windows wheels for Python 3.10–3.14 (curl_cffi 0.17, abi3), verified that yt-dlp lists `curl_cffi` impersonation
+   targets after install. Kept fresh with yt-dlp (launcher refresh every 3 days, updater).
+2. **Third-party download services** (snapinsta-type sites, tikwm.com, public cobalt instances) — rejected: privacy
+   (the user's links go to unknown servers), ads/bot checks, terms of the services; cobalt's public instances are
+   bot-protected and "not meant for other projects without permission".
+3. **Self-hosted cobalt** (Docker image `ghcr.io/imputnet/cobalt`) — rejected: needs Docker on the user's PC, its
+   extractors break as often as yt-dlp's, a Japanese review (2026) says the main branch stalled since April 2026.
+4. **Reading the user's Chrome/Edge logins directly** (`--cookies-from-browser`) — impossible on Windows: Chrome 127+
+   app-bound encryption ("v20" cookies can't be decrypted by another program), the database is locked while the
+   browser runs; Firefox works but the users have Chrome/Edge.
+5. **Easier login if no-login isn't enough — not built, offer to Adam:** a «Войти в Instagram» button that opens
+   Edge (always on Windows) with its **own** profile folder in the program (`--user-data-dir=<Dubber>\browser`) and
+   `--remote-debugging-port`; the user logs in once in that window, Dubber reads the cookies over the DevTools
+   protocol (`Network.getAllCookies`, returns decrypted HttpOnly values) and writes `cookies.txt`. Chrome 136+ only
+   blocks remote debugging for the *default* profile, a custom `--user-data-dir` is allowed (Chrome developer blog,
+   "Changes to remote debugging switches"). No extension, no file handling; needs Edge/Chrome path discovery, a
+   free port, closing the window, and care that the port only listens on 127.0.0.1.
+
+Sources: yt-dlp issue 17074 "Instagram sent an empty media response WITHOUT cookies"
+(github.com/yt-dlp/yt-dlp/issues/17074), yt-dlp `extractor/instagram.py` and `extractor/tiktok.py` (2026.10.26),
+projects fixing TikTok with curl_cffi (e.g. github.com/hypit-ai/hypit/issues/381), Chrome blog
+developer.chrome.com/blog/remote-debugging-port, cobalt API docs (github.com/imputnet/cobalt/blob/main/docs/api.md),
+yt-dlp issue 7271 / 10927 (Chrome cookies on Windows).
+
 ## Risks
 - YouTube anti-bot changes → keep yt-dlp updated; cookies-from-browser fallback (see `youtube-downloader` skill references).
 - edge-tts is an unofficial client of a Microsoft service — may break; Silero offline fallback planned.

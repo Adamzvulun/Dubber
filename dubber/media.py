@@ -37,6 +37,20 @@ def duration(path: Path) -> float:
     return float(probe(path)["format"]["duration"])
 
 
+def video_codec(path: Path) -> str:
+    """Codec name of the first video stream ("h264", "hevc", "vp9", "av1"...), "" when there is none."""
+    return next((s.get("codec_name", "") for s in probe(path)["streams"] if s.get("codec_type") == "video"), "")
+
+
+def to_h264(src: Path, dst: Path, max_height: int = 720) -> Path:
+    """Re-encode the video as H.264 (at most `max_height` high), audio as AAC: the one format every browser,
+    Windows player and phone plays. TikTok and iPhones often give HEVC, which many Windows browsers can't show."""
+    run_ffmpeg(["-i", str(src), "-map", "0:v:0", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast",
+                "-crf", "21", "-pix_fmt", "yuv420p", "-vf", f"scale=-2:'min({max_height},ih)'",
+                "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(dst)])
+    return dst
+
+
 def has_audio(path: Path) -> bool:
     return any(s.get("codec_type") == "audio" for s in probe(path)["streams"])
 

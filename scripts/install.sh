@@ -18,5 +18,5 @@ rm -f install.log  # full pip log, to share if something goes wrong
 # Build tools in .venv, no pip build isolation (a silent extra step that could stall after "Obtaining file://...").
 .venv/bin/python -m pip install --upgrade pip setuptools wheel --log install.log >/dev/null
 .venv/bin/python -m pip install --upgrade --no-build-isolation --log install.log -e .
-.venv/bin/python -m pip install --upgrade yt-dlp --log install.log >/dev/null
+.venv/bin/python -m pip install --upgrade 'yt-dlp[default,curl-cffi]' --log install.log >/dev/null
 echo "Installed. Start with ./scripts/start.sh"

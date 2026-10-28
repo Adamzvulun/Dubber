@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import align, clone, languages, media, separate, subtitles, timing, transcribe, translate, tts
+from . import align, clone, languages, media, separate, sites, subtitles, timing, transcribe, translate, tts
 from .config import Settings
 from .download import download, fetch_info, is_url, local_video_id
 from .mux import mux
@@ -96,7 +96,7 @@ def youtube_id(url: str) -> str | None:
 
 
 def identify(source: str, work_dir: Path | None = None) -> dict:
-    """{id, title, channel} for a URL or a local file, without downloading the video.
+    """{id, title, channel} for a link (YouTube, TikTok, Instagram, Facebook...) or a local file, without downloading.
 
     For YouTube links the id comes from the link and the details are cached in work/<id>/info.json,
     so a video that was already processed never needs YouTube again.
@@ -107,7 +107,10 @@ def identify(source: str, work_dir: Path | None = None) -> dict:
         if cached and cached.exists():
             return json.loads(cached.read_text(encoding="utf-8"))
         info = fetch_info(source)
-        result = {"id": info["id"], "title": info.get("title") or info["id"], "channel": info.get("channel") or ""}
+        vid = sites.video_id(info.get("extractor_key") or info.get("extractor") or "", str(info["id"]))
+        # TikTok/Instagram/Facebook: the account's name ("uploader") when there is no channel
+        result = {"id": vid, "title": info.get("title") or str(info["id"]),
+                  "channel": info.get("channel") or info.get("uploader") or ""}
         if work_dir:
             (work_dir / result["id"]).mkdir(parents=True, exist_ok=True)
             (work_dir / result["id"] / "info.json").write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")

@@ -329,6 +329,15 @@ main.wrap { padding-bottom: 80px; }
 .settings__options select { width: 100%; }
 .saved-note { color: var(--ok); font-size: 15px; font-weight: 500; }
 .saved-note.is-error { color: var(--danger); }
+.logins { list-style: none; margin: 0 0 14px; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.logins__site { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+.logins__name { font-weight: 600; }
+.logins__state { font-size: 14px; color: var(--ink-2); }
+.logins__site.is-on .logins__state { color: var(--ok); }
+.howto { margin: 0 0 14px; font-size: 15px; line-height: 1.55; }
+.howto summary { cursor: pointer; font-weight: 600; color: var(--accent); width: fit-content; }
+.howto ol { margin: 10px 0 0; padding-left: 22px; display: grid; gap: 6px; }
+.howto li { overflow-wrap: anywhere; }
 .notice { margin: 0 0 14px; padding: 10px 14px; border-radius: 10px; font-size: 15px; line-height: 1.5;
   background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--ink); }
 .clone-gpu { margin: 0 0 14px; font-weight: 500; }

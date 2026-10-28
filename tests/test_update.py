@@ -75,11 +75,11 @@ def test_install_replaces_program_files_and_keeps_user_data(installed):
     assert set((installed / update.MANIFEST).read_text().split()) == set(NEW)
     assert not list(installed.rglob("*.partial"))
     # pyproject changed → components reinstalled like install_windows.bat does; yt-dlp is refreshed every time
-    assert runs[0][-3:] == ["--no-build-isolation", "-e", "."] and runs[-1][-1] == "yt-dlp"
+    assert runs[0][-3:] == ["--no-build-isolation", "-e", "."] and runs[-1][-1] == "yt-dlp[default,curl-cffi]"
 
     runs.clear()
     updater.install()  # same version again: pyproject unchanged → no reinstall
-    assert len(runs) == 1 and runs[0][-1] == "yt-dlp"
+    assert len(runs) == 1 and runs[0][-1] == "yt-dlp[default,curl-cffi]"
 
 
 def test_first_update_after_a_zip_install_deletes_nothing(installed):

@@ -113,13 +113,16 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [ ] First run on a clean PC (winget Python + ffmpeg) — Adam
 
 ### M9 — Session 7 (Adam, 2026-10-28)
-- [ ] Windows install on clean Windows 11 PCs: C++ runtime, no-winget fallback, component self-check (v0.8.0, ADR-029)
-- [ ] On-screen subtitles on the watch page: two switches, dub language / original (v0.8.0, ADR-030)
+- [x] Windows install on clean Windows 11 PCs: C++ runtime, no-winget fallback, component self-check (v0.8.0, ADR-029)
+- [x] On-screen subtitles on the watch page: two switches, dub language / original (v0.8.0, ADR-030)
 - [ ] Adam: fresh install on a Windows 11 PC; watch a dub with both subtitle switches
 
-### M10 — Future (Adam, 2026-10-28; not started)
-- [ ] Phone version: fully usable on iPhone and Samsung (`kanban/phone-app.md`)
-- [ ] Dub videos from Facebook, Instagram, TikTok (`kanban/more-video-sites.md`)
+### M10 — Future (Adam, 2026-10-28)
+- [ ] Phone version: fully usable on iPhone and Samsung (`kanban/phone-app.md`) — not started
+- [x] Dub videos from Facebook, Instagram, TikTok + «Вход на сайты» login file (v0.9.0, ADR-031, `kanban/more-video-sites.md`)
+- [x] Public videos without a login: yt-dlp `curl-cffi` impersonation (v0.9.0, ADR-032)
+- [ ] Adam: dub a real TikTok, Instagram Reel and Facebook video without a login; report what fails
+- [ ] If Instagram often needs a login: in-program login window (Edge own profile + DevTools cookies) — ask Adam first
 
 ### M4 — Nice to have
 - [x] Queue of several links / playlists (v0.6.0)

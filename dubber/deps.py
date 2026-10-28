@@ -24,18 +24,46 @@ from .config import PROJECT_ROOT
 NATIVE = ("ctranslate2", "av", "onnxruntime", "tokenizers", "numpy")
 
 _DEPENDENCIES = re.compile(r"^dependencies\s*=\s*\[(.*?)^\]", re.M | re.S)
-_REQUIREMENT = re.compile(r"^\s*([A-Za-z0-9_.-]+)\s*(?:\[[^\]]*\])?\s*(?:>=\s*([0-9][0-9.]*))?")
+_REQUIREMENT = re.compile(r"^\s*([A-Za-z0-9_.-]+)\s*(?:\[([^\]]*)\])?\s*(?:>=\s*([0-9][0-9.]*))?")
 
 
 def requirements(pyproject: Path = PROJECT_ROOT / "pyproject.toml") -> list[tuple[str, str | None]]:
     """(name, minimum version or None) for each entry of `[project] dependencies`."""
+    return [(name, minimum) for name, _extras, minimum in _entries(pyproject)]
+
+
+def _entries(pyproject: Path = PROJECT_ROOT / "pyproject.toml") -> list[tuple[str, list[str], str | None]]:
     block = _DEPENDENCIES.search(pyproject.read_text(encoding="utf-8"))
     out = []
-    for entry in re.findall(r'"([^"]+)"', block.group(1) if block else ""):
-        match = _REQUIREMENT.match(entry)
-        if match:
-            out.append((match.group(1), match.group(2)))
+    for line in (block.group(1) if block else "").splitlines():
+        line = line.split("#", 1)[0]  # comments may quote words
+        for entry in re.findall(r'"([^"]+)"', line):
+            match = _REQUIREMENT.match(entry)
+            if match:
+                extras = [e.strip() for e in (match.group(2) or "").split(",") if e.strip()]
+                out.append((match.group(1), extras, match.group(3)))
     return out
+
+
+def extra_components(pyproject: Path = PROJECT_ROOT / "pyproject.toml") -> list[str]:
+    """Packages that the extras we ask for pull in (e.g. curl_cffi from yt-dlp[curl-cffi]): `missing()` checks
+    them too — a plain `pip install --upgrade yt-dlp` would not have installed them."""
+    try:
+        from packaging.requirements import Requirement
+    except ImportError:
+        return []
+    out = []
+    for name, extras, _minimum in _entries(pyproject):
+        try:
+            requires = metadata.requires(name) or []
+        except metadata.PackageNotFoundError:
+            continue  # reported by missing() already
+        for spec in requires:
+            req = Requirement(spec)
+            if req.marker and any(req.marker.evaluate({"extra": e}) for e in extras) \
+                    and not req.marker.evaluate({"extra": ""}):
+                out.append(req.name)
+    return sorted(set(out))
 
 
 def _version(text: str) -> tuple[int, ...]:
@@ -44,8 +72,10 @@ def _version(text: str) -> tuple[int, ...]:
 
 def missing(reqs: list[tuple[str, str | None]] | None = None) -> list[str]:
     """Components not installed, or older than the program asks for ("name>=version")."""
+    if reqs is None:
+        reqs = requirements() + [(name, None) for name in extra_components()]
     out = []
-    for name, minimum in requirements() if reqs is None else reqs:
+    for name, minimum in reqs:
         try:
             installed = metadata.version(name)
         except metadata.PackageNotFoundError:

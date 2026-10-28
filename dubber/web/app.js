@@ -105,6 +105,7 @@ function route() {
     document.title = t("title.settings");
     loadSettings();
     loadClone();
+    loadLogins();
     loadStorage();
   } else if (page === "library") {
     $("#view-library").hidden = false;
@@ -790,6 +791,7 @@ function applyUiLang() {
   updateVoiceOption();
   renderJobs();
   renderClone();
+  renderLogins();
   renderLibrary();
   renderSettings();
   renderVersion();
@@ -847,6 +849,51 @@ async function clearCache(path, confirmText) {
   note.hidden = false;
   $("#storage-title").focus(); // the pressed button may disappear with its row
   loadStorage();
+}
+
+/* ---------- site logins (sites.py): the cookies file for login-only videos ---------- */
+async function loadLogins() {
+  try { state.logins = await api("/api/cookies"); } catch (_) { return; }
+  renderLogins();
+}
+
+function renderLogins() {
+  const l = state.logins;
+  if (!l) return;
+  const on = l.sites.filter((s) => s.logged_in).length;
+  const badge = $("#logins-badge");
+  badge.textContent = on ? t("logins.badge.on", on) : t("logins.badge.off");
+  badge.className = `badge${on ? " badge--on" : ""}`;
+  $("#logins-list").replaceChildren(...l.sites.map((s) => el("li", { class: `logins__site${s.logged_in ? " is-on" : ""}` },
+    el("span", { class: "logins__name", text: s.name }),
+    el("span", { class: "logins__state", text: !s.logged_in ? t("logins.no")
+      : s.expires ? t("logins.until", dateLabel(new Date(s.expires * 1000).toISOString())) : t("logins.yes") }))));
+  $("#logins-remove").hidden = !l.saved;
+}
+
+function loginNote(text, error) {
+  const note = $("#logins-note");
+  note.textContent = text;
+  note.classList.toggle("is-error", Boolean(error));
+}
+
+async function addLoginFile(file) {
+  if (!file) return;
+  loginNote("");
+  try {
+    state.logins = await api("/api/cookies", { method: "POST", headers: { "Content-Type": "text/plain" }, body: file });
+    renderLogins();
+    loginNote(t("logins.added"));
+  } catch (e) { loginNote(e.message, true); }
+  $("#logins-file").value = ""; // the same file can be chosen again
+}
+
+async function removeLogins() {
+  if (!confirm(t("logins.confirmRemove"))) return;
+  try { state.logins = await api("/api/cookies", { method: "DELETE" }); } catch (e) { loginNote(e.message, true); return; }
+  renderLogins();
+  loginNote(t("logins.removed"));
+  $("#logins-add").focus(); // the pressed button disappears
 }
 
 /* ---------- the original voice (clone.py): graphics card check and install ---------- */
@@ -1041,6 +1088,9 @@ async function saveSettings(changes, savedNote) {
 
 function initSettings() {
   $("#clone-install").addEventListener("click", installClone);
+  $("#logins-add").addEventListener("click", () => $("#logins-file").click());
+  $("#logins-file").addEventListener("change", (e) => addLoginFile(e.target.files[0]));
+  $("#logins-remove").addEventListener("click", removeLogins);
   $("#storage-clear-all").addEventListener("click", () =>
     clearCache("/api/storage/cache", t("storage.confirmAll", sizeLabel(state.storage?.cache))));
   $("#key-form").addEventListener("submit", async (e) => {
