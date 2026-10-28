@@ -293,7 +293,10 @@ main.wrap { padding-bottom: 80px; }
 .nav__settings { display: inline-flex; align-items: center; gap: 6px; }
 .nav__settings svg { width: 18px; height: 18px; flex: none; }
 .composer__note { margin-top: 16px; font-size: 14px; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 4px 10px; }
-.settings { display: grid; gap: 22px; max-width: 760px; }
+/* On a PC two columns fill the page (translation + disk | sites + voice); narrower: one column, disk space last. */
+.settings, .settings__col { display: grid; gap: 22px; align-content: start; min-width: 0; }
+@media (min-width: 1000px) { .settings { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } }
+@media (max-width: 999px) { .settings__col { display: contents; } .settings__last { order: 1; } }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); padding: 24px; display: grid; gap: 16px; min-width: 0; }
 .panel__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .panel__lead { color: var(--ink-2); font-size: 15px; max-width: 64ch; }
@@ -329,7 +332,9 @@ main.wrap { padding-bottom: 80px; }
 .settings__options select { width: 100%; }
 .saved-note { color: var(--ok); font-size: 15px; font-weight: 500; }
 .saved-note.is-error { color: var(--danger); }
-.logins { list-style: none; margin: 0 0 14px; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+#logins { container-type: inline-size; }
+.logins { list-style: none; margin: 0 0 14px; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@container (min-width: 460px) { .logins { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .logins__site { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
 .logins__name { font-weight: 600; }
 .logins__state { font-size: 14px; color: var(--ink-2); }

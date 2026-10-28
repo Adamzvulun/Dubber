@@ -1,13 +1,13 @@
 # Status — read this first
 
-_Last updated: 2026-10-28 (session 7). Update this page at the end of every session._
+_Last updated: 2026-10-28 (session 8). Update this page at the end of every session._
 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a **YouTube, TikTok, Instagram or Facebook**
 video **or a video file** in **any spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version **0.8.0** on `main`; **0.9.0 = open PR #14** (branch `claude/blissful-bell-14f4au`, waiting for Adam's
-review). The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
+Current version **0.9.0** on `main` (PR #14 merged); **0.9.1** (Settings page in two columns on a PC) on branch
+`claude/focused-fermat-9gqp5q`. Session 8 also starts the **phone version** (brainstorm, `kanban/phone-app.md`). The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
 shipping. Adam confirmed 0.6.0 arrived on his PC by itself.
 Session 7 (2026-10-28): **0.8.0 (merged, PR #13)** — the Windows install broke for anyone with Python 3.15 (released
 Oct 2026; no onnxruntime build) → launchers use only Python 3.10–3.14, Microsoft C++ runtime installed, no-winget
@@ -125,12 +125,11 @@ original voice; the voice-free background goes under the dub, ducked while it sp
   voice removal, Google, H.264 playback).
 
 ## Next steps (in order)
-0. **PR #14 (0.9.0):** Adam reviews/merges (CI must be green: `CI`, `Windows install` incl. the curl-cffi check,
-   `Original voice install`). Then he dubs a real TikTok, an Instagram Reel and a Facebook video **without** a login;
+0. **0.9.1 PR** (Settings layout): Adam reviews/merges. **Phone version**: brainstorm in progress (session 8,
+   `kanban/phone-app.md`). Adam (0.9.0 is merged) dubs a real TikTok, an Instagram Reel and a Facebook video **without** a login;
    if one fails, read the job card's message (login-only → «Вход на сайты»; rate limit → wait an hour). Ask him
    whether Instagram worked without a login; if not reliably, propose the in-program login window (ADR-032 "Next").
    Also open: fresh 0.8.0 install on the father's Windows 11 PC, a dub with both subtitle switches.
-   Future (not started): phone version (`kanban/phone-app.md`).
 1. **0.7.0 on an NVIDIA PC (Adam's own; the father's has an RTX 3050 4 GB — below the 6 GB minimum):** then Settings → «Голос оригинала» →
    «Установить» (watch `work/omnivoice-install.log` if it fails: CUDA wheel for his Python, driver too old), dub a
    short video with «Оригинал», listen, and report the time it took (the job card's clock). Tune `BATCH` / steps if slow.

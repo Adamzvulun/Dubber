@@ -2,6 +2,15 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-28 — Session 8: Settings page on a PC (v0.9.1) + phone version brainstorm
+- Adam merged PR #14 (0.9.0). He: the Settings window is squeezed — fix it and check it on a PC; then start the phone
+  version.
+- Cause: the panels were a 760 px column on the left of the 1120 px page. Now two columns from 1000 px (Claude,
+  glossary, disk space | site logins, original voice), one column below with disk space last; site tiles 4 in a row
+  or 2×2 (container query) — never 3+1.
+- Verified in Chromium on the stub server: 1920/1366/1280/1024/900/600/360 px, RU/EN, light/dark, no horizontal
+  scroll; 162 tests pass.
+
 ## 2026-10-28 — Session 7c: TikTok, Instagram, Facebook without a login (still v0.9.0, PR #14)
 - Adam: the extension + cookies file is too much work for the user — find a way without a login; then make the docs
   ready for the next session.

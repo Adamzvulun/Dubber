@@ -1,4 +1,12 @@
 {
+  "0.9.1": {
+    "ru": [
+      "Страница «Настройки» на компьютере больше не сжата в узкую полосу: разделы стоят в две колонки и занимают всю ширину окна. На телефоне — по-прежнему одна колонка."
+    ],
+    "en": [
+      "The Settings page on a computer is no longer squeezed into a narrow strip: its sections sit in two columns that use the whole window. On a phone it is still one column."
+    ]
+  },
   "0.9.0": {
     "ru": [
       "Теперь можно озвучивать видео из TikTok, Instagram (Reels) и Facebook — просто вставьте ссылку, как на YouTube. Открытые для всех видео скачиваются без входа в аккаунт.",
