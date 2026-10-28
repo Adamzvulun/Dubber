@@ -348,3 +348,24 @@ Newest at the bottom. Format: context → decision → consequences.
   line under Hebrew would otherwise be laid out right to left). The player's own CC menu stays in sync with the
   switches. The `<track>` files are no longer attached (they'd duplicate in the CC menu); the `.srt`/`.vtt` files
   and the MP4's soft subtitles are unchanged.
+
+## ADR-031 — TikTok, Instagram, Facebook: yt-dlp + a login file from the Settings page (2026-10-28)
+- **Context:** Adam asked to dub videos from Facebook, Instagram and TikTok. yt-dlp already extracts all three, but
+  Instagram (and many Facebook and some TikTok posts) need a logged-in session, TikTok often serves HEVC, and other
+  sites' ids can collide or contain characters unfit for a folder name. Adam and his father use Chrome and Edge on
+  Windows, whose cookies other programs can't read (app-bound encryption), so yt-dlp's `cookiesfrombrowser` is out.
+- **Decision (Adam's choice: a cookies file in Settings):** Settings → «Вход на сайты» with a step-by-step guide for
+  the open-source "Get cookies.txt LOCALLY" extension (Chrome Web Store; Edge after "allow other stores") and an
+  upload button. `dubber/sites.py` keeps **only** cookies of YouTube/TikTok/Instagram/Facebook (Netscape or the JSON
+  some extensions export), **merges per site** (a new Instagram file replaces only the Instagram login, so files for
+  several sites add up), and reports per site whether a login cookie (`sessionid`, `c_user`, `LOGIN_INFO`...) is
+  there and until when. Saved as `cookies.txt` in the program folder (git-ignored, kept by the updater, 0600 on
+  POSIX); `download.base_opts` passes it to yt-dlp (DUBBER_COOKIES still overrides). API `GET/POST/DELETE
+  /api/cookies` (Origin check like the other changing calls). Login, private and unsupported-site errors get their
+  own messages pointing to the panel.
+- **Downloads:** H.264 is preferred also among combined formats (`b[vcodec^=avc1]`); anything else (HEVC from TikTok,
+  an iPhone upload) is re-encoded to H.264/AAC ≤ `max_height` (`media.to_h264`), so the dub plays in every browser
+  (the mux copies the video). Work folders: `sites.video_id` — YouTube ids unchanged (old caches), others
+  `<site>-<id>` or `<site>-<sha1>`; the channel falls back to the uploader's name.
+- **Not verified here:** real TikTok/Instagram/Facebook downloads — the sandbox can't reach these sites (network
+  policy; they also block datacenter IPs). Covered by tests with a yt-dlp stand-in; Adam tests real links.

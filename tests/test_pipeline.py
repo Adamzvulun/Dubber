@@ -152,6 +152,14 @@ def test_youtube_id_and_cached_identify(tmp_path, monkeypatch):
     assert len(calls) == 1
 
 
+def test_identify_other_sites(tmp_path, monkeypatch):
+    info = {"id": "7345123456789", "title": "", "extractor_key": "TikTok", "uploader": "chef_anna"}
+    monkeypatch.setattr(pipeline, "fetch_info", lambda url: info)
+    found = pipeline.identify("https://www.tiktok.com/@chef_anna/video/7345123456789", tmp_path)
+    assert found == {"id": "tiktok-7345123456789", "title": "7345123456789", "channel": "chef_anna"}
+    assert (tmp_path / "tiktok-7345123456789" / "info.json").exists()
+
+
 def test_each_voice_gets_its_own_recordings(tmp_path, sample_video):
     """Regression: re-dubbing with another voice must not reuse the first voice's cached clips."""
     voices_used = []

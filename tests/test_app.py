@@ -37,7 +37,7 @@ def make_video(output: Path, vid: str, title: str) -> Path:
 
 
 def client(tmp_path, runner=None):
-    settings = Settings(work_dir=tmp_path / "w", output_dir=tmp_path / "out")
+    settings = Settings(work_dir=tmp_path / "w", output_dir=tmp_path / "out", cookies_file=tmp_path / "cookies.txt")
     return TestClient(app.create_app(settings, runner=runner or (lambda *a, **k: None))), settings
 
 
@@ -473,3 +473,34 @@ def test_spoken_times_follow_the_dub_voice(tmp_path):
     timing.write_text("not json")
     assert app.spoken_times(timing, 2) == [None, None]
     assert app.spoken_times(tmp_path / "missing.json", 1) == [None]
+
+
+def test_site_logins_add_merge_and_remove(tmp_path):
+    c, settings = client(tmp_path)
+    state = c.get("/api/cookies").json()
+    assert not state["saved"] and [s["site"] for s in state["sites"]] == ["youtube", "tiktok", "instagram", "facebook"]
+
+    insta = ".instagram.com\tTRUE\t/\tTRUE\t4000000000\tsessionid\tabc\n.bank.com\tTRUE\t/\tTRUE\t0\tx\ty\n"
+    state = c.post("/api/cookies", content=insta.encode()).json()
+    assert state["saved"] and {s["site"] for s in state["sites"] if s["logged_in"]} == {"instagram"}
+    assert "bank.com" not in settings.cookies_file.read_text()  # other sites' cookies are never kept
+
+    fb = "# Netscape HTTP Cookie File\n.facebook.com\tTRUE\t/\tTRUE\t4000000000\tc_user\t1\n"
+    state = c.post("/api/cookies", content=fb.encode()).json()
+    assert {s["site"] for s in state["sites"] if s["logged_in"]} == {"instagram", "facebook"}
+
+    bad = c.post("/api/cookies", content=b"hello")
+    assert bad.status_code == 422 and "cookies.txt" in bad.json()["detail"]["ru"]
+    assert c.post("/api/cookies", content=fb.encode(), headers={"Origin": "https://evil.example"}).status_code == 403
+
+    assert not c.delete("/api/cookies").json()["saved"]
+    assert not settings.cookies_file.exists()
+
+
+def test_login_and_site_errors_are_explained():
+    login = RuntimeError("ERROR: [Instagram] C1x: Requested content is not available, rate-limit reached or login "
+                         "required. Use --cookies-from-browser or --cookies for the authentication.")
+    assert "Вход на сайты" in app.friendly_error(login)
+    assert "Site logins" in app.friendly_error(login, "en")
+    assert "приватное" in app.friendly_error(RuntimeError("ERROR: [TikTok] 1: This video is private"))
+    assert "TikTok" in app.friendly_error(RuntimeError("ERROR: Unsupported URL: https://vimeo.com/1"))

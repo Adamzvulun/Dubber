@@ -111,7 +111,8 @@ def main() -> None:
     data = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/dubber-stub")
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 7871
     settings = Settings(work_dir=data / "w", output_dir=data / "out", env_file=data / ".env",
-                        glossary_file=data / "glossary.txt", claude_key="", translator="auto")
+                        glossary_file=data / "glossary.txt", cookies_file=data / "cookies.txt", claude_key="",
+                        translator="auto")
     print(f"Stub Dubber on http://127.0.0.1:{port} (library: {settings.output_dir})", flush=True)
     download.playlist_entries = fake_playlist
     stub_clone = StubClone()

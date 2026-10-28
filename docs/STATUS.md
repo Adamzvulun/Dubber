@@ -6,7 +6,7 @@ _Last updated: 2026-10-28 (session 7). Update this page at the end of every sess
 Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video **or a video file** in **any
 spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version **0.7.0** on `main` (the original voice); **0.8.0 on PR #13 (`claude/blissful-bell-14f4au`)**: Windows install fixes (Python 3.15 broke new installs, ADR-029) and on-screen subtitles (ADR-030). The repo is **public** and the PCs **update themselves from `main`** at start
+Current version **0.8.0** on `main` (Windows install fixes — Python 3.15 broke new installs, ADR-029 — and on-screen subtitles, ADR-030); **0.9.0 on the PR from `claude/blissful-bell-14f4au`**: TikTok, Instagram, Facebook links + «Вход на сайты» login file (ADR-031). The repo is **public** and the PCs **update themselves from `main`** at start
 (ADR-024) — merging is shipping. Adam confirmed 0.6.0 arrived on his PC by itself.
 Session 5 (2026-10-18): one-click Windows start `Start Dubber.cmd` with a desktop shortcut and its own icon (the old
 `?`/no-shortcut bug reproduced and fixed on real Windows in CI, ADR-025); upload a file, several links, playlists
@@ -34,6 +34,8 @@ Earlier: per-dub library entries + self-update (session 4), voice removal and tr
   (design system), `RESEARCH.md` (tools, timing research, 12-language QA), `SKILLS.md`, `README.ru.md` (longer Russian
   reference). **User guides (RU + HE) are at the top of `README.md`** — they quote UI labels from `i18n.js`. Task cards: `kanban/` (hand-off list: `kanban/next-steps.md`).
 - **Data on a user's PC (git-ignored):** `.env` (settings saved by the website, incl. the Claude key),
+  `cookies.txt` (site logins from «Вход на сайты»: only YouTube/TikTok/Instagram/Facebook cookies), `ffmpeg/` (when
+  winget was missing),
   `glossary.txt`, `install.log` (last installer run), `.venv/dubber-installed` (components installed),
   `work/uploads/<sha>/<name>` = uploaded videos until dubbed, `work/<id>/` = cache per video (`source.mp4`, `info.json`,
   `segments_src_v3.json` = what was said with each line's language, `speech_info.json`, `segments_<lang>_v3.json` (free
@@ -58,6 +60,9 @@ offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 original voice; the voice-free background goes under the dub, ducked while it speaks.
 
 ## What works (verified by running it)
+- **0.9.0 (TikTok/Instagram/Facebook, ADR-031):** unit tests with a yt-dlp stand-in (HEVC → H.264, ids, login file
+  merge/summary, API, error texts); the «Вход на сайты» panel in Chromium on the stub server (RU/EN, 1280/360 px,
+  dark). **No real download from these sites yet** — the sandbox can't reach them.
 - **0.8.0 (PR #13):** Windows CI: install without winget in a folder with a Russian name, venv from a too-new Python
   rebuilt, Whisper model in a Russian-named folder, component repair; on-screen subtitles in Chromium (RU/EN,
   1280/360 px, dark, Hebrew + English lines, CC-menu sync). Not yet on a real Windows 11 PC.
@@ -104,9 +109,10 @@ shortcut after the self-update on the second PC), first run on a clean PC, real 
 Claude dubs (Hebrew, English), voice removal on real videos, Google translation, H.264 playback in Chrome/Edge.
 
 ## Next steps (in order)
-0. **0.8.0:** Adam reviews/merges PR #13; then a fresh install on a Windows 11 PC (the father's), and watching a dub
-   with both subtitle switches. Future work (Adam, not started): phone version (`kanban/phone-app.md`), Facebook /
-   Instagram / TikTok (`kanban/more-video-sites.md`).
+0. **0.9.0:** Adam reviews/merges the PR; then dubs a real TikTok, an Instagram Reel (after adding a login file in
+   «Настройки» → «Вход на сайты») and a Facebook video. Also still open: a fresh 0.8.0 install on the father's
+   Windows 11 PC, a dub watched with both subtitle switches. Future (not started): phone version
+   (`kanban/phone-app.md`).
 1. **0.7.0 on an NVIDIA PC (Adam's own; the father's has an RTX 3050 4 GB — below the 6 GB minimum):** then Settings → «Голос оригинала» →
    «Установить» (watch `work/omnivoice-install.log` if it fails: CUDA wheel for his Python, driver too old), dub a
    short video with «Оригинал», listen, and report the time it took (the job card's clock). Tune `BATCH` / steps if slow.
@@ -127,6 +133,8 @@ Claude dubs (Hebrew, English), voice removal on real videos, Google translation,
 - **Network:** the environment needs these hosts allowed (or "Full" access): `youtube.com`, `*.youtube.com`,
   `*.googlevideo.com`, `*.ytimg.com`, `youtubei.googleapis.com`, `huggingface.co`, `*.huggingface.co`, `*.hf.co`,
   `translate.googleapis.com`, `speech.platform.bing.com`. Fonts load from Google Fonts (optional).
+- **TikTok, Instagram and Facebook are unreachable from the sandbox** (network policy; they also block datacenter
+  IPs): test with the yt-dlp stand-in in `tests/test_download.py`; real links only on Adam's PC.
 - **YouTube blocks datacenter IPs** ("Sign in to confirm you're not a bot", then 403). For a real YouTube test, Adam
   must provide a fresh `cookies.txt`, stored **outside the repo** and passed via `DUBBER_COOKIES`. Never commit cookies.
   Without it, test with local files (`tools/qa_languages.py` makes multilingual clips with Edge voices).

@@ -1,4 +1,16 @@
 {
+  "0.9.0": {
+    "ru": [
+      "Теперь можно озвучивать видео из TikTok, Instagram (Reels) и Facebook — просто вставьте ссылку, как на YouTube.",
+      "Новый раздел «Настройки» → «Вход на сайты»: для видео, которые сайт показывает только после входа в аккаунт (почти всё в Instagram). Там же пошаговая инструкция для Chrome и Edge.",
+      "Видео в формате HEVC (часто из TikTok и с iPhone) программа сама переводит в формат, который показывает любой браузер."
+    ],
+    "en": [
+      "You can now dub videos from TikTok, Instagram (Reels) and Facebook — just paste the link, like a YouTube one.",
+      "New Settings → “Site logins”: for videos a site shows only to logged-in users (almost everything on Instagram), with step-by-step instructions for Chrome and Edge.",
+      "HEVC videos (common from TikTok and iPhones) are converted to a format every browser plays."
+    ]
+  },
   "0.8.0": {
     "ru": [
       "Субтитры прямо на видео: под плеером два переключателя — язык озвучки и оригинал. Можно включить один, оба (озвучка сверху, оригинал под ней) или ни одного; выбор запоминается. Субтитры озвучки идут точно вместе с голосом и видны и во весь экран.",

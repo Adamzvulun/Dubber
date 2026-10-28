@@ -20,6 +20,8 @@ API
 - GET  /api/changelog                                               → [{version, ru, en}] newest first ("What's new")
 - GET  /api/update                                                  → {current, latest, available, enabled}
 - POST /api/update                                                  → install the newest `main` and restart (update.py)
+- GET  /api/cookies, POST /api/cookies (body: a cookies.txt), DELETE /api/cookies → logins for YouTube, TikTok,
+  Instagram, Facebook (sites.py): per site logged in or not; add (merged per site) / remove the login file
 - GET  /api/clone, POST /api/clone/install                          → the original voice (clone.py): graphics card,
   installed or not, install progress; install it (only with an NVIDIA card of 6 GB+)
 
@@ -55,7 +57,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import __version__, clone, download, eta, languages, pipeline, translate, update
+from . import __version__, clone, download, eta, languages, pipeline, sites, translate, update
 from .config import Settings, load_settings, save_env
 from .download import is_url
 
@@ -126,7 +128,21 @@ _ERRORS: list[tuple[Callable[[str], bool], str, str]] = [
      "уже готовые части сохранятся.",
      "Microsoft's voice service isn't responding right now. Wait a few minutes and press “Try again” — "
      "the finished parts are kept."),
-    (lambda t: "downloaderror" in t or "youtube" in t or "unsupported url" in t,
+    (lambda t: any(w in t for w in ("login required", "log in", "logged-in", "--cookies", "cookies-from-browser",
+                                    "requested content is not available", "not comfortable for some audiences")),
+     "Сайт показывает это видео только после входа в аккаунт. Добавьте вход в «Настройках» → «Вход на сайты» "
+     "и нажмите «Попробовать снова». Если вход уже добавлен — возможно, он устарел: добавьте его заново.",
+     "The site shows this video only to logged-in users. Add your login in Settings → “Site logins” and press "
+     "“Try again”. If it is already there, it may have expired: add it again."),
+    (lambda t: "private" in t and ("video" in t or "post" in t or "account" in t),
+     "Это видео закрыто автором (приватное) — скачать его нельзя.",
+     "This video is private — it can't be downloaded."),
+    (lambda t: "unsupported url" in t,
+     "Видео с этого сайта скачать нельзя. Подходят ссылки YouTube, TikTok, Instagram и Facebook — или выберите "
+     "видеофайл с компьютера.",
+     "Videos from this site can't be downloaded. Links from YouTube, TikTok, Instagram and Facebook work — or choose "
+     "a video file from this computer."),
+    (lambda t: "downloaderror" in t or "youtube" in t,
      "Не удалось скачать видео. Проверьте, что ссылка правильная и интернет работает. "
      "Если ошибка повторяется — запустите установку ещё раз, она обновит загрузчик.",
      "Couldn't download the video. Check that the link is right and the internet works. "
@@ -711,6 +727,40 @@ def create_app(
         settings.claude_key = ""
         save_env(settings.env_file, {"ANTHROPIC_API_KEY": None})
         return settings_view()
+
+    def cookie_state() -> dict:
+        text = sites.read(settings.cookies_file)
+        return {"saved": bool(sites.parse(text)), "sites": sites.summary(text)}
+
+    @app.get("/api/cookies")
+    def get_cookies() -> dict:
+        return cookie_state()
+
+    @app.post("/api/cookies")
+    async def add_cookies(request: Request) -> dict:
+        body = await request.body()
+        if len(body) > sites.MAX_BYTES:
+            raise HTTPException(413, _detail("Файл слишком большой для файла входа.", "Too big for a login file."))
+        try:
+            merged = sites.merge(sites.read(settings.cookies_file), body.decode("utf-8", errors="replace"))
+        except sites.CookieError as exc:
+            raise HTTPException(422, _detail(
+                "В этом файле нет входа на YouTube, TikTok, Instagram или Facebook. Сохраните файл cookies.txt "
+                "расширением, когда открыт нужный сайт и вы вошли в аккаунт (см. шаги выше).",
+                "This file has no login for YouTube, TikTok, Instagram or Facebook. Save cookies.txt with the "
+                "extension while the site is open and you are logged in (see the steps above).")) from exc
+        settings.cookies_file.parent.mkdir(parents=True, exist_ok=True)
+        partial = settings.cookies_file.with_name(settings.cookies_file.name + ".partial")
+        partial.write_text(merged, encoding="utf-8")
+        with contextlib.suppress(OSError):
+            partial.chmod(0o600)  # like a password: readable by this user only (no effect on Windows)
+        partial.replace(settings.cookies_file)
+        return cookie_state()
+
+    @app.delete("/api/cookies")
+    def remove_cookies() -> dict:
+        settings.cookies_file.unlink(missing_ok=True)
+        return cookie_state()
 
     @app.get("/api/clone")
     def get_clone() -> dict:

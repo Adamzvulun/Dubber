@@ -2,6 +2,19 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-28 — Session 7b: TikTok, Instagram, Facebook (v0.9.0)
+- Adam merged PR #13 (0.8.0). Next: dubbing from Facebook/Instagram/TikTok. His choices: logins via a cookies file in
+  Settings; he and his father use Chrome and Edge.
+- `dubber/sites.py` (sites, folder-safe ids, cookies parse/merge/summary incl. JSON exports), `/api/cookies`,
+  Settings panel «Вход на сайты» with a Chrome/Edge guide ("Get cookies.txt LOCALLY"), login/private/unsupported
+  error messages, H.264 preferred for combined formats and HEVC re-encoded (`media.to_h264`, also for uploads),
+  uploader as channel, hero text names the sites (ADR-031).
+- Verified: unit tests (yt-dlp stand-in "downloading" a real HEVC clip → H.264 with sound, nothing left behind;
+  uploaded HEVC .mov converted, original untouched; merge/summary/JSON; API add/merge/reject/Origin/remove; error
+  texts). Chromium on the stub server: add a bad file (message), add Instagram+TikTok (badge «Входов: 2», expiry
+  date), remove; RU/EN, 1280/360 px, dark — fixed a class clash (`.steps` = the job card's steps) found there.
+  Not verified: real TikTok/Instagram/Facebook links (the sandbox can't reach them).
+
 ## 2026-10-28 — Session 7: Windows 11 install audit + on-screen subtitles (v0.8.0)
 - Adam: father's PC has an RTX 3050 (4 GB) — too small for «Оригинал»; he'll try it on his own PC later. He hit "some
   package was missing" installing a few days ago.
