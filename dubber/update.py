@@ -26,7 +26,8 @@ from .config import PROJECT_ROOT
 REPO = "Adamzvulun/Dubber"
 MANIFEST = ".dubber-files"  # program files the last update installed: files a new version dropped get removed
 DEPS_STAMP = ".dubber-deps"  # hash of the pyproject.toml whose components were installed last
-KEEP = {".env", "glossary.txt", "work", "output", "models", ".venv", "install.log", ".git", MANIFEST, DEPS_STAMP}
+KEEP = {".env", "glossary.txt", "work", "output", "models", "ffmpeg", ".venv", "install.log", ".git", MANIFEST,
+        DEPS_STAMP}
 VERSION_FILE = "dubber/__init__.py"
 _VERSION = re.compile(r'^__version__\s*=\s*"([^"]+)"', re.M)
 
