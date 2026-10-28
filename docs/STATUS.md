@@ -3,11 +3,18 @@
 _Last updated: 2026-10-28 (session 7). Update this page at the end of every session._
 
 ## In one paragraph
-Dubber is a local website (FastAPI + hand-built front-end) that turns a YouTube video **or a video file** in **any
-spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
+Dubber is a local website (FastAPI + hand-built front-end) that turns a **YouTube, TikTok, Instagram or Facebook**
+video **or a video file** in **any spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version **0.8.0** on `main` (Windows install fixes — Python 3.15 broke new installs, ADR-029 — and on-screen subtitles, ADR-030); **0.9.0 on the PR from `claude/blissful-bell-14f4au`**: TikTok, Instagram, Facebook links + «Вход на сайты» login file (ADR-031). The repo is **public** and the PCs **update themselves from `main`** at start
-(ADR-024) — merging is shipping. Adam confirmed 0.6.0 arrived on his PC by itself.
+Current version **0.8.0** on `main`; **0.9.0 = open PR #14** (branch `claude/blissful-bell-14f4au`, waiting for Adam's
+review). The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
+shipping. Adam confirmed 0.6.0 arrived on his PC by itself.
+Session 7 (2026-10-28): **0.8.0 (merged, PR #13)** — the Windows install broke for anyone with Python 3.15 (released
+Oct 2026; no onnxruntime build) → launchers use only Python 3.10–3.14, Microsoft C++ runtime installed, no-winget
+fallback, component self-check `dubber/deps.py` at every start (ADR-029); on-screen subtitles: two switches under the
+player (ADR-030). **0.9.0 (PR #14)** — TikTok/Instagram/Facebook links (ADR-031); public videos need **no login**
+thanks to yt-dlp's `curl-cffi` extra (browser impersonation, ADR-032; research in `docs/RESEARCH.md`); a login file
+(«Вход на сайты») only for private posts.
 Session 5 (2026-10-18): one-click Windows start `Start Dubber.cmd` with a desktop shortcut and its own icon (the old
 `?`/no-shortcut bug reproduced and fixed on real Windows in CI, ADR-025); upload a file, several links, playlists
 (ADR-026); grouped library + search, disk space page, "What's new" after updates (ADR-027); 0.6.1: console font
@@ -24,14 +31,17 @@ Earlier: per-dub library entries + self-update (session 4), voice removal and tr
   merged `fix/…`, `feat/…`, `chore/…`, earlier `claude/…`) are history; ignore them. Files Adam shares arrive on
   `uploads/…` branches in `dev-uploads/`.
 - **Code:** `dubber/` (pipeline stages, `app.py` = server/API/jobs/settings, `eta.py` = time left, `config.py` =
-  settings + `save_env`, `separate.py` = voice removal), `dubber/web/` (site; `i18n.js` = all UI text RU/EN),
-  `update.py` = self-update, `changelog.json` = "What's new", `assets/` = logo + Windows icon), `tests/` (131 tests,
-  offline), `tools/` (stub server, 12-language QA, Hebrew voice QA, `make_icon.py`), `Start Dubber.cmd` +
+  settings + `save_env` + local ffmpeg on PATH, `separate.py` = voice removal, `sites.py` = TikTok/Instagram/Facebook +
+  login file, `deps.py` = component self-check run by the launcher, `clone.py` = «Оригинал» voice), `dubber/web/`
+  (site; `i18n.js` = all UI text RU/EN), `update.py` = self-update, `changelog.json` = "What's new", `assets/` = logo +
+  Windows icon), `tests/` (162 tests, offline), `tools/` (stub server, 12-language QA, Hebrew voice QA, `make_icon.py`), `Start Dubber.cmd` +
   `scripts/windows/dubber.ps1` (Windows start: install, shortcut, font, start; `-NoStart`, `-ShortcutOnly`; ADR-025),
   `scripts/` (old `.bat` launchers that now call `dubber.ps1`; macOS/Linux scripts), `.github/workflows/`
-  (`ci.yml`, `windows-install.yml`). Conventions: `CLAUDE.md`.
-- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…027), `DESIGN.md`
-  (design system), `RESEARCH.md` (tools, timing research, 12-language QA), `SKILLS.md`, `README.ru.md` (longer Russian
+  (`ci.yml`; `windows-install.yml` = jobs `install` + `clean-pc` (no winget, Cyrillic folder, too-new venv rebuilt,
+  repair, curl-cffi check); `original-voice-install.yml`). Conventions: `CLAUDE.md`.
+- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…032), `DESIGN.md`
+  (design system), `RESEARCH.md` (tools, timing research, 12-language QA, VoiceStudio/OmniVoice, TikTok/Instagram/Facebook without a
+  login), `SKILLS.md`, `README.ru.md` (longer Russian
   reference). **User guides (RU + HE) are at the top of `README.md`** — they quote UI labels from `i18n.js`. Task cards: `kanban/` (hand-off list: `kanban/next-steps.md`).
 - **Data on a user's PC (git-ignored):** `.env` (settings saved by the website, incl. the Claude key),
   `cookies.txt` (site logins from «Вход на сайты»: only YouTube/TikTok/Instagram/Facebook cookies), `ffmpeg/` (when
@@ -49,7 +59,8 @@ Earlier: per-dub library entries + self-update (session 4), voice removal and tr
   `output/<video-id>/` and still work.
 
 ## How it works (one line per stage — details in the `dubber-pipeline` skill)
-1. Download (yt-dlp + deno) → 2. Transcribe: Whisper `base` detects the language of every speech region, Whisper
+1. Download (yt-dlp + deno + curl-cffi impersonation; YouTube/TikTok/Instagram/Facebook or a file; optional
+`cookies.txt` login file; anything not H.264 re-encoded to H.264) → 2. Transcribe: Whisper `base` detects the language of every speech region, Whisper
 `small` transcribes each language run with word timings (each region gets one of the video's languages,
 `transcribe.video_languages`; runs keep up to 1 s around them) → sentence lines (`segments.split_into_units`) → 3. Translate
 (`translate.Translator`): lines already in the dub language kept; Claude (opt-in key) gets the whole video with time
@@ -60,9 +71,10 @@ offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 original voice; the voice-free background goes under the dub, ducked while it speaks.
 
 ## What works (verified by running it)
-- **0.9.0 (TikTok/Instagram/Facebook, ADR-031):** unit tests with a yt-dlp stand-in (HEVC → H.264, ids, login file
-  merge/summary, API, error texts); the «Вход на сайты» panel in Chromium on the stub server (RU/EN, 1280/360 px,
-  dark). **No real download from these sites yet** — the sandbox can't reach them.
+- **0.9.0 (TikTok/Instagram/Facebook, ADR-031/032, PR #14):** unit tests with a yt-dlp stand-in (HEVC → H.264, ids,
+  login file merge/summary, API, error texts incl. Instagram's anonymous rate limit); yt-dlp lists curl_cffi
+  impersonation targets (test + Windows CI step); the «Вход на сайты» panel in Chromium on the stub server (RU/EN,
+  1280/360 px, dark). **No real download from these sites yet** — the sandbox can't reach them.
 - **0.8.0 (PR #13):** Windows CI: install without winget in a folder with a Russian name, venv from a too-new Python
   rebuilt, Whisper model in a Russian-named folder, component repair; on-screen subtitles in Chromium (RU/EN,
   1280/360 px, dark, Hebrew + English lines, CC-menu sync). Not yet on a real Windows 11 PC.
@@ -104,15 +116,21 @@ original voice; the voice-free background goes under the dub, ducked while it sp
 - Timing (ADR-013), all 12 dub languages (ADR-014/016: 24 real QA dubs), real YouTube runs (session 1).
 
 ## Not verified yet
-Nothing open. **Adam verified on 2026-10-19 every item that was listed here:** 0.6.1 (readable Russian in the window,
-shortcut after the self-update on the second PC), first run on a clean PC, real YouTube playlists and large uploads,
-Claude dubs (Hebrew, English), voice removal on real videos, Google translation, H.264 playback in Chrome/Edge.
+- **Real TikTok / Instagram / Facebook links (0.9.0)** — public ones should work without a login (ADR-032); whether
+  Instagram's anonymous path holds up in practice is the big unknown. If it fails often → offer the in-program login
+  window (RESEARCH option 5, ADR-032 "Next").
+- **0.8.0 on a real Windows 11 PC** (father's): fresh install, the C++ runtime prompt, subtitles with both switches.
+- **«Оригинал» voice on a real NVIDIA card** (needs ≥ 6 GB; Adam's own PC).
+- Earlier items were all verified by Adam on 2026-10-19 (0.6.1, clean-PC install, playlists, uploads, Claude dubs,
+  voice removal, Google, H.264 playback).
 
 ## Next steps (in order)
-0. **0.9.0:** Adam reviews/merges the PR; then dubs a real TikTok, an Instagram Reel (after adding a login file in
-   «Настройки» → «Вход на сайты») and a Facebook video. Also still open: a fresh 0.8.0 install on the father's
-   Windows 11 PC, a dub watched with both subtitle switches. Future (not started): phone version
-   (`kanban/phone-app.md`).
+0. **PR #14 (0.9.0):** Adam reviews/merges (CI must be green: `CI`, `Windows install` incl. the curl-cffi check,
+   `Original voice install`). Then he dubs a real TikTok, an Instagram Reel and a Facebook video **without** a login;
+   if one fails, read the job card's message (login-only → «Вход на сайты»; rate limit → wait an hour). Ask him
+   whether Instagram worked without a login; if not reliably, propose the in-program login window (ADR-032 "Next").
+   Also open: fresh 0.8.0 install on the father's Windows 11 PC, a dub with both subtitle switches.
+   Future (not started): phone version (`kanban/phone-app.md`).
 1. **0.7.0 on an NVIDIA PC (Adam's own; the father's has an RTX 3050 4 GB — below the 6 GB minimum):** then Settings → «Голос оригинала» →
    «Установить» (watch `work/omnivoice-install.log` if it fails: CUDA wheel for his Python, driver too old), dub a
    short video with «Оригинал», listen, and report the time it took (the job card's clock). Tune `BATCH` / steps if slow.
@@ -135,6 +153,8 @@ Claude dubs (Hebrew, English), voice removal on real videos, Google translation,
   `translate.googleapis.com`, `speech.platform.bing.com`. Fonts load from Google Fonts (optional).
 - **TikTok, Instagram and Facebook are unreachable from the sandbox** (network policy; they also block datacenter
   IPs): test with the yt-dlp stand-in in `tests/test_download.py`; real links only on Adam's PC.
+- **Always install/upgrade `yt-dlp[default,curl-cffi]`, never plain `yt-dlp`:** without curl_cffi TikTok and
+  Instagram refuse every download that has no login (ADR-032). `dubber.deps` reports the extra as missing.
 - **YouTube blocks datacenter IPs** ("Sign in to confirm you're not a bot", then 403). For a real YouTube test, Adam
   must provide a fresh `cookies.txt`, stored **outside the repo** and passed via `DUBBER_COOKIES`. Never commit cookies.
   Without it, test with local files (`tools/qa_languages.py` makes multilingual clips with Edge voices).

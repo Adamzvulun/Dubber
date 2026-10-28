@@ -6,19 +6,26 @@ blocked_by: []
 tags: [handoff, next]
 ---
 
-# Next steps (hand-off at the end of session 5)
+# Next steps (hand-off at the end of session 7, 2026-10-28)
 
 Read `docs/STATUS.md` first. Open items, in order:
-1. Adam confirms 0.6.1: readable Russian in the black window (Consolas switch); on the second PC the «Дубляж видео»
-   shortcut with the icon appears by itself after its self-update (`kanban/console-font-and-shortcut.md`).
-2. Adam listens to a Hebrew dub and an English dub with Claude (`kanban/claude-translation.md`); voice removal on a
-   real video.
-3. Unverified: first run on a clean PC (winget), real YouTube playlists, multi-GB uploads, Google end-to-end, H.264
-   in a real browser.
-4. Ideas to offer (not chosen yet): voice speed control; Hebrew spelling fix on the free path; Silero offline TTS;
-   Telegram bot; ElevenLabs (`kanban/nice-to-haves.md`, PLAN M4).
+1. **PR #14 (v0.9.0)** — TikTok/Instagram/Facebook (ADR-031/032). Adam reviews and merges; CI must be green
+   (`CI`, `Windows install` incl. the curl-cffi check, `Original voice install`). If CI is red, fix on the same
+   branch `claude/blissful-bell-14f4au`.
+2. **Adam tests real links without a login:** a public TikTok, an Instagram Reel, a Facebook video. Ask what the
+   job card said for any failure. Login-only/private → «Вход на сайты» (cookies file); "rate limit" → wait an hour.
+   If Instagram needs a login often → propose the in-program login window (`docs/RESEARCH.md` → option 5,
+   ADR-032 "Next") — ask before building.
+3. **0.8.0 on the father's Windows 11 PC:** fresh install (Visual C++ prompt → «Да»), then a dub with both subtitle
+   switches (`kanban/install-and-subtitles.md`).
+4. **«Оригинал» voice** on Adam's own NVIDIA PC (≥ 6 GB; the father's RTX 3050 4 GB is too small)
+   (`kanban/voicestudio-omnivoice.md`).
+5. **Future, not started:** phone version for iPhone/Samsung (`kanban/phone-app.md`) — brainstorm with Adam first.
+6. Ideas to offer, don't build unasked: voice speed control; Hebrew spelling fix on the free path; Silero offline
+   TTS; Telegram bot; ElevenLabs (`kanban/nice-to-haves.md`, PLAN M4).
 
 ## Narrative
 - 2026-10-17: Created at the end of session 1 as the hand-off list. (by @claude)
 - 2026-10-18: Rewritten at the end of session 2. (by @claude)
 - 2026-10-19: Rewritten at the end of session 5 (0.6.1 shipped, README guides RU + HE). (by @claude)
+- 2026-10-28: Rewritten at the end of session 7 (0.8.0 merged; 0.9.0 = PR #14 with TikTok/Instagram/Facebook). (by @claude)

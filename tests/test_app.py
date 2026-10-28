@@ -503,4 +503,7 @@ def test_login_and_site_errors_are_explained():
     assert "Вход на сайты" in app.friendly_error(login)
     assert "Site logins" in app.friendly_error(login, "en")
     assert "приватное" in app.friendly_error(RuntimeError("ERROR: [TikTok] 1: This video is private"))
+    limited = RuntimeError("ERROR: [Instagram] C1: The webpage request was redirected to the login page. You have "
+                           "exceeded the rate-limit for accessing posts anonymously. Use --cookies")
+    assert "Подождите час" in app.friendly_error(limited)
     assert "TikTok" in app.friendly_error(RuntimeError("ERROR: Unsupported URL: https://vimeo.com/1"))

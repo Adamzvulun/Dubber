@@ -120,7 +120,9 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 ### M10 — Future (Adam, 2026-10-28)
 - [ ] Phone version: fully usable on iPhone and Samsung (`kanban/phone-app.md`) — not started
 - [x] Dub videos from Facebook, Instagram, TikTok + «Вход на сайты» login file (v0.9.0, ADR-031, `kanban/more-video-sites.md`)
-- [ ] Adam: dub a real TikTok, Instagram Reel and Facebook video (with a login file for Instagram)
+- [x] Public videos without a login: yt-dlp `curl-cffi` impersonation (v0.9.0, ADR-032)
+- [ ] Adam: dub a real TikTok, Instagram Reel and Facebook video without a login; report what fails
+- [ ] If Instagram often needs a login: in-program login window (Edge own profile + DevTools cookies) — ask Adam first
 
 ### M4 — Nice to have
 - [x] Queue of several links / playlists (v0.6.0)

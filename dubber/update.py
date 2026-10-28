@@ -112,7 +112,8 @@ class Updater:
                     if getattr(done, "returncode", 0):
                         raise UpdateError("installing the new components failed (run install_windows.bat)")
                     (self.root / DEPS_STAMP).write_text(hashlib.sha1(files["pyproject.toml"]).hexdigest())
-                self.run([*pip, "yt-dlp"], cwd=self.root)  # YouTube changes often; a fresh downloader fixes most
+                # YouTube, TikTok, Instagram change often; a fresh downloader (with curl-cffi) fixes most
+                self.run([*pip, "yt-dlp[default,curl-cffi]"], cwd=self.root)
             target = self.root / name
             if _read(target) == content:
                 continue

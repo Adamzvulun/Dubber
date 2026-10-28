@@ -344,7 +344,7 @@ if (-not (Test-Path -LiteralPath $Stamp)) {
     # No pip "build isolation": that hidden step could sit silently for a long time on a slow PC.
     & $VenvPython -m pip install --upgrade --no-build-isolation --log $Log -e $Root
     if ($LASTEXITCODE -ne 0) { Stop-WithError 'Не удалось установить компоненты. Проверьте интернет и запустите «Дубляж» снова.' }
-    & $VenvPython -m pip install --upgrade yt-dlp --log $Log | Out-Null
+    & $VenvPython -m pip install --upgrade 'yt-dlp[default,curl-cffi]' --log $Log | Out-Null
     Set-Content -LiteralPath $Stamp -Value (Get-Date -Format s) -Encoding ASCII
     Say 'Компоненты установлены.'
 }
@@ -378,7 +378,8 @@ if ($LASTEXITCODE -ne 0) {
 $Fresh = Join-Path $Root '.venv\yt-dlp-checked'
 if (-not (Test-Path -LiteralPath $Fresh) -or (Get-Item -LiteralPath $Fresh).LastWriteTime -lt (Get-Date).AddDays(-3)) {
     Say 'Проверяю обновление загрузчика видео…'
-    & $VenvPython -m pip install -q --upgrade --disable-pip-version-check yt-dlp 2>$null
+    # With its extras: curl-cffi (looks like a browser) is what TikTok and Instagram need without a login
+    & $VenvPython -m pip install -q --upgrade --disable-pip-version-check 'yt-dlp[default,curl-cffi]' 2>$null
     if ($LASTEXITCODE -eq 0) { Set-Content -LiteralPath $Fresh -Value (Get-Date -Format s) -Encoding ASCII }
 }
 

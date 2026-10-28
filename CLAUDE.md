@@ -67,6 +67,8 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (needs ffmp
   `dubber/changelog.json` — the page shows them once after the update (a test checks the current version is there).
 - Python **3.10–3.14** only (`$PythonMax` in `dubber.ps1`, `scripts/install.sh`): 3.15 has no onnxruntime build yet
   (ADR-029). Every start runs `python -m dubber.deps` (missing components → reinstall).
+- yt-dlp is always `yt-dlp[default,curl-cffi]` (pyproject, launcher refresh, updater, install.sh): curl-cffi lets
+  TikTok/Instagram download without a login (ADR-032). TikTok/Instagram/Facebook are unreachable from the sandbox.
 - Windows start: `Start Dubber.cmd` → `scripts/windows/dubber.ps1` (UTF-8 **with BOM**; keep Russian text out of
   `.bat`/`.cmd`; shortcuts via IShellLinkW, not WScript.Shell — ADR-025). CI job `windows-install.yml` tests it.
 

@@ -9,7 +9,7 @@ description: How the Dubber dubbing pipeline (any spoken language → 12 dub lan
 
 | # | Stage | Module | Cache file in `work/<video-id>/` |
 |---|---|---|---|
-| 1 | Download (yt-dlp or local copy) | `download.py` | `source.mp4` |
+| 1 | Download (yt-dlp: YouTube/TikTok/Instagram/Facebook, or a local copy; non-H.264 re-encoded) | `download.py`, `sites.py` | `source.mp4` |
 | 2 | Transcribe any language: language per stretch of speech (`language_runs`), each run in its own language, word timestamps → sentence lines (`split_into_units`) | `transcribe.py`, `segments.py` | `audio_16k.wav`, `segments_src_v3.json` (with `lang` per line), `speech_info.json` |
 | 3 | Translate → target language: one-language batches, Google (retries) / Claude, NLLB-200 offline backup, quality gate (`Translator`) | `translate.py` | `segments_<lang>_v3.json` (+ `.translator`) |
 | 4 | TTS twice: natural speed (measure) → `timing.plan_rates` → planned Edge `rate` | `tts.py`, `timing.py` | `clips_<voice>/00000_<texthash>[_+35].mp3` (per voice) |
@@ -33,8 +33,13 @@ DUBBER_WHISPER_MODEL=tiny  DUBBER_TRANSLATOR=google  DUBBER_VOICE=ru-RU-Svetlana
 ```
 
 ## Debugging checklist
-- **Download fails (403 / "confirm you're not a bot")** → `pip install -U yt-dlp` first; then see the
-  `youtube-downloader` skill references (cookies, PO tokens). Cloud/datacenter IPs are often blocked.
+- **Download fails (403 / "confirm you're not a bot")** → `pip install -U "yt-dlp[default,curl-cffi]"` first (never
+  plain `yt-dlp`: without curl-cffi TikTok/Instagram refuse logged-out downloads, ADR-032); then see the
+  `youtube-downloader` skill references (cookies, PO tokens). Cloud/datacenter IPs are often blocked; TikTok,
+  Instagram and Facebook are not reachable from the sandbox at all.
+- **TikTok/Instagram/Facebook "login required" / private / rate limit** → public posts need no login; private ones need
+  the login file from Settings → «Вход на сайты» (`cookies.txt`, `sites.py`, ADR-031). Ids: `sites.video_id`
+  (`tiktok-<id>`; YouTube ids unchanged).
 - **Dub doesn't follow the speaker (rushing / dragging / late)** → read `output/<id>/timing.json`: `median_rate`
   (voice pace), `late_lines`/`max_delay` (lines pushed back), `stretched_lines` (needed atempo). Pace rules live in
   `timing.py` (BAND, STEP, BREATH); `DUBBER_MAX_SPEEDUP` caps the voice rate. Edge clips carry ~0.25 s + ~0.9 s of

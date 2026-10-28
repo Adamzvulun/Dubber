@@ -17,3 +17,4 @@ browser), short vertical videos need the player/thumbnail layout checked, and th
 ## Narrative
 - 2026-10-28: Card created at Adam's request as future work. (by @claude)
 - 2026-10-28: Built (v0.9.0, ADR-031): any of the three links works like a YouTube one; logins via a cookies file in Settings → «Вход на сайты» (Adam's choice; Chrome/Edge guide); HEVC → H.264. Waiting for Adam to try real links. (by @claude)
+- 2026-10-28: Adam: the extension + file is too much work — find a way without a login. Found: yt-dlp needs curl-cffi (browser impersonation) for logged-out TikTok/Instagram; added `yt-dlp[default,curl-cffi]` everywhere (ADR-032, research in RESEARCH.md). Login file stays only for private posts. Same PR #14. (by @claude)

@@ -128,6 +128,11 @@ _ERRORS: list[tuple[Callable[[str], bool], str, str]] = [
      "уже готовые части сохранятся.",
      "Microsoft's voice service isn't responding right now. Wait a few minutes and press “Try again” — "
      "the finished parts are kept."),
+    (lambda t: "rate-limit for accessing posts anonymously" in t or "rate-limit reached" in t,
+     "Instagram временно не даёт скачивать без входа (слишком много видео подряд с этого компьютера). Подождите "
+     "час и нажмите «Попробовать снова» — или добавьте вход в «Настройках» → «Вход на сайты».",
+     "Instagram is temporarily refusing downloads without a login (too many videos in a row from this computer). "
+     "Wait an hour and press “Try again” — or add a login in Settings → “Site logins”."),
     (lambda t: any(w in t for w in ("login required", "log in", "logged-in", "--cookies", "cookies-from-browser",
                                     "requested content is not available", "not comfortable for some audiences")),
      "Сайт показывает это видео только после входа в аккаунт. Добавьте вход в «Настройках» → «Вход на сайты» "

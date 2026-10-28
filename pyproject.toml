@@ -9,7 +9,9 @@ description = "Paste a YouTube link, get the video dubbed into Russian (plus sub
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "yt-dlp[default]>=2025.10.1",
+    # curl-cffi: requests that look like a real browser's. Without it TikTok and Instagram refuse every download
+    # that has no login (yt-dlp issue 17074; ADR-032)
+    "yt-dlp[default,curl-cffi]>=2026.10.21",
     "deno>=2.0",  # JavaScript runtime yt-dlp needs for YouTube
     "faster-whisper>=1.1",
     "edge-tts>=7.0",

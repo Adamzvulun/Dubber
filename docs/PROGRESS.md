@@ -2,6 +2,23 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-28 — Session 7c: TikTok, Instagram, Facebook without a login (still v0.9.0, PR #14)
+- Adam: the extension + cookies file is too much work for the user — find a way without a login; then make the docs
+  ready for the next session.
+- Research (`docs/RESEARCH.md` → "TikTok, Instagram, Facebook without a login"): yt-dlp's Instagram extractor sends
+  its logged-out GraphQL query only when browser impersonation (curl_cffi) is available, and TikTok answers a
+  bot-challenge page without it; a yt-dlp maintainer confirmed it in issue 17074. Rejected: third-party download
+  sites, public/self-hosted cobalt, reading Chrome/Edge cookies (app-bound encryption). Kept for later: an
+  in-program login window (Edge with its own profile + DevTools protocol).
+- Built (ADR-032): dependency `yt-dlp[default,curl-cffi]` everywhere yt-dlp is installed or refreshed;
+  `dubber.deps` also checks the extras' packages (PCs from before get curl_cffi on the next start); message for
+  Instagram's anonymous rate limit; «Вход на сайты» text: usually no login needed, guide folded under "if a video
+  won't download"; guides RU/HE + README.ru; Windows CI checks yt-dlp lists curl_cffi targets.
+- Verified here: curl_cffi wheels for Windows 3.10–3.14; `yt-dlp --list-impersonate-targets` shows curl_cffi;
+  162 tests pass. Not verified: live downloads (sites unreachable from the sandbox).
+- Hand-off docs brought up to date: STATUS (state, not-verified list, next steps, gotchas), `kanban/next-steps.md`
+  rewritten, CLAUDE.md + `dubber-pipeline` skill (curl-cffi rule, sites).
+
 ## 2026-10-28 — Session 7b: TikTok, Instagram, Facebook (v0.9.0)
 - Adam merged PR #13 (0.8.0). Next: dubbing from Facebook/Instagram/TikTok. His choices: logins via a cookies file in
   Settings; he and his father use Chrome and Edge.

@@ -126,6 +126,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "components missing or not loading" }
           .venv\Scripts\python.exe -c "import sys; print(sys.version); assert (3, 10) <= sys.version_info[:2] <= (3, 14)"
           if ($LASTEXITCODE -ne 0) { throw "the program's Python is not a supported version" }
+          # curl-cffi (yt-dlp looks like a browser): TikTok and Instagram refuse downloads without a login otherwise
+          $targets = .venv\Scripts\python.exe -m yt_dlp --list-impersonate-targets 2>&1 | Out-String
+          $targets
+          if ($targets -notmatch 'curl_cffi') { throw "yt-dlp has no browser impersonation (curl-cffi missing)" }
       - name: Whisper reads its model from a folder with a Russian name; ffmpeg found without PATH
         shell: powershell
         run: |

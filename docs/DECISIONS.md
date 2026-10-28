@@ -369,3 +369,22 @@ Newest at the bottom. Format: context → decision → consequences.
   `<site>-<id>` or `<site>-<sha1>`; the channel falls back to the uploader's name.
 - **Not verified here:** real TikTok/Instagram/Facebook downloads — the sandbox can't reach these sites (network
   policy; they also block datacenter IPs). Covered by tests with a yt-dlp stand-in; Adam tests real links.
+
+## ADR-032 — No login for public TikTok/Instagram/Facebook videos: yt-dlp with curl-cffi (2026-10-28)
+- **Context:** Adam: installing an extension and uploading a cookies file (ADR-031) is too much for the user — find a
+  way without a login. Research: `docs/RESEARCH.md` → "TikTok, Instagram, Facebook without a login".
+- **Decision:** depend on `yt-dlp[default,curl-cffi]`. With curl_cffi yt-dlp's requests look like a real browser's:
+  TikTok stops answering with a bot-challenge page, and the Instagram extractor runs its logged-out GraphQL query
+  (it is skipped without impersonation, which is why public reels failed). Public videos of all three sites then
+  need no login. The launcher's 3-day refresh, the updater and `scripts/install.sh` upgrade `yt-dlp[default,curl-cffi]`
+  (a plain `pip install -U yt-dlp` would not install the extra), and `dubber.deps` checks the extras' packages too,
+  so PCs that installed before 0.9.0 get curl_cffi on their next start. The «Вход на сайты» panel stays as the
+  fallback for private/followers-only posts and Instagram's anonymous rate limit (new message: wait an hour or add
+  a login); its text now says that usually no login is needed and the guide is folded under "if a video won't
+  download".
+- **Rejected:** third-party download sites / public cobalt instances (privacy, terms, bot checks), self-hosted cobalt
+  (Docker), reading Chrome/Edge cookies (app-bound encryption).
+- **Next, if Adam finds Instagram still needs a login too often:** an in-program login window — Edge with its own
+  profile folder + DevTools protocol to read the cookies (RESEARCH, option 5). Not built yet; ask Adam first.
+- **Not verified live:** the sandbox can't reach the sites. Verified: curl_cffi installs (Windows wheels 3.10–3.14),
+  yt-dlp lists curl_cffi impersonation targets (unit test + Windows CI step).
