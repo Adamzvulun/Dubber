@@ -15,3 +15,6 @@ install.log
 .dubber-files
 .dubber-deps
 ffmpeg/
+cloudflared/
+cloud/worker/public/
+cloud/worker/node_modules/
