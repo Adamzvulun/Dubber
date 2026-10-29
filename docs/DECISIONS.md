@@ -480,3 +480,26 @@ Newest at the bottom. Format: context → decision → consequences.
     the dub instead of going one line at a time. The program window says how many lines go at once.
   - Not done (ask first): fewer generation steps (16 instead of 32 ≈ 2× faster; on CPU it garbled a Russian word).
 - **Not verified:** on the real card — how the floor sounds, and the new speed. Adam re-dubs the same video.
+
+## ADR-037 — «Оригинал» listens to itself; names in the dub language's letters (2026-10-29)
+- **Context:** after 0.10.3 Adam: "a lot better, but sentences are still cut off a lot; some words are left in
+  English, or the dub says the English word in the copied voice". Measured (RESEARCH "how fast can a line be asked
+  for"): OmniVoice garbles some lines even at −7% of its own length while others hold at 8 syllables/s — slips are
+  word-dependent and partly random. Separately, the Claude prompt said "keep names, product names, code and acronyms
+  as in the original", so Russian lines carried Latin words (Kay, MIB) that every voice reads in English.
+- **Decision:**
+  - The copied voice is hurried at most `clone.MAX_RATE` = 1.25× (Edge keeps the 1.6× cap); the 7-syllables/s floor
+    stays.
+  - Listen-back check: Whisper (`transcribe.reader`, same model as the transcription, on the card with the processor
+    fallback) reads every new clip; `clone.heard_share` (words heard, and lowered by words heard that aren't in the
+    text, e.g. English in the copied voice) < 0.8 → spoken again, up to `clone.TRIES` = 3, the last at
+    the voice's own pace; the best try is kept. `clips_original_<lang>/check.json` keeps what was heard per line
+    (for the next diagnosis); the program window says how many lines were redone / stay unclear.
+  - Claude prompt v3: every word in the dub language's writing system (names by their established form or spelled
+    as pronounced; Russian note: FBI → ФБР, Kay → Кей). Cached Claude translations are redone once.
+- **Cost:** Whisper `small` on the card reads a short clip in well under a second; a 5-min video's ~110 lines add
+  roughly a minute plus the redone lines.
+- **Verified:** real OmniVoice + real Whisper (`small`, CPU) through `clone.synthesize`, 3 lines from an English
+  reference: one line unclear on its first try, spoken again, all 3 heard (`check.json`), the window lines printed.
+- **Not verified:** on Adam's card and his video. Not done: two voices at once (needs speakers — proposal in STATUS).
+

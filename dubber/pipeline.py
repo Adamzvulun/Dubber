@@ -303,9 +303,11 @@ def run(
     clips: list[Path | None] = []
     if use_clone:
         try:
+            # Whisper listens to every new line and garbled ones are spoken again (clone.TRIES, ADR-037)
+            listen = {} if cloner else {"listen": transcribe.reader(settings.whisper_model, settings.whisper_device)}
             clips, rates = (cloner or clone.synthesize)(
                 segments, vocals_wav, target.code, work / f"clips_{voice}_{target.code}", settings.max_speedup,
-                progress=report)
+                progress=report, **listen)
         except Exception:
             # e.g. the graphics card's driver is too old: the Edge voice instead, and the watch page says so.
             # (A cancelled job raises again from the Edge voice's first progress report.)

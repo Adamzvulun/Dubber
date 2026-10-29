@@ -2,6 +2,17 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-29 — Session 9b: «Оригинал» listens to itself; names in Russian letters (v0.10.4, ADR-037)
+- Adam merged 0.10.3 (PR #18): "a lot better", but sentences still cut off, some words left in English or said as
+  the English word in the copied voice; asked for two dubbed voices at once when two people talk.
+- Found: the Claude prompt kept names/acronyms "as in the original" (Latin letters → read in English). Measured the
+  real OmniVoice on CPU (RESEARCH "how fast can a line be asked for"): one line garbled at −7% of its own length while
+  others held at 8 syllables/s — slips are word-dependent and random, so a speed limit alone can't stop them.
+- Built: prompt v3 (every word in the dub language's letters), `clone.MAX_RATE` 1.25, the listen-back check
+  (`transcribe.reader` + `clone.heard_share`, up to 3 tries, the last at the voice's own pace, `check.json`).
+- Verified: 205 tests; the real OmniVoice + real Whisper listener end to end on CPU (see ADR-037). Not built: two
+  voices at once — proposal (speaker grouping) waiting for Adam.
+
 ## 2026-10-29 — Session 9: «Оригинал» swallowed words, card at 50% (v0.10.3, ADR-036)
 - PR #17 (0.10.2) merged. Adam on the RTX 5060 Ti: the voice copy works and runs on the card (~50% load); but no
   background music, and sentences "swallowed or warped"; asked whether Claude Opus causes it (no — it only

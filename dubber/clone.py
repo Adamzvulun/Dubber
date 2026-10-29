@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 import logging
 import os
 import re
@@ -25,6 +26,7 @@ import threading
 import time
 import urllib.parse
 from collections.abc import Callable
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Protocol
 
@@ -53,6 +55,13 @@ BATCH = 4  # lines per model call on a 6-8 GB card (batch_for): several at once 
 # (Adam's dub, 2026-10-29: its own guess was ~0.15 s for whole words, and crowded stretches were planned 1.6x fast).
 MAX_SYLLABLES_PER_SECOND = 7.0  # fast but clear speech
 LINE_EDGES = 0.2  # seconds a line needs beyond its syllables (onset and release)
+# Measured on the real model (docs/RESEARCH.md, session 9): at its own pace every test line came out whole, but asked
+# for only 7% less time one line was garbled ("Кей, ты видел…" -> "КТ-Виддл. Стон…") — the model samples, so slips
+# are partly random. So the copied voice is hurried less than Edge's, and every new clip is listened to (Whisper):
+MAX_RATE = 1.25  # at most this much faster than the voice's own pace
+TRIES = 3  # a line whose words can't be heard is spoken again; the last try at the voice's own pace
+HEARD_ENOUGH = 0.8  # share of a line's words the listener must hear
+SAME_WORD = 0.85  # similarity at which a heard word counts as the written one (Whisper slips on lone short words)
 # The install's progress bar (Installer.progress): each step's share of the whole and how many bytes it downloads.
 STEP_SHARES = {"torch": 0.5, "omnivoice": 0.12, "model": 0.38}
 STEP_BYTES = {"torch": 3.4e9, "omnivoice": 0.45e9, "model": 3_267_470_260}  # model: k2-fsa/OmniVoice on Hugging Face
@@ -93,6 +102,39 @@ def syllables(text: str) -> int:
 def min_seconds(text: str) -> float:
     """The shortest time a line can be said in and still be understood."""
     return LINE_EDGES + syllables(text) / MAX_SYLLABLES_PER_SECOND
+
+
+def _words(text: str) -> list[str]:
+    words = []
+    for word in re.findall(r"[^\W\d_]+", text.lower().replace("ё", "е")):
+        words += list(word) if _SYLLABLE_SIGNS.fullmatch(word[0]) else [word]  # no spaces in Chinese/Japanese
+    return words
+
+
+def heard_share(text: str, heard: str) -> float:
+    """How well a listener's `heard` matches `text`, forgiving small slips: the share of the words that were heard,
+    or lower when much was heard that isn't in the text (e.g. an English word in the copied voice)."""
+    want, got = _words(text), _words(heard)
+    if not want:
+        return 1.0
+    heard_words, found = len(got), 0
+    for word in want:
+        best = max(got, key=lambda g: SequenceMatcher(None, word, g).ratio(), default=None)
+        if best is not None and SequenceMatcher(None, word, best).ratio() >= SAME_WORD:
+            found += 1
+            got.remove(best)
+    return min(found / len(want), found / heard_words if heard_words else 0.0)
+
+
+CHECK_FILE = "check.json"
+
+
+def check_report(clips_dir: Path) -> dict:
+    """What the listen-back check heard per line ({"<line>": {"heard", "share", "tries"}})."""
+    try:
+        return json.loads((clips_dir / CHECK_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
 
 
 def batch_for(vram_gb: float) -> int:
@@ -413,13 +455,16 @@ def synthesize(
     engine: Engine | None = None,
     progress: Callable[[float], None] | None = None,
     batch: int | None = None,
+    listen: Callable[[Path, str], str] | None = None,
 ) -> tuple[list[Path | None], list[float]]:
     """Speak every line in the voice of whoever said it; returns one clip per line (None = nothing to say) and the
     speaking-rate factors asked for (for timing.json).
 
-    Like the Edge voice, the pace follows the speaker (timing.plan_rates), but instead of asking for a rate the model
-    is told each line's length — never less than `min_seconds` (a line that then runs long pushes the next one back,
-    align.py). Lines of similar length share a model call (`batch` lines, default: what the card's memory allows).
+    Like the Edge voice, the pace follows the speaker (timing.plan_rates, at most MAX_RATE), but instead of asking for
+    a rate the model is told each line's length — never less than `min_seconds` (a line that then runs long pushes the
+    next one back, align.py). Lines of similar length share a model call (`batch` lines, default: what the card's
+    memory allows). `listen(clip, lang)` -> the words heard: a line whose words aren't heard is spoken again (TRIES,
+    the last at the voice's own pace) and the best try kept; `check_report` says what was heard.
     Finished clips are reused; `progress` may raise to cancel between model calls.
     """
     clips_dir.mkdir(parents=True, exist_ok=True)
@@ -446,7 +491,7 @@ def synthesize(
         natural: list[float | None] = [None] * len(segments)
         for i in todo:
             natural[i] = engine.natural_seconds(segments[i].ru, prompt_for(i))
-        rates = timing.plan_rates(segments, natural, max_speedup)
+        rates = timing.plan_rates(segments, natural, min(max_speedup, MAX_RATE))
 
         clips: list[Path | None] = [None] * len(segments)
         missing = []
@@ -466,27 +511,65 @@ def synthesize(
         if missing:
             print(f"Голос оригинала: {len(missing)} строк, {where or 'устройство не известно'}, по {batch} за раз",
                   flush=True)
-        began, done = time.monotonic(), 0
-        while done < len(missing):
-            group = missing[done:done + batch]
-            tick = time.monotonic()
-            texts, group_prompts = [segments[i].ru for i, _ in group], [prompt_for(i) for i, _ in group]
-            try:
-                audios = engine.speak(texts, group_prompts, [s for _, s in group], lang)
-            except Exception:
-                if len(group) == 1:
-                    raise
-                # e.g. the card ran out of memory with several long lines at once: half as many from now on
-                batch = max(1, len(group) // 2)
-                log.warning("The original voice: %d lines at once failed; trying %d", len(group), batch)
-                continue
-            for (i, _), audio in zip(group, audios, strict=True):
-                write_wav(_level(audio), clips[i], SAMPLE_RATE)
-            done += len(group)
-            print(f"Голос оригинала: {done}/{len(missing)} строк, {time.monotonic() - tick:.1f} с на группу, "
-                  f"всего {time.monotonic() - began:.0f} с", flush=True)
-            if progress:
-                progress(done / len(missing))
+        report = check_report(clips_dir)
+        best: dict[int, float] = {}
+        began = time.monotonic()
+        total, done = len(missing), 0
+        for attempt in range(1, (TRIES if listen else 1) + 1):
+            if attempt == TRIES:  # the last try: at the voice's own pace
+                missing = [(i, round(max(s, natural[i], min_seconds(segments[i].ru)), 2)) for i, s in missing]
+            again = []
+            n = 0
+            while n < len(missing):
+                group = missing[n:n + batch]
+                tick = time.monotonic()
+                texts, group_prompts = [segments[i].ru for i, _ in group], [prompt_for(i) for i, _ in group]
+                try:
+                    audios = engine.speak(texts, group_prompts, [s for _, s in group], lang)
+                except Exception:
+                    if len(group) == 1:
+                        raise
+                    # e.g. the card ran out of memory with several long lines at once: half as many from now on
+                    batch = max(1, len(group) // 2)
+                    log.warning("The original voice: %d lines at once failed; trying %d", len(group), batch)
+                    continue
+                for (i, seconds), audio in zip(group, audios, strict=True):
+                    if listen is None:
+                        write_wav(_level(audio), clips[i], SAMPLE_RATE)
+                        continue
+                    trial = clips[i].with_suffix(".try.wav")
+                    write_wav(_level(audio), trial, SAMPLE_RATE)
+                    heard = listen(trial, lang)
+                    share = heard_share(segments[i].ru, heard)
+                    if share > best.get(i, -1.0):
+                        best[i] = share
+                        trial.replace(clips[i])
+                        rates[i] = natural[i] / seconds
+                        report[str(i)] = {"text": segments[i].ru, "heard": heard, "share": round(share, 2),
+                                          "tries": attempt}
+                    else:
+                        trial.unlink()
+                        report[str(i)]["tries"] = attempt
+                    if share < HEARD_ENOUGH and attempt < TRIES:
+                        again.append((i, seconds))
+                n += len(group)
+                if attempt == 1:
+                    done += len(group)
+                    print(f"Голос оригинала: {done}/{total} строк, {time.monotonic() - tick:.1f} с на группу, "
+                          f"всего {time.monotonic() - began:.0f} с", flush=True)
+                if progress:
+                    progress(min(done / total, 1.0) * (0.85 if listen else 1.0) + (0.05 * (attempt - 1)))
+            if listen:
+                (clips_dir / CHECK_FILE).write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+            if again:
+                print(f"Голос оригинала: {len(again)} строк звучат неразборчиво — озвучиваю ещё раз "
+                      f"(попытка {attempt + 1} из {TRIES})", flush=True)
+            missing = again
+        if listen and best:
+            unclear = sum(share < HEARD_ENOUGH for share in best.values())
+            print(f"Голос оригинала: проверено на слух {len(best)} строк, неразборчиво осталось {unclear}", flush=True)
+        if progress and total:
+            progress(1.0)
         return clips, rates
     finally:
         voice.close()

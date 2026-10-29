@@ -17,3 +17,5 @@ voice studio install, whether the background switches should be on with «Ори
 - 2026-10-29: PR #17 open. Next: Adam's numbers from the RTX 5060 Ti (see STATUS "Next steps" 0). (by @claude)
 - 2026-10-29: 0.10.2 merged; Adam: card used (~50%), words swallowed/warped. 0.10.3 (ADR-036): speed floor per
   line, bigger length-sorted groups. Next: Adam re-dubs the same video and reports. (by @claude)
+- 2026-10-29: 0.10.3 merged; Adam: better, still cut off + English words. 0.10.4 (ADR-037): listen-back
+  check, ≤1.25×, Claude prompt v3. Next: his re-dub + `check.json`. (by @claude)

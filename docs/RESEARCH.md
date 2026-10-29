@@ -341,6 +341,28 @@ projects fixing TikTok with curl_cffi (e.g. github.com/hypit-ai/hypit/issues/381
 developer.chrome.com/blog/remote-debugging-port, cobalt API docs (github.com/imputnet/cobalt/blob/main/docs/api.md),
 yt-dlp issue 7271 / 10927 (Chrome cookies on Windows).
 
+## OmniVoice: how fast can a line be asked for? — measured 2026-10-29 (ADR-036, ADR-037)
+Adam's «Оригинал» dubs: sentences "swallowed or warped", then (0.10.3, floor 7 syllables/s) "still cut off a lot".
+Real `omnivoice==0.2.1` on CPU (32 steps), an English Edge reference (en-US-AndrewNeural, 6 s), six Russian lines,
+each at its own length and at 5/6/7/8 syllables per second (+0.2 s); Whisper `small` reads every clip back
+(`tools`-style script kept in the session scratchpad, not in the repo).
+
+| line (syllables) | own length | 5/s | 6/s | 7/s | 8/s |
+|---|---|---|---|---|---|
+| Прекрасно. (3) | "Рекрасно" (Whisper) | ok | ok | ok | ok |
+| Ладно, слушай внимательно. (8) | ok | ok | ok | ok | ok |
+| Мы не знаем, откуда они прилетели. (13) | ok | ok | ok | ok | ok |
+| Кей, ты видел, что он сделал с машиной? (11) | ok | ok | **"КТ-Виддл. Стон…"** | **"…видеостон…"** | **"Кейт и Ведерстон…"** |
+| Никому ни слова об этом, понятно? (12) | ok | ok | ok | ok | ok |
+| У тебя есть пять секунд… я стреляю. (19) | ok | ok | ok | ok | ok |
+
+- The model's own estimate for "Кей…" was 2.18 s; asked for 2.03 s (−7%) it already garbled the middle. Other lines
+  held at 8/s. Slips depend on the words (and the model samples), so **no speed limit alone prevents them**.
+- `duration=` is followed within ~0.2 s (its 0.1 s padding on each side). Whisper on a lone word can drop its first
+  sound ("Рекрасно"), so the listen-back match forgives small slips (`clone.SAME_WORD` = 0.85 similarity).
+- Decision (ADR-037): hurry the copied voice at most 1.25× and listen to every clip; garbled lines are spoken again,
+  the last try at the voice's own pace.
+
 ## Phone version and NVIDIA libraries — notes 2026-10-28/29 (ADR-033, ADR-034, ADR-035)
 - **Reaching a home PC from a phone, no accounts for users:** Tailscale works anywhere but needs an app + sign-in on
   every PC and phone (rejected: Adam wants one click). Cloudflare **quick tunnels** (`cloudflared tunnel --url …`)
