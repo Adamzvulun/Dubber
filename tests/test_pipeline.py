@@ -62,7 +62,7 @@ def test_end_to_end_with_local_file(tmp_path, sample_video):
 
     # Second run reuses the cache: no stage needs its backend again.
     again = pipeline.run(str(sample_video), settings, translator=None, synth=None, transcriber=None)
-    assert again.video == result.video
+    assert again.video.exists() and again.id != result.id and result.video.exists()  # a new entry, the old one stays
 
 
 def test_without_background_russian_voice_only(tmp_path, sample_video):
@@ -349,17 +349,22 @@ def test_each_dub_of_a_video_keeps_its_own_library_entry(tmp_path, sample_video)
         meta = json.loads((result.folder / "meta.json").read_text(encoding="utf-8"))
         assert meta["id"] == result.id and meta["video_id"] == ru.video_id and meta["target_lang"] == lang
         assert result.video.exists() and result.folder.name == result.id
-    assert dub().id == ru.id  # the same choices again replace that dub
-    assert sorted(p.name for p in (tmp_path / "out").iterdir()) == sorted([ru.id, en.id])
+    again = dub()  # the same choices again: a new library entry, the earlier dub stays (Adam, 2026-10-29)
+    assert again.id != ru.id and again.id.startswith(ru.id.rsplit("-", 2)[0])
+    assert sorted(p.name for p in (tmp_path / "out").iterdir()) == sorted([ru.id, en.id, again.id])
+    created = json.loads((again.folder / "meta.json").read_text(encoding="utf-8"))["created"]
+    assert len(created) == len("2026-10-29T22:41:47")  # the exact time of the dub, to the second
 
 
 def test_dub_id_is_a_safe_name_that_changes_with_every_choice():
     import re
 
-    base = dict(video_id="dQw4w9WgXcQ", lang="ru", voice="ru-RU-DmitryNeural", background=True, remove_voice=False)
+    base = dict(video_id="dQw4w9WgXcQ", lang="ru", voice="ru-RU-DmitryNeural", background=True, remove_voice=False,
+                when="20261029-224147")
     one = pipeline.dub_id(**base)
-    assert one == pipeline.dub_id(**base) and one.startswith("dQw4w9WgXcQ--ru-")
-    assert re.fullmatch(r"[A-Za-z0-9_-]{1,64}", pipeline.dub_id(**{**base, "video_id": "local-0123456789ab"}))
+    assert one == pipeline.dub_id(**base) and one.startswith("dQw4w9WgXcQ--ru-") and one.endswith("-20261029-224147")
+    assert pipeline.dub_id(**{**base, "when": "20261029-224148"}) != one  # every dub its own entry
+    assert re.fullmatch(r"[A-Za-z0-9_-]{1,96}", pipeline.dub_id(**{**base, "video_id": "local-0123456789ab"}))
     changed = [dict(lang="en"), dict(voice="ru-RU-SvetlanaNeural"), dict(background=False), dict(remove_voice=True)]
     assert len({one, *(pipeline.dub_id(**{**base, **c}) for c in changed)}) == 5
 
@@ -370,8 +375,9 @@ def test_dub_id_of_an_unusual_video_id_is_still_a_safe_name():
 
     for vid in ("a" * 70, "lecture.final v2", "видео", "x/../y"):
         name = pipeline.dub_id(vid, "ru", "ru-RU-DmitryNeural", True, False)
-        assert re.fullmatch(r"[A-Za-z0-9_-]{1,64}", name), name
-    assert pipeline.dub_id("a" * 70, "ru", "v", True, False) != pipeline.dub_id("a" * 71, "ru", "v", True, False)
+        assert re.fullmatch(r"[A-Za-z0-9_-]{1,96}", name) and len(name) <= 96, name
+    assert pipeline.dub_id("a" * 70, "ru", "v", True, False, when="1") != pipeline.dub_id("a" * 71, "ru", "v", True,
+                                                                                         False, when="1")
 
 
 def stub_separator_with_vocals(calls):

@@ -42,12 +42,13 @@ def mux(
 
     if original_has_audio and background and background_audio:
         # The voice-free soundtrack keeps its music and effects, so it can be much louder than the original;
-        # sidechaincompress ducks it (about -10 dB) whenever the dubbed voice is speaking.
+        # sidechaincompress ducks it (about -8 dB) whenever the dubbed voice is speaking — easing down and back up
+        # (a 20-ms drop made every line start with a jump in the music: "harsh on the ear", Adam 2026-10-29).
         args += [
             "-filter_complex",
             "[1:a]aresample=44100,aformat=channel_layouts=stereo,apad,asplit=2[fg][key];"
             f"[2:a]aresample=44100,aformat=channel_layouts=stereo,volume={background_volume}[bg];"
-            "[bg][key]sidechaincompress=threshold=0.02:ratio=6:attack=20:release=500[ducked];"
+            "[bg][key]sidechaincompress=threshold=0.02:ratio=4:attack=80:release=800[ducked];"
             "[ducked][fg]amix=inputs=2:duration=first:normalize=0[dub]",
             "-map", "0:v:0", "-map", "[dub]",
         ]

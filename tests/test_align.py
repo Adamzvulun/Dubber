@@ -50,3 +50,21 @@ def test_silence_around_a_clip_is_trimmed(tmp_path, tone):
     assert abs(duration(padded) - 2.15) < 0.05
     assert abs(speech_seconds(padded) - 1.06) < 0.03  # 1 s of speech + 2 x 0.03 s pad
     assert len(trim_silence(np.zeros(100, dtype=np.float32))) == 0
+
+
+def test_lines_fade_in_and_out_instead_of_starting_and_stopping_hard(tmp_path, tone):
+    """Adam, 2026-10-29: "very rough chops between sentences, harsh on the ear"."""
+    import numpy as np
+
+    from dubber.align import FADE_IN, FADE_OUT
+
+    segs = [Segment(1.0, 2.0, "a", "а"), Segment(2.6, 3.0, "b", "б")]
+    clips = [tone(tmp_path / "0.wav", 1.0), tone(tmp_path / "1.wav", 0.3)]
+    report = []
+    audio = decode_audio(build_track(segs, clips, 4.0, tmp_path / "t.wav", report=report), SAMPLE_RATE)
+    level = lambda a, b: float(np.abs(audio[int(a * SAMPLE_RATE):int(b * SAMPLE_RATE)]).max())  # noqa: E731
+    start, end = 1.0, 1.0 + report[0]["spoken"]
+    assert level(start, start + 0.004) < 0.3 * level(start + FADE_IN + 0.01, start + 0.3)  # rises, no click
+    assert level(end - 0.01, end + 0.2) < 0.5 * level(start + 0.3, start + 0.6)  # dies away
+    assert report[1]["delay"] == 0.0  # the softer tail never pushes the next line back
+    assert FADE_OUT >= 0.05

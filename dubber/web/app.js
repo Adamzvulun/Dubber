@@ -77,9 +77,11 @@ function clock(seconds) {
   return (h ? `${h}:` : "") + `${mm}:${String(s).padStart(2, "0")}`;
 }
 
+/** When a dub was made, to the minute ("29 октября 2026 г., 22:41"): every dub is its own entry (Adam, 2026-10-29). */
 function dateLabel(iso) {
   if (!iso) return "";
-  return new Date(iso).toLocaleDateString(uiLang === "ru" ? "ru-RU" : "en-GB", { day: "numeric", month: "long", year: "numeric" })
+  return new Date(iso).toLocaleString(uiLang === "ru" ? "ru-RU" : "en-GB",
+    { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })
     .replace(/ /g, "\u00a0"); // one unit: "г." never wraps onto its own line
 }
 
@@ -180,7 +182,9 @@ function card(dubs) {
     $(".card__meta", node).textContent = [video.channel, t("card.dubs", dubs.length), dateLabel(video.created)]
       .filter(Boolean).join(" · ");
     const byLang = new Map();
-    for (const dub of dubs) byLang.set(dub.target_lang, [...(byLang.get(dub.target_lang) || []), dubLabel(dub)]);
+    for (const dub of dubs) {
+      byLang.set(dub.target_lang, [...(byLang.get(dub.target_lang) || []), `${dubLabel(dub)} · ${dateLabel(dub.created)}`]);
+    }
     $(".card__tags", node).replaceChildren(...[...byLang].map(([lang, labels]) => el("span", {
       class: "tag", title: labels.join("\n"), "aria-label": labels.join("; "), text: lang.toUpperCase(),
     })));
@@ -742,7 +746,7 @@ function renderWatchDetails() {
   $("#other-dubs").hidden = !siblings.length;
   $("#other-dubs-list").replaceChildren(...siblings.map((s) => el("a", {
     class: "btn", href: `#/watch/${encodeURIComponent(s.id)}`,
-    text: dubLabel(s),
+    text: [dubLabel(s), dateLabel(s.created)].filter(Boolean).join(" · "),
   })));
 
   const files = video.files || {};

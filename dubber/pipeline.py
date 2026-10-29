@@ -71,15 +71,13 @@ class Result:
     video_id: str = ""  # the video (= its folder in work/); several dubs can share it
 
 
-def dub_id(video_id: str, lang: str, voice: str, background: bool, remove_voice: bool) -> str:
-    """Name of one dub's folder in output/: each set of choices of a video is its own library entry.
-
-    The same choices again give the same name, so redoing a dub replaces it instead of adding a duplicate.
-    """
+def dub_id(video_id: str, lang: str, voice: str, background: bool, remove_voice: bool, when: str | None = None) -> str:
+    """Name of one dub's folder in output/: every dub is its own library entry, even with the same choices again
+    (Adam, 2026-10-29; ADR-039). `when`: the dub's time, "YYYYMMDD-HHMMSS" (default: now)."""
     choices = hashlib.sha1(f"{lang}|{voice}|{background}|{remove_voice}".encode()).hexdigest()[:6]
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", video_id):  # other sites' ids: long, dots, spaces, non-ASCII
         video_id = "v" + hashlib.sha1(video_id.encode()).hexdigest()[:12]
-    return f"{video_id}--{lang}-{choices}"
+    return f"{video_id}--{lang}-{choices}-{when or time.strftime('%Y%m%d-%H%M%S')}"
 
 
 def safe_name(title: str, max_len: int = 80) -> str:
@@ -346,8 +344,15 @@ def run(
 
     # 8. Subtitles + final video, all in output/<dub id>/ (what the website's library reads)
     report = p.stage("mux")
-    dub = dub_id(video_id, target.code, voice, settings.keep_background, background_audio is not None)
+    now = time.localtime()
+    dub = dub_id(video_id, target.code, voice, settings.keep_background, background_audio is not None,
+                 time.strftime("%Y%m%d-%H%M%S", now))
     folder = settings.output_dir / dub
+    n = 1
+    while folder.exists():  # two dubs within the same second
+        n += 1
+        folder = settings.output_dir / f"{dub}-{n}"
+    dub = folder.name
     files = subtitles.write_all(segments, folder, title, target=target.code, source=source_lang)
     out_video = folder / "dubbed.mp4"
     partial = folder / "dubbed.partial.mp4"  # never serve a half-written file
@@ -382,7 +387,7 @@ def run(
         "translator_notes": translation["notes"],
         "translation_cost_usd": translation["cost_usd"],
         "files": {key: path.name for key, path in files.items()},
-        "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "created": time.strftime("%Y-%m-%dT%H:%M:%S", now),  # the library shows the date and the exact time
     }
     (folder / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
     report(1.0)

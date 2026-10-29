@@ -71,7 +71,7 @@ from .download import is_url
 
 WEB_DIR = Path(__file__).parent / "web"
 STAGE_KEYS = {label: key for key, label, _ in pipeline.STAGES}
-_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_ID = re.compile(r"^[A-Za-z0-9_-]{1,96}$")
 # Uploaded videos: work/uploads/<first 12 hex of the file's sha1>/<file name>
 _UPLOAD = re.compile(r"^[0-9a-f]{12}/[^/\\:*?\"<>|]{1,120}$")
 UPLOAD_TYPES = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v", ".wmv", ".flv", ".mpg", ".mpeg", ".ts", ".3gp"}
@@ -82,8 +82,8 @@ PHONE_ROUTES = [(methods, re.compile(path)) for methods, path in (
     ({"GET"}, r"/api/jobs/[0-9a-f]{12}"),
     ({"POST"}, r"/api/(jobs|upload|playlist)"),
     ({"POST"}, r"/api/jobs/[0-9a-f]{12}/cancel"),
-    ({"GET", "DELETE"}, r"/api/videos/[A-Za-z0-9_-]{1,64}"),
-    ({"GET"}, r"/files/[A-Za-z0-9_-]{1,64}/[^/]+"),
+    ({"GET", "DELETE"}, r"/api/videos/[A-Za-z0-9_-]{1,96}"),
+    ({"GET"}, r"/files/[A-Za-z0-9_-]{1,96}/[^/]+"),
 )]
 
 
@@ -690,7 +690,8 @@ def create_app(
         meta["segments"] = json.loads(segments_file.read_text(encoding="utf-8")) if segments_file.exists() else []
         meta["spoken"] = spoken_times(folder / "timing.json", len(meta["segments"]))
         # Other dubs of the same video (another language or voice), for the watch page's switcher.
-        meta["siblings"] = [{k: m.get(k) for k in ("id", "target_lang", "voice", "background", "remove_voice")}
+        keys = ("id", "target_lang", "voice", "background", "remove_voice", "created")
+        meta["siblings"] = [{k: m.get(k) for k in keys}
                             for m in list_videos() if m["video_id"] == meta["video_id"] and m["id"] != meta["id"]]
         return meta
 
