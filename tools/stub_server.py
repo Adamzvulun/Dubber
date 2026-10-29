@@ -11,7 +11,8 @@ key-shaped one is accepted without calling Anthropic.
 Playlist links get a made-up playlist of 3 videos (15 when the list id starts with "BIG"; no YouTube needed).
 STUB_UPDATE=9.9.9 makes the site offer an update to that version (installing it takes 2 s and changes nothing).
 The original voice (Settings): the stand-in PC has an RTX 3070 (STUB_GPU=none: no NVIDIA card, STUB_GPU=small: 4 GB);
-"Install" walks its 3 steps in ~12 s (STUB_CLONE_FAIL=1: fails at step 2), then "Original" is offered on the form.
+"Install" walks its 3 steps in ~12 s (STUB_CLONE_FAIL=1: fails at step 2), then "Original" is offered on the form
+(STUB_CUDA=broken: installed, but PyTorch can't compute on the card).
 The phone (phone.py): STUB_MAILBOX=<mailbox address> STUB_TUNNEL=<tunnel address> connects the stand-in PC to the
 local stand-in for Cloudflare, `node tools/phone_dev.mjs` (no cloudflared: the tunnel address is reported at once).
 Kill it by PID, never with `pkill -f` (that kills your own shell).
@@ -83,12 +84,17 @@ class StubClone:
     def __init__(self):
         self.ready = False
         self.state = {"running": False, "step": "", "error": "", "done": False}
+        self._step_started = 0.0
 
     def status(self) -> dict:
         gpu = {"none": None, "small": {"name": "NVIDIA GeForce GTX 1650", "vram_gb": 4.0}}.get(
             os.environ.get("STUB_GPU", ""), {"name": "NVIDIA GeForce RTX 3070", "vram_gb": 8.0})
+        cuda = {"available": True, "name": gpu and gpu["name"], "cuda": "12.8"}
+        if os.environ.get("STUB_CUDA") == "broken":
+            cuda = {"available": False, "error": "CUDA error: no kernel image is available for execution on the device"}
         return {"gpu": gpu, "gpu_ok": bool(gpu and gpu["vram_gb"] >= clone.MIN_VRAM_GB), "installed": self.ready,
-                "ready": self.ready, "min_vram_gb": clone.MIN_VRAM_GB, "unsupported": sorted(clone.UNSUPPORTED)}
+                "ready": self.ready, "min_vram_gb": clone.MIN_VRAM_GB, "unsupported": sorted(clone.UNSUPPORTED),
+                "cuda": cuda if self.ready else None}
 
     def start(self) -> bool:
         if self.state["running"]:
@@ -97,9 +103,19 @@ class StubClone:
         threading.Thread(target=self._install, daemon=True).start()
         return True
 
+    def progress(self) -> float | None:
+        """Like clone.Installer.progress: the share done, filled evenly over each 4-second step."""
+        if not self.state["running"] or self.state["step"] not in clone.STEP_SHARES:
+            return None
+        steps = list(clone.STEP_SHARES)
+        done = sum(clone.STEP_SHARES[s] for s in steps[:steps.index(self.state["step"])])
+        into = min(0.97, (time.monotonic() - self._step_started) / 4)
+        return round(done + clone.STEP_SHARES[self.state["step"]] * into, 3)
+
     def _install(self) -> None:
         for step in clone.Installer.STEPS:
             self.state["step"] = step
+            self._step_started = time.monotonic()
             time.sleep(4)
             if step == "omnivoice" and os.environ.get("STUB_CLONE_FAIL"):
                 self.state.update(running=False, error=step)

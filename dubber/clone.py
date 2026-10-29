@@ -17,10 +17,13 @@ import hashlib
 import importlib.util
 import logging
 import os
+import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+import urllib.parse
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
@@ -46,6 +49,11 @@ MAX_REF = 15.0  # longer references are refused by OmniVoice (with a transcript:
 JOIN_GAP = 1.0  # neighbouring lines join one reference only across pauses this short (likely the same speaker)
 LOUDNESS = 0.1  # RMS every clip is brought to (the copied voices are as loud as their references otherwise)
 BATCH = 4  # lines per model call: several at once use the graphics card better
+# The install's progress bar (Installer.progress): each step's share of the whole and how many bytes it downloads.
+STEP_SHARES = {"torch": 0.5, "omnivoice": 0.12, "model": 0.38}
+STEP_BYTES = {"torch": 3.4e9, "omnivoice": 0.45e9, "model": 3_267_470_260}  # model: k2-fsa/OmniVoice on Hugging Face
+_DOWNLOADING = re.compile(r"Downloading (\S+?)(?: \(([\d.]+) ([kMG]B)\))?\s*$", re.M)
+_UNITS = {"kB": 1e3, "MB": 1e6, "GB": 1e9}
 
 
 def marker() -> Path:
@@ -87,7 +95,68 @@ def gpu_info(run=subprocess.run) -> dict | None:
 def status(run=subprocess.run) -> dict:
     gpu = gpu_info(run)
     return {"gpu": gpu, "gpu_ok": bool(gpu and gpu["vram_gb"] >= MIN_VRAM_GB), "installed": installed(),
-            "ready": ready(), "min_vram_gb": MIN_VRAM_GB, "unsupported": sorted(UNSUPPORTED)}
+            "ready": ready(), "min_vram_gb": MIN_VRAM_GB, "unsupported": sorted(UNSUPPORTED),
+            "cuda": cuda_status()}
+
+
+# Does the installed PyTorch really compute on the card? A tiny computation in a separate Python (importing PyTorch
+# takes seconds and a lot of memory). Without it OmniVoice silently ran on the processor: ~20x slower than real time.
+_CUDA_CHECK = """
+import json, torch
+ok = torch.cuda.is_available()
+if ok:
+    (torch.ones(8, device="cuda") * 2).sum().item()  # "no kernel image" (a card newer than this PyTorch) fails here
+print(json.dumps({"available": ok, "name": torch.cuda.get_device_name(0) if ok else None,
+                  "torch": torch.__version__, "cuda": torch.version.cuda}))
+"""
+_cuda: dict = {}  # {"result": dict} once checked, {"running": True} while checking; reset after an install
+_cuda_lock = threading.Lock()
+
+
+def _check_cuda(run) -> dict:
+    try:
+        result = run([sys.executable, "-c", _CUDA_CHECK], capture_output=True, text=True, encoding="utf-8",
+                     errors="replace", timeout=180)
+        if result.returncode == 0:
+            import json
+
+            return json.loads(result.stdout.strip().splitlines()[-1])
+        lines = (result.stderr or result.stdout or "").strip().splitlines()
+        return {"available": False, "error": lines[-1] if lines else f"exit code {result.returncode}"}
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError) as exc:
+        return {"available": False, "error": str(exc)}
+
+
+def cuda_status(run=subprocess.run, wait: bool = False) -> dict | None:
+    """{"available", "name", "torch", "cuda"} or {"available": False, "error"}; None while still checking (the
+    Settings page asks again) or when the original voice isn't installed. `wait`: check now (the pipeline)."""
+    if not installed():
+        return None
+    with _cuda_lock:
+        if "result" in _cuda:
+            return _cuda["result"]
+        if not wait:
+            if not _cuda.get("running"):
+                _cuda["running"] = True
+
+                def check() -> None:
+                    result = _check_cuda(run)
+                    with _cuda_lock:
+                        _cuda.update(result=result, running=False)
+
+                threading.Thread(target=check, daemon=True, name="cuda-check").start()
+            return None
+    result = _check_cuda(run)
+    with _cuda_lock:
+        _cuda.update(result=result, running=False)
+    return result
+
+
+def cuda_ok(run=subprocess.run) -> bool:
+    """The original voice may run: PyTorch computes on the card (or DUBBER_CLONE_DEVICE asks for another device)."""
+    if os.environ.get("DUBBER_CLONE_DEVICE"):
+        return True
+    return bool((cuda_status(run, wait=True) or {}).get("available"))
 
 
 # Run in a separate Python after installing: the server itself never loads PyTorch until a dub needs it.
@@ -113,12 +182,45 @@ class Installer:
         self._lock = threading.Lock()
 
     def commands(self) -> list[tuple[str, list[str]]]:
-        pip = [self.python, "-m", "pip", "install", "--disable-pip-version-check", "--log", str(self.log_file)]
+        # --no-cache-dir: no second copy of PyTorch's 3 GB in pip's cache (and the download is a file progress() sees)
+        pip = [self.python, "-m", "pip", "install", "--disable-pip-version-check", "--no-cache-dir",
+               "--log", str(self.log_file)]
         return [
             ("torch", pip + ["torch", "torchaudio", "--index-url", TORCH_INDEX]),
             ("omnivoice", pip + [OMNIVOICE]),  # keeps the CUDA PyTorch: omnivoice asks for any version
             ("model", [self.python, "-c", _CHECK]),
         ]
+
+    def progress(self, temp_dir: Path | None = None, hub_dir: Path | None = None) -> float | None:
+        """0..1 of the whole install while it runs (None otherwise), from the bytes downloaded so far: pip's
+        downloads announced in the log and their growing files in pip's temp folders; the model's files in the
+        Hugging Face cache. Never quite 1 before the install says it is done (unpacking takes a while too)."""
+        step = self.state.get("step")
+        if not self.state.get("running") or step not in STEP_SHARES:
+            return None
+        done = sum(STEP_SHARES[s] for s in STEP_SHARES if list(STEP_SHARES).index(s) < list(STEP_SHARES).index(step))
+        if step == "model":
+            got = _folder_bytes((hub_dir or _hub_cache()) / ("models--" + MODEL_REPO.replace("/", "--")))
+        else:
+            got = self._pip_bytes(step, temp_dir or Path(tempfile.gettempdir()))
+        return round(done + STEP_SHARES[step] * min(0.97, got / STEP_BYTES[step]), 3)
+
+    def _pip_bytes(self, step: str, temp_dir: Path) -> float:
+        """Bytes pip downloaded in this step: finished downloads (sizes from the log) + the one in progress."""
+        try:
+            log_text = self.log_file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return 0.0
+        start = log_text.rfind(f" {step}: ")  # this step's header line (written by _install)
+        log_text = log_text[start:] if start >= 0 else ""
+        found = [(urllib.parse.unquote(name.rsplit("/", 1)[-1]), float(size or 0) * _UNITS.get(unit, 0))
+                 for name, size, unit in _DOWNLOADING.findall(log_text) if not name.endswith(".metadata")]
+        if not found:
+            return 0.0
+        finished = sum(size for _, size in found[:-1])
+        partial = max((f.stat().st_size for f in temp_dir.glob(f"pip-unpack-*/{found[-1][0]}") if f.is_file()),
+                      default=0)
+        return finished + (partial or 0)
 
     def start(self) -> bool:
         """Start installing (False when it is already running)."""
@@ -142,6 +244,8 @@ class Installer:
                     return
             importlib.invalidate_caches()  # the server may now find the new packages
             marker().write_text(time.strftime("%Y-%m-%dT%H:%M:%S"), encoding="utf-8")
+            with _cuda_lock:
+                _cuda.clear()  # a new PyTorch: check the card again
             self.state["done"] = True
         except OSError as exc:  # e.g. the disk is full
             log.warning("Installing the original voice failed: %s", exc)
@@ -149,6 +253,17 @@ class Installer:
         finally:
             self.state["running"] = False
             self._lock.release()
+
+
+def _hub_cache() -> Path:
+    from huggingface_hub import constants
+
+    return Path(constants.HF_HUB_CACHE)
+
+
+def _folder_bytes(folder: Path) -> int:
+    return sum(f.stat().st_size for f in folder.rglob("*") if f.is_file() and not f.is_symlink()) \
+        if folder.is_dir() else 0
 
 
 class Engine(Protocol):
@@ -168,6 +283,7 @@ class OmniVoiceEngine:
         self.torch = torch
         device = device or os.environ.get("DUBBER_CLONE_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
         dtype = torch.float16 if device.startswith("cuda") else torch.float32
+        self.device = torch.cuda.get_device_name(0) if device.startswith("cuda") else device
         self.model = retry(lambda: OmniVoice.from_pretrained(MODEL_REPO, device_map=device, dtype=dtype))
 
     def prompt(self, audio, text: str) -> object:
@@ -305,8 +421,14 @@ def synthesize(
             clips[i] = clips_dir / f"{i:05d}_{digest}.wav"
             if not (clips[i].exists() and clips[i].stat().st_size > 0):
                 missing.append((i, seconds))
+        # In the program's window: where the voice runs and how fast (Adam's 90-minute estimate, 2026-10-29).
+        where = getattr(engine, "device", "")
+        if missing:
+            print(f"Голос оригинала: {len(missing)} строк, {where or 'устройство не известно'}", flush=True)
+        began = time.monotonic()
         for n in range(0, len(missing), batch):
             group = missing[n:n + batch]
+            tick = time.monotonic()
             texts, group_prompts = [segments[i].ru for i, _ in group], [prompt_for(i) for i, _ in group]
             try:
                 audios = engine.speak(texts, group_prompts, [s for _, s in group], lang)
@@ -318,6 +440,9 @@ def synthesize(
                           for text, prompt, (_, s) in zip(texts, group_prompts, group, strict=True)]
             for (i, _), audio in zip(group, audios, strict=True):
                 write_wav(_level(audio), clips[i], SAMPLE_RATE)
+            done = min(n + batch, len(missing))
+            print(f"Голос оригинала: {done}/{len(missing)} строк, {time.monotonic() - tick:.1f} с на группу, "
+                  f"всего {time.monotonic() - began:.0f} с", flush=True)
             if progress:
                 progress(min(n + batch, len(missing)) / len(missing))
         return clips, rates

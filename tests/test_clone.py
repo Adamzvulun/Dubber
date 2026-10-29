@@ -133,3 +133,87 @@ def test_installer_steps(tmp_path, monkeypatch):
         __import__("time").sleep(0.02)
     assert failing.state["error"] == "torch" and not failing.state["done"]
     assert not (tmp_path / "dubber-omnivoice").exists()
+
+
+def test_install_progress_counts_the_bytes_downloaded(tmp_path):
+    """The progress bar: PyTorch's wheel growing in pip's temp folder, then the model in the Hugging Face cache."""
+    log = tmp_path / "install.log"
+    installer = clone.Installer(log, python="py")
+    assert installer.progress() is None  # not running
+    installer.state.update(running=True, step="torch")
+    log.write_text("\n== 2026-10-29 10:00:00 torch: py -m pip install ...\n"
+                   "Looking in indexes: https://download.pytorch.org/whl/cu128\n"
+                   "10:00:01,000   Downloading torch-2.9.0+cu128-cp312-cp312-win_amd64.whl.metadata (30 kB)\n"
+                   "Downloading https://download.pytorch.org/whl/cu128/torch-2.9.0%2Bcu128-cp312-cp312-win_amd64.whl"
+                   " (3400.0 MB)\n", encoding="utf-8")
+    temp = tmp_path / "temp"
+    (temp / "pip-unpack-abc").mkdir(parents=True)
+    (temp / "pip-unpack-abc" / "torch-2.9.0+cu128-cp312-cp312-win_amd64.whl").write_bytes(b"x" * 1000)
+    clone.STEP_BYTES["torch"], saved = 2000, clone.STEP_BYTES["torch"]
+    try:
+        assert installer.progress(temp_dir=temp) == round(clone.STEP_SHARES["torch"] * 0.5, 3)
+    finally:
+        clone.STEP_BYTES["torch"] = saved
+
+    installer.state["step"] = "model"
+    hub = tmp_path / "hub"
+    blobs = hub / "models--k2-fsa--OmniVoice" / "blobs"
+    blobs.mkdir(parents=True)
+    (blobs / "abc.incomplete").write_bytes(b"x" * 10)
+    before = clone.STEP_SHARES["torch"] + clone.STEP_SHARES["omnivoice"]
+    assert before <= installer.progress(hub_dir=hub) < before + 0.01
+    clone.STEP_BYTES["model"], saved = 10, clone.STEP_BYTES["model"]
+    try:  # all bytes there, still unpacking/checking: never 100% before the install says so
+        assert installer.progress(hub_dir=hub) == round(before + clone.STEP_SHARES["model"] * 0.97, 3)
+    finally:
+        clone.STEP_BYTES["model"] = saved
+
+
+def test_cuda_check_runs_once_and_says_whether_pytorch_sees_the_card(monkeypatch):
+    """Adam's RTX 5060 Ti PC (2026-10-29): a 5-minute «Оригинал» dub estimated 90 minutes with the card idle. The
+    check runs a tiny computation on the card in a separate Python, once per run of the program."""
+    import json as _json
+
+    calls = []
+
+    def run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout=_json.dumps(
+            {"available": True, "name": "NVIDIA GeForce RTX 5060 Ti", "torch": "2.9.0+cu128", "cuda": "12.8"}) + "\n")
+
+    monkeypatch.setattr(clone, "installed", lambda: True)
+    monkeypatch.setattr(clone, "_cuda", {})
+    assert clone.cuda_status(run=run, wait=True)["name"] == "NVIDIA GeForce RTX 5060 Ti"
+    assert clone.cuda_ok(run=run) and len(calls) == 1  # cached
+    assert "torch" in calls[0][-1] and "cuda" in calls[0][-1]
+
+    monkeypatch.setattr(clone, "_cuda", {})
+    broken = clone.cuda_status(run=lambda cmd, **kw: subprocess.CompletedProcess(
+        cmd, 1, stdout="", stderr="RuntimeError: CUDA error: no kernel image is available for execution\n"), wait=True)
+    assert broken["available"] is False and "no kernel image" in broken["error"]
+    assert not clone.cuda_ok()
+    monkeypatch.setenv("DUBBER_CLONE_DEVICE", "cpu")  # asked for on purpose (tests, measurements)
+    assert clone.cuda_ok()
+
+
+def test_cuda_check_does_not_block_the_settings_page(monkeypatch):
+    import threading
+
+    release = threading.Event()
+
+    def slow(cmd, **kwargs):
+        release.wait(5)
+        return subprocess.CompletedProcess(cmd, 0, stdout='{"available": true}\n')
+
+    monkeypatch.setattr(clone, "installed", lambda: True)
+    monkeypatch.setattr(clone, "_cuda", {})
+    assert clone.cuda_status(run=slow) is None  # still checking
+    release.set()
+    for _ in range(100):
+        if clone.cuda_status(run=slow) is not None:
+            break
+        __import__("time").sleep(0.02)
+    assert clone.cuda_status(run=slow) == {"available": True}
+    monkeypatch.setattr(clone, "installed", lambda: False)
+    monkeypatch.setattr(clone, "_cuda", {})
+    assert clone.cuda_status(run=slow, wait=True) is None  # nothing to check

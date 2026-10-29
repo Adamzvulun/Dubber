@@ -434,6 +434,9 @@ def test_original_voice_job_and_install(tmp_path, monkeypatch):
             self.state = {**self.state, "running": True, "step": "torch"}
             return True
 
+        def progress(self):
+            return 0.25 if self.state["running"] else None
+
     gpu = {"gpu": {"name": "NVIDIA GeForce RTX 3070", "vram_gb": 8.0}, "gpu_ok": True, "installed": False,
            "ready": False, "min_vram_gb": 6.0, "unsupported": ["he"]}
     status = dict(gpu)
@@ -442,13 +445,14 @@ def test_original_voice_job_and_install(tmp_path, monkeypatch):
 
     assert c.get("/api/clone").json()["gpu"]["name"] == "NVIDIA GeForce RTX 3070"
     answer = c.post("/api/clone/install").json()
-    assert started == [True] and answer["install"]["step"] == "torch"
+    assert started == [True] and answer["install"]["step"] == "torch" and answer["install"]["progress"] == 0.25
     status.update(gpu=None, gpu_ok=False)
     r = c.post("/api/clone/install")
     assert r.status_code == 409 and "NVIDIA" in r.json()["detail"]["ru"] and len(started) == 1
 
     # The voice choice reaches the pipeline as "original"; the job card shows the separation step only when used.
     monkeypatch.setattr(clone, "ready", lambda: True)
+    monkeypatch.setattr(clone, "cuda_ok", lambda: True)  # PyTorch computes on the card
     for lang, separate in (("ru", True), ("he", False)):
         job = c.post("/api/jobs", json={"url": "https://youtu.be/x", "voice": "original", "lang": lang}).json()
         for _ in range(100):

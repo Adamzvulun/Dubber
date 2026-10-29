@@ -123,6 +123,8 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [ ] Adam: pair his Samsung (QR), dub with the PC on and off; an iPhone if one is at hand
 - [x] NVIDIA PCs: no "cublas64_12.dll" failure, Whisper on the card (0.10.1, ADR-034)
 - [ ] Adam: re-dub on the new NVIDIA PC; faster after the background download?
+- [x] «Оригинал»: card check, no CPU crawl, install progress bar, voice-free background (0.10.2, ADR-035)
+- [ ] Adam: «Оригинал» 5-min dub on the RTX 5060 Ti — program window lines + total time
 - [x] Dub videos from Facebook, Instagram, TikTok + «Вход на сайты» login file (v0.9.0, ADR-031, `kanban/more-video-sites.md`)
 - [x] Public videos without a login: yt-dlp `curl-cffi` impersonation (v0.9.0, ADR-032)
 - [ ] Adam: dub a real TikTok, Instagram Reel and Facebook video without a login; report what fails

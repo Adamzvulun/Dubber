@@ -42,14 +42,15 @@
 
   <main id="main" class="wrap" tabindex="-1">
     <!-- On the phone only (phone mode): is the home PC reachable, install the app, links waiting for the PC -->
-    <section class="phone-bar" id="phone-bar" aria-live="polite" hidden>
-      <p class="phone-bar__state" id="phone-state"><span class="phone-bar__dot" aria-hidden="true"></span><span id="phone-state-text"></span></p>
+    <section class="phone-bar" id="phone-bar" hidden>
+      <p class="phone-bar__state" id="phone-state" aria-live="polite"><span class="phone-bar__dot" aria-hidden="true"></span><span id="phone-state-text"></span></p>
       <div class="phone-bar__install" id="phone-install-box" hidden>
         <button class="btn btn--primary" type="button" id="phone-install" data-i18n="phone.install" hidden>Установить на телефон</button>
         <p class="option-hint" id="phone-ios" data-i18n="phone.ios" hidden></p>
+        <p class="option-hint" id="phone-android" data-i18n="phone.android" hidden></p>
       </div>
       <div class="phone-queue" id="phone-queue-box" hidden>
-        <h2 class="phone-queue__title" data-i18n="phone.queueTitle">Ждут компьютера</h2>
+        <p class="phone-queue__title" data-i18n="phone.queueTitle">Ждут компьютера</p>
         <ul class="phone-queue__list" id="phone-queue"></ul>
       </div>
     </section>
@@ -91,6 +92,7 @@
           </span>
         </div>
         <p class="composer__error" id="form-error" role="alert" hidden></p>
+        <p class="composer__ok" id="form-note" role="status" hidden></p>
         <div class="upload" id="upload" hidden>
           <div class="upload__head">
             <span class="upload__name" id="upload-name"></span>
@@ -330,6 +332,8 @@
           <p class="panel__lead" data-i18n="clone.about"></p>
           <p class="notice" data-i18n="clone.warning"></p>
           <p class="clone-gpu" id="clone-gpu"></p>
+          <div class="bar clone-bar" id="clone-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+               aria-valuenow="0" aria-labelledby="clone-progress" hidden><div class="bar__fill" id="clone-fill"></div></div>
           <div class="panel__actions">
             <button class="btn btn--primary" type="button" id="clone-install" data-i18n="clone.install" hidden>Установить</button>
             <span class="option-hint" id="clone-progress" role="status" aria-live="polite"></span>

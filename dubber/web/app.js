@@ -160,6 +160,7 @@ function route() {
     document.title = t("title.home");
     loadLibrary();
   }
+  if (PHONE) $("#phone-bar").hidden = !$("#view-watch").hidden; // not over the video
   window.scrollTo(0, 0);
 }
 
@@ -224,7 +225,10 @@ function renderLibrary() {
   const shown = query ? groups.filter((dubs) => searchable(`${dubs[0].title} ${dubs[0].channel}`).includes(query)) : groups;
   $("#library-search-box").hidden = groups.length < 2 && !query; // nothing to search in one video
   all.replaceChildren(...shown.map(card));
-  if (!groups.length) {
+  if (!groups.length && PHONE && !PHONE.online) { // not empty: the PC that has the videos is off (phone mode)
+    recent.replaceChildren(el("p", { class: "empty-note", text: t("phone.libraryOff") }));
+    all.append(el("p", { class: "empty-note", text: t("phone.libraryOff") }));
+  } else if (!groups.length) {
     all.append(el("div", { class: "empty-note" },
       el("p", { text: t("library.empty") }),
       el("p", {}, el("a", { class: "link", href: "#/", text: t("library.first") }))));
@@ -416,8 +420,16 @@ function formChoices() {
 
 /** Queue one job per source ({url} or {file}); they run one after another. */
 async function startJobs(sources, choices = formChoices()) {
-  for (const source of sources) {
-    await api("/api/jobs", { method: "POST", body: JSON.stringify({ ...source, ...choices }) });
+  for (const [i, source] of sources.entries()) {
+    try {
+      await api("/api/jobs", { method: "POST", body: JSON.stringify({ ...source, ...choices }) });
+    } catch (e) {
+      // Phone: the PC went off just now — the links not sent yet wait in the mailbox instead of getting lost.
+      const left = sources.slice(i).map((s) => s.url).filter(Boolean);
+      if (!PHONE || PHONE.online || !left.length) throw e;
+      await queueLinks(left, choices);
+      return;
+    }
   }
   pollJobs();
   if (sources.length > 1) $("#jobs-status").textContent = t("form.queued", sources.length);
@@ -515,6 +527,7 @@ function autoGrow() {
   const field = $("#url");
   field.style.height = "auto";
   field.style.height = `${field.scrollHeight + 2}px`;
+  if (!field.value) field.scrollLeft = 0; // else an emptied field shows its placeholder scrolled sideways
 }
 
 /* ---------- upload a video file ---------- */
@@ -586,7 +599,11 @@ function stopPlayer() {
 async function showVideo(id) {
   let video;
   try { video = await api(`/api/videos/${encodeURIComponent(id)}`); } catch (_) {
-    $("#view-watch").hidden = true; $("#view-missing").hidden = false; document.title = t("missing.title"); return;
+    $("#view-watch").hidden = true; $("#view-missing").hidden = false; document.title = t("missing.title");
+    const off = PHONE && !PHONE.online; // the video isn't gone: the PC that has it is off
+    $("#view-missing h1").textContent = t(off ? "phone.watchOffTitle" : "missing.title");
+    $("#view-missing p").textContent = t(off ? "phone.libraryOff" : "missing.text");
+    return;
   }
   state.video = video;
   const player = $("#player");
@@ -811,14 +828,23 @@ function updateVoiceOption() {
   hint.hidden = !radio.checked;
   const unsupported = (state.clone?.unsupported || []).includes($("#lang").value);
   hint.textContent = radio.checked ? t(unsupported ? "form.original.he" : "form.original.hint") : "";
+  updateBackgroundHint();
+}
+
+/** The original voice copies the speaker from the separated voice track, so its background is always voice-free. */
+function originalVoiceChosen() {
+  return $("#voice-original").checked && !(state.clone?.unsupported || []).includes($("#lang").value);
 }
 
 function updateBackgroundHint() {
-  const background = $("#background").checked, removeVoice = $("#remove-voice");
+  const background = $("#background").checked, removeVoice = $("#remove-voice"), original = originalVoiceChosen();
   $("#background-hint").textContent = t(background ? "form.background.on" : "form.background.off");
-  removeVoice.disabled = !background; // without a background there is no voice to remove
+  if (original && !removeVoice.disabled) state.removeVoiceChoice = removeVoice.checked; // restored when switching back
+  if (original) removeVoice.checked = background;
+  else if (state.removeVoiceChoice !== undefined) { removeVoice.checked = state.removeVoiceChoice; state.removeVoiceChoice = undefined; }
+  removeVoice.disabled = !background || original; // without a background there is no voice to remove
   $("#remove-voice-hint").textContent = t(!background ? "form.removeVoice.disabled"
-    : removeVoice.checked ? "form.removeVoice.on" : "form.removeVoice.off");
+    : original ? "form.removeVoice.original" : removeVoice.checked ? "form.removeVoice.on" : "form.removeVoice.off");
 }
 
 /** Re-render everything after the interface language changes (without reloading the video). */
@@ -949,7 +975,10 @@ async function loadClone() {
   renderClone();
   updateVoiceOption();
   clearTimeout(clonePoll);
-  if (state.clone.install?.running) clonePoll = setTimeout(loadClone, 3000);
+  // also while the card check runs (clone.cuda_status: PyTorch takes a few seconds to start)
+  if (state.clone.install?.running || (state.clone.installed && state.clone.cuda == null)) {
+    clonePoll = setTimeout(loadClone, 3000);
+  }
 }
 
 function renderClone() {
@@ -962,14 +991,25 @@ function renderClone() {
   const gpu = $("#clone-gpu");
   gpu.textContent = !c.gpu ? t("clone.gpu.none") : c.gpu_ok ? t("clone.gpu.ok", c.gpu.name, c.gpu.vram_gb)
     : t("clone.gpu.small", c.gpu.name, c.gpu.vram_gb, c.min_vram_gb);
-  gpu.classList.toggle("is-error", !c.gpu_ok);
+  // Installed: does PyTorch really compute on the card? (without it the voice would crawl on the processor)
+  const cudaBad = c.ready && !working && c.cuda && !c.cuda.available;
+  if (c.ready && !working && c.gpu_ok) {
+    gpu.textContent += " " + (c.cuda == null ? t("clone.cuda.checking")
+      : c.cuda.available ? t("clone.cuda.ok", c.cuda.cuda || "") : t("clone.cuda.bad", c.cuda.error || ""));
+  }
+  gpu.classList.toggle("is-error", !c.gpu_ok || cudaBad);
   const button = $("#clone-install");
-  button.hidden = !c.gpu_ok || (c.ready && !working);
+  button.hidden = !c.gpu_ok || (c.ready && !working && !cudaBad);
   button.disabled = working;
   button.textContent = t(install.error ? "clone.retry" : "clone.install");
   const step = (key) => t(`clone.step.${key}`);
+  // The bar: bytes downloaded so far (clone.Installer.progress); the step line says what is being installed.
+  const pct = working && typeof install.progress === "number" ? Math.round(install.progress * 100) : null;
+  $("#clone-bar").hidden = !working;
+  $("#clone-fill").style.width = `${pct ?? 0}%`;
+  $("#clone-bar").setAttribute("aria-valuenow", String(pct ?? 0));
   $("#clone-progress").textContent = working
-    ? t("clone.step", CLONE_STEPS.indexOf(install.step) + 1, CLONE_STEPS.length, step(install.step || "torch"))
+    ? t("clone.step", CLONE_STEPS.indexOf(install.step) + 1, CLONE_STEPS.length, step(install.step || "torch"), pct)
     : install.error ? t("clone.error", step(install.error)) : c.ready && install.done ? t("clone.ready") : "";
   $("#clone-progress").classList.toggle("is-error", Boolean(install.error) && !working);
 }
@@ -1206,7 +1246,7 @@ async function init() {
     updateVoiceOption();
     try { localStorage.setItem("dubber.dubLang", e.target.value); } catch (_) {}
   });
-  $("#url").addEventListener("input", () => { if (!$("#form-error").hidden) showFormError(""); });
+  $("#url").addEventListener("input", () => { if (!$("#form-error").hidden) showFormError(""); showFormNote(""); });
   // The skip link must not change the hash (that is the router's job): just move focus to the content.
   $(".skip").addEventListener("click", (e) => { e.preventDefault(); $("#main").focus(); });
   $("#library-search").addEventListener("input", renderLibrary);
@@ -1276,7 +1316,9 @@ function initPhone() {
       let text = "";
       try { text = await navigator.clipboard.readText(); } catch (_) {}
       const link = (text || "").match(/https?:\/\/\S+/);
-      if (!link) { showFormError(t("phone.pasteEmpty")); $("#url").focus(); return; }
+      if (!link) { // no focus on the field: the keyboard would cover the message
+        showFormError(t("phone.pasteEmpty")); $("#form-error").scrollIntoView({ block: "center", behavior: "smooth" }); return;
+      }
       showFormError("");
       const field = $("#url");
       field.value = field.value.trim() ? `${field.value.trim()}\n${link[0]}` : link[0];
@@ -1342,7 +1384,9 @@ function renderPhoneBar() {
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   $("#phone-install").hidden = standalone || !PHONE.install;
   $("#phone-ios").hidden = standalone || !ios;
-  $("#phone-install-box").hidden = $("#phone-install").hidden && $("#phone-ios").hidden;
+  // Android without Chrome's install offer (Samsung Internet, a dismissed offer): the browser menu does it
+  $("#phone-android").hidden = standalone || ios || Boolean(PHONE.install);
+  $("#phone-install-box").hidden = $("#phone-install").hidden && $("#phone-ios").hidden && $("#phone-android").hidden;
   renderPhoneQueue();
 }
 
@@ -1351,7 +1395,8 @@ function renderPhoneQueue() {
   $("#phone-queue-box").hidden = !links.length;
   $("#phone-queue").replaceChildren(...links.map((link) => {
     let label = link.url;
-    try { const u = new URL(link.url); label = u.hostname.replace(/^www\./, "") + u.pathname; } catch (_) {}
+    // the query too: two YouTube links differ only in ?v=…
+    try { const u = new URL(link.url); label = u.hostname.replace(/^www\./, "") + u.pathname + u.search; } catch (_) {}
     return el("li", { class: "phone-queue__item" },
       el("span", { class: "phone-queue__link", text: label, title: link.url }),
       el("span", { class: "phone-queue__lang muted", text: langName(link.lang) }),
@@ -1360,6 +1405,7 @@ function renderPhoneQueue() {
         try { await api(`/api/box/links/${link.id}`, { method: "DELETE" }); } catch (_) {}
         try { PHONE.box = await api("/api/box"); } catch (_) {}
         renderPhoneQueue();
+        ($("#phone-queue button") || $("#url")).focus(); // the pressed button is gone
       } }));
   }));
 }
@@ -1367,14 +1413,26 @@ function renderPhoneQueue() {
 /** PC off: the links wait in the mailbox with the form's choices; the PC dubs them when it starts. */
 async function queueOnPhone(links, choices) {
   await busy(async () => {
-    for (const url of [...new Set(links)]) {
-      await api("/api/box/links", { method: "POST", body: JSON.stringify({ url, ...choices }) });
-    }
+    await queueLinks(links, choices);
     $("#url").value = ""; autoGrow();
-    $("#jobs-status").textContent = t("phone.queued", new Set(links).size);
-    try { PHONE.box = await api("/api/box"); } catch (_) {}
-    renderPhoneQueue();
   });
+}
+
+async function queueLinks(links, choices) {
+  const unique = [...new Set(links)];
+  for (const url of unique) {
+    await api("/api/box/links", { method: "POST", body: JSON.stringify({ url, ...choices }) });
+  }
+  showFormNote(t("phone.queued", unique.length)); // visible next to the button, not only for screen readers
+  try { PHONE.box = await api("/api/box"); } catch (_) {}
+  renderPhoneQueue();
+}
+
+/** A short confirmation under the form (e.g. "sent, waits for the computer"); cleared by the next edit. */
+function showFormNote(text) {
+  const note = $("#form-note");
+  note.textContent = text;
+  note.hidden = !text;
 }
 
 /* ---------- the phone panel in Settings (on the PC) ---------- */

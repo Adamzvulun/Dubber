@@ -128,6 +128,8 @@ def _transcribe(audio_wav: Path, model_size: str, device: str, progress, info_ou
 
     compute_type = "int8" if device in ("auto", "cpu") else "float16"
     model = retry(lambda: WhisperModel(model_size, device=device, compute_type=compute_type))  # downloads on first use
+    where = getattr(getattr(model, "model", None), "device", device)  # what "auto" chose
+    print(f"Распознаю речь: {'видеокарта' if where == 'cuda' else 'процессор'} ({where})", flush=True)
     # Decode with our own ffmpeg call and pass samples: faster-whisper's PyAV-based file loading breaks with
     # some PyAV versions (e.g. av 19 rejects the `metadata_errors` argument faster-whisper 1.2 passes).
     samples = decode_audio(audio_wav, SAMPLE_RATE)

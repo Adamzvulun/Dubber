@@ -6,9 +6,9 @@ _Last updated: 2026-10-28 (session 8). Update this page at the end of every sess
 Dubber is a local website (FastAPI + hand-built front-end) that turns a **YouTube, TikTok, Instagram or Facebook**
 video **or a video file** in **any spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version **0.10.0** on `main` (PR #15 merged: the phone version, ADR-033 — switched on once Adam's Cloudflare
-mailbox address is in `phone.MAILBOX_URL`); **0.10.1** (NVIDIA PCs: no more "cublas64_12.dll" failures, Whisper on
-the card, ADR-034) on branch `claude/focused-fermat-9gqp5q` in a new PR. The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
+Current version **0.10.1** on `main` (phone version ADR-033 — switched on once Adam's Cloudflare mailbox address is
+in `phone.MAILBOX_URL`; NVIDIA fix ADR-034). **0.10.2** (ADR-035: «Оригинал» card check + no CPU crawl, install
+progress bar, voice-free background with «Оригинал», QA fixes) on branch `claude/focused-fermat-9gqp5q` in a new PR. The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
 shipping. Adam confirmed 0.6.0 arrived on his PC by itself.
 Session 7 (2026-10-28): **0.8.0 (merged, PR #13)** — the Windows install broke for anyone with Python 3.15 (released
 Oct 2026; no onnxruntime build) → launchers use only Python 3.10–3.14, Microsoft C++ runtime installed, no-winget
@@ -124,6 +124,7 @@ original voice; the voice-free background goes under the dub, ducked while it sp
 - Timing (ADR-013), all 12 dub languages (ADR-014/016: 24 real QA dubs), real YouTube runs (session 1).
 
 ## Not verified yet
+- **«Оригинал» card check + speed on a real NVIDIA card (0.10.2).**
 - **Whisper on a real NVIDIA card (0.10.1):** the CPU fallback and the installer are unit-tested and the NVIDIA wheels
   resolve on Windows CI; no NVIDIA card here or in CI.
 - **Phone version (0.10.0):** a real quick tunnel and the real Worker (blocked here; the Windows CI step runs real
@@ -138,8 +139,10 @@ original voice; the voice-free background goes under the dub, ducked while it sp
   voice removal, Google, H.264 playback).
 
 ## Next steps (in order)
-0. **0.10.1 (NVIDIA fix, ADR-034):** Adam merges, then re-dubs the Instagram reel on the new PC: it must work at once
-   (processor); after the background download (`work/gpu-install.log`) and a restart it should be faster.
+0. **0.10.2 (ADR-035):** Adam merges; on the RTX 5060 Ti PC: Settings → «Голос оригинала» must say it runs on the
+   card (else «Установить ещё раз»); dub 5 min with «Оригинал» and send the program window's «Распознаю речь: …» /
+   «Голос оригинала: … с на группу» lines + the job's total time. Task Manager's "3D" graph doesn't show CUDA: pick
+   "Cuda" in a graph's drop-down to see the card work. 0.10.1's NVIDIA fix: the Instagram reel re-dub.
    **Phone version 0.10.0 (merged, not switched on yet):** Adam: (a) free Cloudflare account, open "Workers & Pages" once (choose the
    `workers.dev` name), API token from the template "Edit Cloudflare Workers", add GitHub secrets
    `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`; (b) send the address `https://dubber.<name>.workers.dev` →

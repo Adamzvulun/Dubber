@@ -17,7 +17,10 @@ from collections.abc import Callable
 from pathlib import Path
 
 DEFAULT_SHARES = {"download": 0.08, "transcribe": 0.45, "translate": 0.07, "tts": 0.25, "align": 0.05, "mux": 0.10,
-                  "separate": 0.30}  # optional (removing the original voice), on top of the others, which add up to 1
+                  "separate": 0.30,  # optional (removing the original voice), on top of the others, which add up to 1
+                  "tts_clone": 0.35}  # instead of "tts" when the original voice speaks (clone.py, on the card)
+OPTIONAL = {"separate", "tts_clone"}  # left out when the shares are scaled to add up to 1
+RAN_ONLY = {"separate", "tts", "tts_clone"}  # learned only from the jobs that ran them
 HISTORY = 10  # finished jobs kept for learning
 PRIOR = 2  # the defaults count as this many jobs when blended with measurements
 MIN_JOB_SECONDS = 60  # shorter jobs (mostly cached) say little about the stages
@@ -100,17 +103,17 @@ def load_shares(path: Path) -> dict[str, float]:
         return dict(DEFAULT_SHARES)
     blended = {}
     for key, default in DEFAULT_SHARES.items():
-        # An optional stage ("separate") is learned only from the jobs that ran it.
-        jobs = [job for job in history if key in job] if key == "separate" else history
+        # An optional stage ("separate") and each kind of voice are learned only from the jobs that ran them.
+        jobs = [job for job in history if key in job] if key in RAN_ONLY else history
         measured = sum(job.get(key, 0.0) / _core(job) for job in jobs)
         blended[key] = (PRIOR * default + measured) / (PRIOR + len(jobs))
-    total = sum(value for key, value in blended.items() if key != "separate")  # the stages every job runs sum to 1
+    total = sum(value for key, value in blended.items() if key not in OPTIONAL)  # the stages every job runs sum to 1
     return {key: value / total for key, value in blended.items()}
 
 
 def _core(job: dict[str, float]) -> float:
     """Seconds of the stages every job runs (shares are relative to these, so the optional one fits on top)."""
-    return sum(v for k, v in job.items() if k != "separate") or 1.0
+    return sum(v for k, v in job.items() if k != "separate") or 1.0  # "tts" or "tts_clone": one voice per job
 
 
 def _read(path: Path) -> list[dict[str, float]]:
