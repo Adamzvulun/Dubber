@@ -463,3 +463,20 @@ Newest at the bottom. Format: context → decision → consequences.
     sizes, per step (`Installer.progress`); pip runs with `--no-cache-dir` (no second 3 GB copy).
 - **Not verified:** a real NVIDIA card. Adam: Settings line, then a 5-minute «Оригинал» dub and the program window's
   lines «Распознаю речь: …» / «Голос оригинала: …».
+
+## ADR-036 — «Оригинал»: a speed floor per line, bigger groups on big cards (2026-10-29)
+- **Context:** Adam's first «Оригинал» dub on the RTX 5060 Ti (a 5-min film scene, 114 lines): the voice copy was
+  good and ran on the card, but at ~50% load; sentences sounded "swallowed or warped". Its `timing.json`: whole lines
+  spoken in 0.14–0.26 s with 2–5 s of room (OmniVoice's own estimate, without its short-line boost — ADR-028/RESEARCH
+  — is far too short for short lines), and crowded stretches planned up to 1.6× (the planner's smoothing lifts the
+  neighbours too). OmniVoice follows `duration=` closely, so it crammed the words. The same dub's `meta.json` said
+  `"background": false` — the switch was off for that job, not a mixing bug.
+- **Decision:**
+  - `clone.min_seconds(text)` = 0.2 s + syllables / 7 per second (`clone.syllables`: Cyrillic vowels, Latin vowel
+    runs, kana/Chinese characters, Arabic letters / 2). Every line asks for at least that; a line that then runs past
+    its slot pushes the next one back (align.py, as with Edge). `timing.json` shows the rate really asked for.
+  - Lines per model call from the card's memory (`clone.batch_for`: 12 at ≥ 14 GB, 8 at ≥ 10 GB, else 4), longest
+    lines first so similar lengths share a call; a call that fails (out of memory) halves the group for the rest of
+    the dub instead of going one line at a time. The program window says how many lines go at once.
+  - Not done (ask first): fewer generation steps (16 instead of 32 ≈ 2× faster; on CPU it garbled a Russian word).
+- **Not verified:** on the real card — how the floor sounds, and the new speed. Adam re-dubs the same video.

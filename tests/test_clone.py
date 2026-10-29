@@ -107,6 +107,66 @@ def test_a_batch_that_fails_is_spoken_line_by_line(tmp_path, vocals):
     assert all(c.exists() for c in clips) and len(engine.calls) == 2
 
 
+def test_syllables():
+    assert clone.syllables("Прекрасно.") == 3
+    assert clone.syllables("Où êtes-vous ?") == 4  # accented vowels count
+    assert clone.syllables("你好吗") == 3 and clone.syllables("ありがとう") == 5
+    assert clone.syllables("مرحبا بكم") == 4  # Arabic writes no short vowels: letters / 2
+    assert clone.syllables("—") == 0
+
+
+def test_a_line_is_never_asked_to_be_said_faster_than_people_can_speak(tmp_path, vocals):
+    # Adam's dub, 2026-10-29: the model guessed ~0.15 s for whole words and lines in a crowded stretch were planned
+    # 1.6x fast; told to fit that, the copied voice swallowed and warped them.
+    class Hasty(FakeEngine):
+        def natural_seconds(self, text, prompt):
+            return 0.15
+
+    lines = [seg(0.0, 3.2, "First sentence here.", "Первое предложение."),
+             seg(3.6, 8.4, "Wonderful.", "Прекрасно."),
+             seg(8.5, 11.5, "And the last.", "И последнее.")]
+    engine = Hasty()
+    clips, rates = clone.synthesize(lines, vocals, "ru", tmp_path / "w" / "c", 1.6, engine=engine)
+    spoken = {text: d for texts, durations, _ in engine.calls for text, d in zip(texts, durations, strict=True)}
+    for line, rate in zip(lines, rates, strict=True):
+        floor = clone.min_seconds(line.ru)
+        assert spoken[line.ru] >= floor - 0.01
+        assert abs(rate - 0.15 / spoken[line.ru]) < 0.01  # timing.json shows the pace really asked for
+    assert clone.min_seconds("Прекрасно.") >= 0.6
+
+
+def test_lines_of_similar_length_share_a_model_call(tmp_path, vocals):
+    lines = [seg(0, 2, "a", "Да."), seg(2.5, 9, "b", "Очень длинное предложение про всё на свете сразу."),
+             seg(9.5, 11, "c", "Нет."), seg(11.5, 18, "d", "Ещё одно очень длинное предложение про всё подряд.")]
+    engine = FakeEngine()
+    clone.synthesize(lines, vocals, "ru", tmp_path / "w" / "c", 1.6, engine=engine, batch=2)
+    assert sorted(sorted(texts) for texts, _, _ in engine.calls) == [
+        sorted([lines[0].ru, lines[2].ru]), sorted([lines[1].ru, lines[3].ru])]
+
+
+def test_the_batch_follows_the_cards_memory(tmp_path, vocals):
+    assert clone.batch_for(16.0) > clone.batch_for(8.0) >= clone.batch_for(6.0) == clone.BATCH
+    engine = FakeEngine()
+    engine.batch = 3  # the engine's own suggestion (from the card's memory) is used when no batch is given
+    lines = [seg(i * 2.0, i * 2.0 + 1.5, "x", f"Строка номер {i}.") for i in range(6)]
+    clone.synthesize(lines, vocals, "ru", tmp_path / "w" / "c", 1.6, engine=engine)
+    assert [len(texts) for texts, _, _ in engine.calls] == [3, 3]
+
+
+def test_a_failing_batch_is_halved_not_spoken_one_by_one(tmp_path, vocals):
+    class Small(FakeEngine):  # the card has room for 2 lines at once
+        def speak(self, texts, prompts, durations, lang):
+            if len(texts) > 2:
+                raise RuntimeError("CUDA out of memory")
+            return super().speak(texts, prompts, durations, lang)
+
+    lines = [seg(i * 2.0, i * 2.0 + 1.5, "x", f"Строка номер {i}.") for i in range(8)]
+    engine = Small()
+    clips, _ = clone.synthesize(lines, vocals, "ru", tmp_path / "w" / "c", 1.6, engine=engine, batch=8)
+    assert all(c.exists() for c in clips)
+    assert [len(texts) for texts, _, _ in engine.calls] == [2, 2, 2, 2]
+
+
 def test_installer_steps(tmp_path, monkeypatch):
     monkeypatch.setattr(clone, "marker", lambda: tmp_path / "dubber-omnivoice")
     ran = []

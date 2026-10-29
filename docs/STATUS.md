@@ -1,13 +1,13 @@
 # Status — read this first
 
-_Last updated: 2026-10-29 (end of session 8). Update this page at the end of every session._
+_Last updated: 2026-10-29 (session 9). Update this page at the end of every session._
 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a **YouTube, TikTok, Instagram or Facebook**
 video **or a video file** in **any spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version: **0.10.1** on `main`; **0.10.2 = PR #17** (branch `claude/focused-fermat-9gqp5q`, waiting for Adam's
-merge). The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
+Current version: **0.10.2** on `main`; **0.10.3** (session 9, ADR-036: «Оригинал» speed floor + bigger groups on
+the card) on branch `claude/modest-thompson-pp54kx`, waiting for a PR / Adam's merge. The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
 shipping. The phone version (0.10.0) is merged but **switched off** until Adam's Cloudflare mailbox address is put in
 `phone.MAILBOX_URL` (see Next steps 1).
 Session 7 (2026-10-28): **0.8.0 (merged, PR #13)** — the Windows install broke for anyone with Python 3.15 (released
@@ -35,6 +35,11 @@ Session 8 (2026-10-28/29), PRs #15–#17:
 - **0.10.2 — «Оригинал» (ADR-035, PR #17):** a real card check (Settings line; no hours-long CPU dubs: `clone:no_gpu`
   → Edge voice), device/timing lines in the program window, the install progress bar, voice-free background always
   with «Оригинал»; a QA pass by two agents (desktop + phone) and its fixes.
+
+Session 9 (2026-10-29): Adam's first «Оригинал» dub on the RTX 5060 Ti — voice copy good, card ~50% busy, words
+"swallowed or warped" (lines told to last 0.14–0.26 s, crowded stretches 1.6×). **0.10.3 (ADR-036):** each line asks
+for at least `clone.min_seconds` (≤ 7 syllables/s); 12/8/4 lines per call by card memory, longest first, a failing
+group halved. His "no background" was a job with the background switch off (`meta.json`).
 
 ## Where things are
 - **Git:** `main` = stable and **shipped** (PCs self-update from it; every release bumps the version and adds a
@@ -164,12 +169,11 @@ original voice; the voice-free background goes under the dub, ducked while it sp
   voice removal, Google, H.264 playback).
 
 ## Next steps (in order)
-0. **PR #17 (0.10.2):** Adam reviews/merges (CI must be green). Then on the RTX 5060 Ti PC: Settings → «Голос
-   оригинала» must say «Голос оригинала работает на видеокарте» (else «Установить ещё раз»); dub 5 min with
-   «Оригинал» and get from him the program window's «Распознаю речь: …» and «Голос оригинала: … с на группу» lines +
-   the total time (and `work/gpu-install.log` if Whisper still says «процессор»). Task Manager's "3D" graph doesn't
-   show CUDA work — pick "Cuda" in a graph's drop-down. If OmniVoice is on the card and still slow: tune `clone.BATCH`
-   / generation steps; the separation (Demucs ONNX) runs on the CPU — next candidate for the card.
+0. **0.10.3 (ADR-036):** PR + Adam's merge; then he re-dubs the same «Оригинал» video (background switch ON) and
+   says whether words still get swallowed, and sends the «Голос оригинала: … по N за раз» / «… с на группу» lines +
+   total time and the new `timing.json`. Still slow → offer 16 generation steps (≈ 2×, quality risk — ask first) and
+   Demucs (separation, CPU-only ONNX) on the card. Voices that flip between "AI-like" and the real speaker → per-line
+   references are short (1–3 s); next idea: one longer reference per speaker (needs speaker grouping).
 1. **Switch the phone version on:** Adam (a) creates a free Cloudflare account, opens "Workers & Pages" once (choose
    the `workers.dev` name), makes an API token from the template "Edit Cloudflare Workers" and adds GitHub secrets
    `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`; (b) sends the address `https://dubber.<name>.workers.dev` →
