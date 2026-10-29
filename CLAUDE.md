@@ -48,8 +48,8 @@ node tools/phone_dev.mjs 7871                                  # local Cloudflar
   icon).
 - `Start Dubber.cmd` → `scripts/windows/dubber.ps1` — the Windows start (install, shortcut, start); `scripts/*.bat`
   call it too. `.github/workflows/` — `ci.yml` (lint + tests), `windows-install.yml` (real Windows).
-- `tools/` — developer tools (not shipped): `stub_server.py`, `qa_languages.py`, `qa_hebrew_voice.py`, `make_icon.py`
-  (see docs/STATUS.md "How to test").
+- `tools/` — developer tools (not shipped): `stub_server.py`, `phone_dev.mjs` (local Cloudflare stand-in),
+  `qa_languages.py`, `qa_hebrew_voice.py`, `make_icon.py`, `make_phone_icons.js` (see docs/STATUS.md "How to test").
 - `tests/` — unit tests per stage; network stages are mocked.
 - `docs/` — STATUS (start here), PLAN, RESEARCH, DECISIONS, DESIGN, PROGRESS, SKILLS, README.ru.
 - `kanban/` — task cards (see `kanban-ai` skill).
@@ -75,6 +75,11 @@ node tools/phone_dev.mjs 7871                                  # local Cloudflar
   (ADR-029). Every start runs `python -m dubber.deps` (missing components → reinstall).
 - yt-dlp is always `yt-dlp[default,curl-cffi]` (pyproject, launcher refresh, updater, install.sh): curl-cffi lets
   TikTok/Instagram download without a login (ADR-032). TikTok/Instagram/Facebook are unreachable from the sandbox.
+- NVIDIA PCs: Whisper uses the card when `gpu.py`'s libraries load, else the CPU (never fail a dub on a GPU-library
+  error, ADR-034); «Оригинал» runs only when `clone.cuda_ok()` (ADR-035). No NVIDIA card here or in CI — stub/mock it.
+- Phone version (ADR-033): switched off until `phone.MAILBOX_URL` holds Adam's Worker address; tunnel requests need the
+  household token and only reach `app.PHONE_ROUTES`. Running downloaded binaries (cloudflared) and force-pushes are
+  blocked in the sandbox.
 - Windows start: `Start Dubber.cmd` → `scripts/windows/dubber.ps1` (UTF-8 **with BOM**; keep Russian text out of
   `.bat`/`.cmd`; shortcuts via IShellLinkW, not WScript.Shell — ADR-025). CI job `windows-install.yml` tests it.
 

@@ -443,3 +443,23 @@ Newest at the bottom. Format: context → decision → consequences.
   - Any GPU-library error that still reaches the job card gets a clear RU/EN message.
 - **Rejected:** CPU only (slower on the PCs that have a card); asking the user to install CUDA (clicks, 3 GB).
 - **Not verified:** a real NVIDIA card (none here or in CI). Windows CI checks the wheels resolve for the PCs' Python.
+
+## ADR-035 — «Оригинал»: check the card for real, never crawl on the processor, voice-free background (2026-10-29)
+- **Context:** Adam's new PC (RTX 5060 Ti 16 GB): a 5-minute «Оригинал» dub estimated 90 minutes and Task Manager
+  showed the card idle (its "3D" graph does not show CUDA work, so idle there proves little). OmniVoice silently
+  falls back to the processor when PyTorch doesn't see the card (~20× slower than real time = the 90 minutes), and
+  nothing told the user. He also asked whether the two background switches should be on with «Оригинал».
+- **Decision:**
+  - `clone.cuda_status()`: a tiny computation on the card in a separate Python (catches "not available" and "no
+    kernel image" for a card newer than the PyTorch build), once per run, in the background for the Settings page
+    («Голос оригинала работает на видеокарте (CUDA x)» or why not + «Установить ещё раз»); reset after an install.
+  - `pipeline.clone_choice`: when the check fails, the dub uses the Edge voice at once with the note
+    `clone:no_gpu` (no separation step, no hours on the CPU). `DUBBER_CLONE_DEVICE` still forces a device.
+  - The program's window prints where Whisper and OmniVoice run and the seconds per group of lines; the time-left
+    estimate learns «Оригинал»'s voice step apart from Edge's (`tts_clone` in `eta.py`).
+  - With «Оригинал» and the background on, the background is always the voice-free one (the voice is separated
+    anyway, so it costs nothing; otherwise the same person is heard twice). The form shows the switch on and locked.
+  - Install progress bar: bytes downloaded (pip's log + its temp file; the Hugging Face cache) against the known
+    sizes, per step (`Installer.progress`); pip runs with `--no-cache-dir` (no second 3 GB copy).
+- **Not verified:** a real NVIDIA card. Adam: Settings line, then a 5-minute «Оригинал» dub and the program window's
+  lines «Распознаю речь: …» / «Голос оригинала: …».

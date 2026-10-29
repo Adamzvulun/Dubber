@@ -410,9 +410,15 @@ def test_original_voice_copies_the_speaker(tmp_path, sample_video):
     assert separated and separated[0].name == "vocals_htdemucs.wav"
     assert cloned == [(separated[0], "ru", "clips_original_ru")]
     meta = json.loads((result.folder / "meta.json").read_text(encoding="utf-8"))
-    assert meta["voice"] == clone.VOICE and meta["voice_notes"] == [] and meta["remove_voice"] is False
+    # the voice is split off anyway: the background under the copied voice is always without the original speech
+    assert meta["voice"] == clone.VOICE and meta["voice_notes"] == [] and meta["remove_voice"] is True
     # the voice is separated before the dub is spoken (it is the reference), not after
     assert labels.index("Убираю оригинальный голос") < labels.index("Озвучиваю")
+    quiet = pipeline.run(str(sample_video), Settings(work_dir=tmp_path / "work", output_dir=tmp_path / "out",
+                                                     voice=clone.VOICE, keep_background=False),
+                         translator=StubTranslator(), synth=stub_synth, transcriber=stub_transcriber,
+                         separator=stub_separator_with_vocals(separated), cloner=stub_cloner)
+    assert json.loads((quiet.folder / "meta.json").read_text(encoding="utf-8"))["remove_voice"] is False
     edge = pipeline.run(str(sample_video), Settings(work_dir=tmp_path / "work", output_dir=tmp_path / "out"),
                         translator=StubTranslator(), synth=stub_synth, transcriber=stub_transcriber)
     assert edge.id != result.id
@@ -443,6 +449,12 @@ def test_original_voice_falls_back_to_edge(tmp_path, sample_video, monkeypatch):
                           transcriber=stub_transcriber, separator=broken_separator, cloner=broken_cloner)
     no_voice = json.loads((result.folder / "meta.json").read_text(encoding="utf-8"))
     assert no_voice["voice"] == "ru-RU-DmitryNeural" and no_voice["voice_notes"] == ["clone:failed"]
+
+    # installed, but PyTorch doesn't compute on the card: never hours on the processor (Adam's RTX 5060 Ti, 2026-10-29)
+    monkeypatch.setattr(clone, "ready", lambda: True)
+    monkeypatch.setattr(clone, "cuda_ok", lambda: False)
+    no_gpu = run(None)
+    assert no_gpu["voice"] == "ru-RU-DmitryNeural" and no_gpu["voice_notes"] == ["clone:no_gpu"]
 
     monkeypatch.setattr(clone, "ready", lambda: False)
     missing = run(None)

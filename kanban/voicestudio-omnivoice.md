@@ -21,3 +21,4 @@ improve the dub. Findings: `docs/RESEARCH.md` → "VoiceStudio / OmniVoice"; pro
   Settings. Built `dubber/clone.py` + pipeline/app/UI (v0.7.0, ADR-028); verified with stand-ins, in Chromium and with a
   real CPU dub; waiting for the first run on the 3070. (by @claude)
 - 2026-10-28: The father's PC has an RTX 3050 with 4 GB (not a 3070) — below the 6 GB minimum. Adam will try it on his own PC later; not urgent. (by @claude)
+- 2026-10-29: First real-card try (RTX 5060 Ti) was very slow; 0.10.2 adds a card check, no CPU fallback and timing lines (ADR-035, `original-voice-speed.md`). (by @claude)

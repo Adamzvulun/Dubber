@@ -2,6 +2,28 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-29 — Session 8d: «Оригинал» on a real card, install progress, QA pass (v0.10.2, ADR-035)
+- Adam merged 0.10.1. On his RTX 5060 Ti PC a 5-min «Оригинал» dub estimated 90 min with the card looking idle. He
+  asked: a progress bar for the voice studio install; whether the background switches should be on with «Оригинал»;
+  QA agents on the site.
+- Built: real card check (`clone.cuda_status`, Settings line + «Установить ещё раз»), no CPU crawl (`clone:no_gpu`
+  → Edge voice), device/timing lines in the program window, `tts_clone` ETA share, voice-free background always with
+  «Оригинал» (switch shown on + locked), install progress bar from downloaded bytes.
+- QA: two agents (desktop functional with `webapp-testing`; phone mode + `web-design-guidelines`). Phone findings
+  fixed: library/watch said "empty"/"not found" while the PC was off, a link sent as the PC dropped was lost,
+  identical queue labels, placeholder scrolled sideways after clearing, plurals, no visible "sent" note, form below
+  the fold on small phones, no Android install hint, the whole bar as a live region, focus lost after «Убрать», a
+  heading out of order, tap targets < 44 px (touch screens), «Готово» green 3.45:1 → 5:1, 13 px subtitles on phones.
+- Desktop findings fixed: a logged-out cookies file was "added" (now refused, and it no longer replaces a saved
+  login), the remove-voice choice was lost around «Оригинал», links inside other text («Посмотри https://…») are
+  taken out, the background hint contradicted the remove-voice one, "work is kept" on a job cancelled in the queue,
+  "other dubs stay" with no other dubs, the Settings intro, an EN label quote; the stub now fakes the card check.
+- Left for later (`kanban/nice-to-haves.md`): native confirm() dialogs, accent-folding search, remembering the
+  voice/background choices, a confirm on per-video «Очистить кэш», an offline banner on the PC, glossary validation,
+  playlist-cancel dropping the other links, the Haiku price in `translate.py` to re-check, voice names in Cyrillic.
+- Verified: 194 tests; browser checks of the bar, the Settings card line (ok/broken stub), the locked switch, the
+  phone fixes (360×640) and the desktop fixes. Not verified: a real NVIDIA card.
+
 ## 2026-10-29 — Session 8c: NVIDIA PCs (v0.10.1, ADR-034)
 - Adam merged PR #15 (0.10.0) and dubbed an Instagram reel on a new PC: the download worked, then «cublas64_12.dll is
   not found» — Whisper picked the NVIDIA card without NVIDIA's libraries. Reproduced with a stand-in model (test

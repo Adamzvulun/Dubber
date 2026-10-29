@@ -341,6 +341,21 @@ projects fixing TikTok with curl_cffi (e.g. github.com/hypit-ai/hypit/issues/381
 developer.chrome.com/blog/remote-debugging-port, cobalt API docs (github.com/imputnet/cobalt/blob/main/docs/api.md),
 yt-dlp issue 7271 / 10927 (Chrome cookies on Windows).
 
+## Phone version and NVIDIA libraries — notes 2026-10-28/29 (ADR-033, ADR-034, ADR-035)
+- **Reaching a home PC from a phone, no accounts for users:** Tailscale works anywhere but needs an app + sign-in on
+  every PC and phone (rejected: Adam wants one click). Cloudflare **quick tunnels** (`cloudflared tunnel --url …`)
+  need no account and give a random `https://<words>.trycloudflare.com` per start — offered "for testing", no uptime
+  promise, 100 MB request bodies; the address is published through a Worker + KV mailbox on Adam's free account. If
+  they prove flaky: named tunnels under that account (need a domain).
+- **iPhone home-screen web apps** don't share Safari's storage → the household token lives in the app's path
+  (`/p/<token>/`), not in localStorage. Android's `share_target` gives Share → Дубляж; iOS has no share target for
+  web apps (a «Вставить» button reads the clipboard instead).
+- **Whisper on NVIDIA:** ctranslate2 4.5+ needs cuBLAS 12 + cuDNN 9; on Windows the pip packages
+  `nvidia-cublas-cu12` / `nvidia-cudnn-cu12` put the DLLs in `site-packages/nvidia/*/bin` (faster-whisper README).
+- **OmniVoice speed:** ~20× slower than real time on 4 CPU cores (measured 0.7.0); Task Manager's "3D" GPU graph
+  doesn't show CUDA work (pick "Cuda"), so "the card is idle" there proves nothing. The model is 3.3 GB on Hugging
+  Face (≈ 1.2 GB on the card in float16).
+
 ## Risks
 - YouTube anti-bot changes → keep yt-dlp updated; cookies-from-browser fallback (see `youtube-downloader` skill references).
 - edge-tts is an unofficial client of a Microsoft service — may break; Silero offline fallback planned.

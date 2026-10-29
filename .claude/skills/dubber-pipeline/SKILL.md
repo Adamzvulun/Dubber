@@ -19,7 +19,13 @@ description: How the Dubber dubbing pipeline (any spoken language → 12 dub lan
 Optional stages: **voice removal** (`separate.py`, Demucs ONNX → `background_htdemucs.wav`, before the mux) and the
 **original voice** (`clone.py`, voice `"original"`, OmniVoice on an NVIDIA GPU, installed from Settings): the voice is
 split off *before* TTS (`vocals_htdemucs.wav` → `vocals_24k.f32`), each line copies whoever said it, clips in
-`clips_original_<lang>/`; Hebrew, not installed or any error → the Edge male voice + `voice_notes` in meta.json (ADR-028).
+`clips_original_<lang>/`; Hebrew, not installed, PyTorch not computing on the card (`clone.cuda_ok`, ADR-035) or any
+error → the Edge male voice + `voice_notes` in meta.json (`clone:language|not_installed|no_gpu|failed`, ADR-028). With
+the original voice and the background on, the background is always the voice-free one.
+
+**Devices:** Whisper runs with `device="auto"` (the NVIDIA card when cuBLAS/cuDNN load — `gpu.py` installs them on
+Windows NVIDIA PCs — else the CPU: `transcribe.gpu_error` → redo on CPU, remembered per run, ADR-034). The program
+window prints «Распознаю речь: видеокарта/процессор» and «Голос оригинала: n/m строк, x с на группу».
 
 **Resume/cache rule:** a stage is skipped if its cache file exists. To redo a stage, delete its file
 and everything after it (e.g. new translation → delete `segments_<lang>_v3.json`; the track is keyed by the lines' content, clips by their text).
@@ -53,7 +59,11 @@ DUBBER_WHISPER_MODEL=tiny  DUBBER_TRANSLATOR=google  DUBBER_VOICE=ru-RU-Svetlana
   multilingual test clips and reports untranslated lines, Whisper re-listen, timing and back-translations;
   `tools/stub_server.py` runs the website with a stand-in pipeline for UI work (see docs/STATUS.md "How to test").
 - **Nothing heard** → `ffprobe` the track wav; check `clips/` sizes (0-byte = TTS failed).
-- **Slow** → transcription dominates on CPU; try `DUBBER_WHISPER_MODEL=base`.
+- **Slow** → transcription dominates on CPU; try `DUBBER_WHISPER_MODEL=base`. On an NVIDIA PC read the program
+  window's device lines and `work/gpu-install.log`; «Оригинал» slow → Settings card line (`clone.cuda_status`),
+  `work/stage_times.json` (seconds per stage; the original voice's step is `tts_clone`).
+- **"cublas64_12.dll is not found" / cuDNN errors** → should no longer fail a dub (CPU fallback); check
+  `work/gpu-install.log` and that `site-packages/nvidia/{cublas,cudnn}/bin` exist (`gpu.use_dll_dirs`).
 
 ## Extending
 - New dub language: add a row to `dubber/languages.py` (Edge voices from `edge_tts.list_voices()`, Google code from

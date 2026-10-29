@@ -249,6 +249,11 @@ class Job:
         return out
 
 
+def _timed(job: Job, key: str) -> str:
+    """The stage's key for the time-left estimate: the original voice's "tts" is learned apart from Edge's."""
+    return "tts_clone" if job.clone and key == "tts" else key
+
+
 class JobCancelled(Exception):
     """Raised from the progress callback to stop a job the user cancelled."""
 
@@ -303,7 +308,8 @@ class JobRunner:
             job.clone = pipeline.clone_choice(settings)[0]
             job.separate = job.remove_voice or job.clone
             job._tracker = eta.Tracker(
-                [(key, weight) for key, _, weight in pipeline.stages(job.separate, job.clone)], self.clock)
+                [(_timed(job, key), weight) for key, _, weight in pipeline.stages(job.separate, job.clone)],
+                self.clock)
             job._shares = eta.load_shares(self.history)
 
             def progress(label: str, fraction: float, job: Job = job) -> None:
@@ -311,7 +317,7 @@ class JobRunner:
                 if job.cancel_requested:
                     raise JobCancelled()
                 job.stage, job.label, job.progress = STAGE_KEYS.get(label, ""), label, round(fraction, 4)
-                job._tracker.update(job.stage, fraction)
+                job._tracker.update(_timed(job, job.stage), fraction)
 
             try:
                 result = self.runner(job.url, settings, progress=progress)
@@ -818,12 +824,19 @@ def create_app(
             raise HTTPException(413, _detail("Файл слишком большой для файла входа.", "Too big for a login file."))
         try:
             merged = sites.merge(sites.read(settings.cookies_file), body.decode("utf-8", errors="replace"))
+        except sites.NoLogin as exc:
+            raise HTTPException(422, _detail(
+                "В этом файле нет входа: похоже, когда его сохраняли, вы не вошли в аккаунт на сайте. Войдите на "
+                "сайт в браузере и сохраните файл ещё раз.",
+                "This file has no login: it looks like you weren't logged in on the site when it was saved. Log in "
+                "on the site in the browser and save the file again.")) from exc
         except sites.CookieError as exc:
             raise HTTPException(422, _detail(
                 "В этом файле нет входа на YouTube, TikTok, Instagram или Facebook. Сохраните файл cookies.txt "
-                "расширением, когда открыт нужный сайт и вы вошли в аккаунт (см. шаги выше).",
+                "расширением, когда открыт нужный сайт и вы вошли в аккаунт (см. «Если видео не скачивается…» выше).",
                 "This file has no login for YouTube, TikTok, Instagram or Facebook. Save cookies.txt with the "
-                "extension while the site is open and you are logged in (see the steps above).")) from exc
+                "extension while the site is open and you are logged in (see “If a video won't download…” above).")) \
+                from exc
         settings.cookies_file.parent.mkdir(parents=True, exist_ok=True)
         partial = settings.cookies_file.with_name(settings.cookies_file.name + ".partial")
         partial.write_text(merged, encoding="utf-8")
@@ -837,9 +850,12 @@ def create_app(
         settings.cookies_file.unlink(missing_ok=True)
         return cookie_state()
 
+    def install_state() -> dict:
+        return {**installer.state, "progress": installer.progress()}
+
     @app.get("/api/clone")
     def get_clone() -> dict:
-        return {**clone_status(), "install": installer.state}
+        return {**clone_status(), "install": install_state()}
 
     @app.post("/api/clone/install")
     def install_clone() -> dict:
@@ -851,7 +867,7 @@ def create_app(
                 "this computer doesn't have one."))
         if not state["ready"]:
             installer.start()
-        return {**state, "install": installer.state}
+        return {**state, "install": install_state()}
 
     @app.get("/api/phone")
     def phone_state() -> dict:

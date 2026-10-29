@@ -1,4 +1,18 @@
 {
+  "0.10.2": {
+    "ru": [
+      "«Настройки» → «Голос оригинала»: при установке видна полоска — сколько уже скачано.",
+      "Программа проверяет, что голос оригинала действительно работает на видеокарте, и пишет это в настройках. Если не работает — обычный голос вместо многочасовой озвучки на процессоре, и кнопка «Установить ещё раз».",
+      "С голосом «Оригинал» голос диктора из фона убирается сам — без лишнего времени.",
+      "Телефон: если компьютер выключился прямо во время отправки, ссылка не пропадает — она ждёт в очереди; библиотека пишет, что компьютер выключен; кнопки стали крупнее."
+    ],
+    "en": [
+      "Settings → “Original voice”: a progress bar shows how much has been downloaded during the install.",
+      "The program checks that the original voice really runs on the graphics card and says so in the settings. If it doesn't, the usual voice is used instead of an hours-long dub on the processor, with an “Install again” button.",
+      "With the “Original” voice, the speaker's voice is removed from the background automatically, at no extra time.",
+      "Phone: if the computer goes off right while sending, the link isn't lost — it waits in the queue; the library says the computer is off; larger buttons."
+    ]
+  },
   "0.10.1": {
     "ru": [
       "На компьютерах с видеокартой NVIDIA озвучка больше не прерывается с ошибкой «cublas64_12.dll». Программа сама (один раз, в фоне) скачивает нужные файлы NVIDIA, и речь распознаётся на видеокарте — в несколько раз быстрее. Пока они скачиваются, всё работает на процессоре."

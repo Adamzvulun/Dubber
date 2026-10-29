@@ -58,6 +58,9 @@ def test_merge_replaces_a_site_and_keeps_the_others():
         sites.merge(saved, line(".bank.com", "secret"))
     with pytest.raises(sites.CookieError):
         sites.merge(saved, "not a cookies file")
+    # exported while logged out (QA, 2026-10-29): refused — and it must not replace the saved Instagram login
+    with pytest.raises(sites.NoLogin):
+        sites.merge(saved, line(".instagram.com", "csrftoken"))
 
 
 def test_summary_per_site():

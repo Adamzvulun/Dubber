@@ -144,6 +144,8 @@ def clone_choice(settings: Settings, cloner: CloneFn | None = None) -> tuple[boo
         return False, ["clone:language"]
     if cloner is None and not clone.ready():
         return False, ["clone:not_installed"]
+    if cloner is None and not clone.cuda_ok():  # on the processor it would take hours (ADR-028/035)
+        return False, ["clone:no_gpu"]
     return True, []
 
 
@@ -291,7 +293,9 @@ def run(
         if background is None:
             use_clone, voice_notes = False, ["clone:failed"]
             voice = languages.voice_for(target.code, "male")
-        elif remove_voice:
+        elif settings.keep_background:
+            # The voice is split off anyway (it is the reference): under the copied voice the original speech would
+            # sound like the same person twice, so the background is always the voice-free one (Adam, 2026-10-29).
             background_audio = background
 
     # 5. Text to speech
