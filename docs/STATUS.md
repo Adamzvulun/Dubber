@@ -1,13 +1,13 @@
 # Status — read this first
 
-_Last updated: 2026-10-28 (session 7). Update this page at the end of every session._
+_Last updated: 2026-10-28 (session 8). Update this page at the end of every session._
 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a **YouTube, TikTok, Instagram or Facebook**
 video **or a video file** in **any spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version **0.8.0** on `main`; **0.9.0 = open PR #14** (branch `claude/blissful-bell-14f4au`, waiting for Adam's
-review). The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
+Current version **0.9.0** on `main` (PR #14 merged); **0.10.0 = the phone version** (ADR-033) on branch
+`claude/focused-fermat-9gqp5q`, PR #15 — waits for Adam's Cloudflare account (mailbox address) and review. The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
 shipping. Adam confirmed 0.6.0 arrived on his PC by itself.
 Session 7 (2026-10-28): **0.8.0 (merged, PR #13)** — the Windows install broke for anyone with Python 3.15 (released
 Oct 2026; no onnxruntime build) → launchers use only Python 3.10–3.14, Microsoft C++ runtime installed, no-winget
@@ -22,6 +22,11 @@ switched to Consolas (Russian showed as `?` in the window) and the shortcut appe
 **README.md now opens with full user guides in Russian and Hebrew** (every function, Claude step by step).
 Earlier: per-dub library entries + self-update (session 4), voice removal and transcription fixes (session 3).
 
+Session 8 (2026-10-28): Settings stays one 760 px column (Adam). **Phone version 0.10.0 (ADR-033):** the same
+website as a home-screen app on Samsung/iPhone; the PC is reached through a free Cloudflare quick tunnel
+(`dubber/phone.py`, cloudflared downloaded by the program), a mailbox Worker on Adam's Cloudflare account
+(`cloud/worker/`) serves the phone app and keeps links while the PC is off; pairing by QR code in Settings → «Телефон».
+
 ## Where things are
 - **Git:** `main` = stable and **shipped** (PCs self-update from it; every release bumps the version and adds a
   `dubber/changelog.json` entry). Code changes: a branch + PR into `main`; CI (`CI` lint + tests, and `Windows install`
@@ -32,9 +37,11 @@ Earlier: per-dub library entries + self-update (session 4), voice removal and tr
   `uploads/…` branches in `dev-uploads/`.
 - **Code:** `dubber/` (pipeline stages, `app.py` = server/API/jobs/settings, `eta.py` = time left, `config.py` =
   settings + `save_env` + local ffmpeg on PATH, `separate.py` = voice removal, `sites.py` = TikTok/Instagram/Facebook +
-  login file, `deps.py` = component self-check run by the launcher, `clone.py` = «Оригинал» voice), `dubber/web/`
+  login file, `deps.py` = component self-check run by the launcher, `clone.py` = «Оригинал» voice, `phone.py` = the phone: cloudflared tunnel + mailbox), `dubber/web/`
+  (also the phone app: `manifest.webmanifest`, `sw.js`, `icons/`), `cloud/` (mailbox Worker `cloud/worker/` + its
+  Node tests, `cloud/build.py` = phone app build), `dubber/web/`
   (site; `i18n.js` = all UI text RU/EN), `update.py` = self-update, `changelog.json` = "What's new", `assets/` = logo +
-  Windows icon), `tests/` (162 tests, offline), `tools/` (stub server, 12-language QA, Hebrew voice QA, `make_icon.py`), `Start Dubber.cmd` +
+  Windows icon), `tests/` (182 tests, offline), `tools/` (stub server, 12-language QA, Hebrew voice QA, `make_icon.py`), `Start Dubber.cmd` +
   `scripts/windows/dubber.ps1` (Windows start: install, shortcut, font, start; `-NoStart`, `-ShortcutOnly`; ADR-025),
   `scripts/` (old `.bat` launchers that now call `dubber.ps1`; macOS/Linux scripts), `.github/workflows/`
   (`ci.yml`; `windows-install.yml` = jobs `install` + `clean-pc` (no winget, Cyrillic folder, too-new venv rebuilt,
@@ -116,6 +123,9 @@ original voice; the voice-free background goes under the dub, ducked while it sp
 - Timing (ADR-013), all 12 dub languages (ADR-014/016: 24 real QA dubs), real YouTube runs (session 1).
 
 ## Not verified yet
+- **Phone version (0.10.0):** a real quick tunnel and the real Worker (blocked here; the Windows CI step runs real
+  cloudflared through a real tunnel), a real Samsung / iPhone (install, share target, paste, video playback). Needs
+  Adam's Cloudflare account first.
 - **Real TikTok / Instagram / Facebook links (0.9.0)** — public ones should work without a login (ADR-032); whether
   Instagram's anonymous path holds up in practice is the big unknown. If it fails often → offer the in-program login
   window (RESEARCH option 5, ADR-032 "Next").
@@ -125,12 +135,14 @@ original voice; the voice-free background goes under the dub, ducked while it sp
   voice removal, Google, H.264 playback).
 
 ## Next steps (in order)
-0. **PR #14 (0.9.0):** Adam reviews/merges (CI must be green: `CI`, `Windows install` incl. the curl-cffi check,
-   `Original voice install`). Then he dubs a real TikTok, an Instagram Reel and a Facebook video **without** a login;
+0. **Phone version 0.10.0 (PR #15):** Adam: (a) free Cloudflare account, open "Workers & Pages" once (choose the
+   `workers.dev` name), API token from the template "Edit Cloudflare Workers", add GitHub secrets
+   `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`; (b) send the address `https://dubber.<name>.workers.dev` →
+   put it into `phone.MAILBOX_URL` on the PR before merging (until then the «Телефон» panel says "not switched on
+   yet"); (c) merge → `deploy-phone.yml` deploys; (d) pair his Samsung, dub with the PC on and off. Adam (0.9.0 is merged) dubs a real TikTok, an Instagram Reel and a Facebook video **without** a login;
    if one fails, read the job card's message (login-only → «Вход на сайты»; rate limit → wait an hour). Ask him
    whether Instagram worked without a login; if not reliably, propose the in-program login window (ADR-032 "Next").
    Also open: fresh 0.8.0 install on the father's Windows 11 PC, a dub with both subtitle switches.
-   Future (not started): phone version (`kanban/phone-app.md`).
 1. **0.7.0 on an NVIDIA PC (Adam's own; the father's has an RTX 3050 4 GB — below the 6 GB minimum):** then Settings → «Голос оригинала» →
    «Установить» (watch `work/omnivoice-install.log` if it fails: CUDA wheel for his Python, driver too old), dub a
    short video with «Оригинал», listen, and report the time it took (the job card's clock). Tune `BATCH` / steps if slow.
@@ -151,6 +163,11 @@ original voice; the voice-free background goes under the dub, ducked while it sp
 - **Network:** the environment needs these hosts allowed (or "Full" access): `youtube.com`, `*.youtube.com`,
   `*.googlevideo.com`, `*.ytimg.com`, `youtubei.googleapis.com`, `huggingface.co`, `*.huggingface.co`, `*.hf.co`,
   `translate.googleapis.com`, `speech.platform.bing.com`. Fonts load from Google Fonts (optional).
+- **Phone version without Cloudflare:** `python3 cloud/build.py`, `node tools/phone_dev.mjs 7871` (mailbox :8787 +
+  "tunnel" :7872 adding Cf-Ray), then `STUB_MAILBOX=http://127.0.0.1:8787 STUB_TUNNEL=http://127.0.0.1:7872
+  STUB_PULL=3 .venv/bin/python tools/stub_server.py DIR 7871`; the phone app is `/api/phone` → `pair_url`. Phone
+  viewports in Playwright: `devices['Galaxy S9+']`, `devices['iPhone 13']`. Running downloaded binaries (cloudflared)
+  is blocked here. Worker tests: `node --test cloud/worker/worker.test.mjs`.
 - **TikTok, Instagram and Facebook are unreachable from the sandbox** (network policy; they also block datacenter
   IPs): test with the yt-dlp stand-in in `tests/test_download.py`; real links only on Adam's PC.
 - **Always install/upgrade `yt-dlp[default,curl-cffi]`, never plain `yt-dlp`:** without curl_cffi TikTok and

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dubber"
-version = "0.9.0"
+version = "0.10.0"
 description = "Paste a YouTube link, get the video dubbed into Russian (plus subtitles and transcript)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,6 +23,7 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "anthropic>=1.0",  # Claude translation (paid, opt-in: used only when a key is entered in the settings)
+    "segno>=1.6",  # the QR code that connects a phone (Settings → «Телефон»; pure Python)
 ]
 
 [project.optional-dependencies]

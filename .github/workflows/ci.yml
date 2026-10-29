@@ -25,3 +25,5 @@ jobs:
         run: ruff check .
       - name: Tests (offline)
         run: pytest -q
+      - name: Phone mailbox worker tests (Node)
+        run: node --test cloud/worker/worker.test.mjs

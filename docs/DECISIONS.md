@@ -388,3 +388,42 @@ Newest at the bottom. Format: context → decision → consequences.
   profile folder + DevTools protocol to read the cookies (RESEARCH, option 5). Not built yet; ask Adam first.
 - **Not verified live:** the sandbox can't reach the sites. Verified: curl_cffi installs (Windows wheels 3.10–3.14),
   yt-dlp lists curl_cffi impersonation targets (unit test + Windows CI step).
+
+## ADR-033 — Dubber on the phone: the same website as an installable web app, the home PC through a Cloudflare quick tunnel, a mailbox for links while the PC is off (2026-10-28)
+- **Context:** Adam: scroll TikTok/Instagram/Facebook/YouTube on the phone, copy a link, paste it into Dubber on
+  the phone; Samsung for him and his father, iPhone must work too; from anywhere (home or mobile data); dub at once
+  when the PC is on, else queue and dub when it starts (send-and-forget); a home-screen icon, not a store app; and
+  **install as simple as possible: one click, the install does anything external, minimal taps** (this ruled out
+  Tailscale, chosen first: an app and an account sign-in on every PC and phone).
+- **Decision:**
+  - **The phone never dubs** (Whisper, Demucs, voices need the PC). Each phone pairs with its own household's PC.
+  - **Reaching the PC:** `cloudflared tunnel --url http://127.0.0.1:7860` (a free Cloudflare *quick tunnel*: no
+    account) started with the program (`dubber/phone.py`); cloudflared is downloaded into `cloudflared/` on the first
+    start (GitHub releases, `latest`), kept by updates. The server still listens on 127.0.0.1 only. Requests that
+    come through the tunnel (Cf-Ray) must carry the household token (`X-Dubber-Token`, or `?t=` for video/picture/
+    download addresses) and may only dub, list jobs/videos, play/download/delete videos and upload (`PHONE_ROUTES`);
+    settings, logins, updates, disk space and the original-voice install stay PC-only. CORS only for the phone app.
+  - **The mailbox:** a Cloudflare Worker (`cloud/worker/`, free plan, KV) on Adam's account serves the phone app at
+    `https://dubber.<name>.workers.dev/p/<token>/` and keeps per household (key = SHA-256 of the token) the PC's
+    current tunnel address and the links left while the PC was off (30 days). The PC announces its address at start
+    and every 5 min and pulls links every minute (`PhoneBridge`). Deployed by `.github/workflows/deploy-phone.yml` on
+    every merge to `main` (secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`), so phones and PCs stay on one
+    version. `phone.MAILBOX_URL` holds its address.
+  - **The phone app = the same `dubber/web/`** (relative file addresses; `app.js` switches to phone mode under
+    `/p/<token>/`): `manifest.webmanifest` (standalone, icons, Android share target → Share → «Дубляж»),
+    `sw.js` (opens without the PC), «Вставить» (clipboard), «Установить на телефон» (Android install prompt), an
+    iPhone hint (Share → Add to Home Screen), PC on/off bar, «Ждут компьютера» list. The token is in the path, not
+    in browser storage, because an iPhone home-screen app does not share Safari's storage.
+  - **Pairing:** Settings → «Телефон» shows a QR code (`segno`) of the household's phone-app address.
+- **Rejected:** Tailscale (accounts + app everywhere), home Wi-Fi only (Adam wants anywhere), a rented server that
+  dubs (cost; YouTube blocks datacenters, ADR-023), store apps (fees, review, a Mac for iPhone), queue on the phone
+  only (a home-screen app can't send in the background).
+- **Risks:** quick tunnels are offered "for testing", without an uptime guarantee; if they turn out flaky, the
+  worker can create a named tunnel per household under Adam's account (needs a domain, ~$10/year) — users would see
+  no difference. Uploads through Cloudflare are limited to 100 MB per file (message on the phone).
+- **Verified here:** worker unit tests (Node), PC side unit tests (token, routes, CORS, bridge, tunnel log parsing,
+  download), and an end-to-end run with a local stand-in for Cloudflare (`tools/phone_dev.mjs`: mailbox + tunnel)
+  in Chromium with Samsung- and iPhone-sized phones: pairing, PC on → dub, library + video + download through the
+  tunnel, PC off → queued → PC back → dubbed (in the chosen language), share target, paste, offline app, RU/EN,
+  dark. **Not verified:** a real quick tunnel and the real Worker (sandbox: running downloaded binaries is blocked;
+  the Windows CI job runs real cloudflared), real Samsung/iPhone.

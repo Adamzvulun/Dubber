@@ -118,7 +118,9 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [ ] Adam: fresh install on a Windows 11 PC; watch a dub with both subtitle switches
 
 ### M10 — Future (Adam, 2026-10-28)
-- [ ] Phone version: fully usable on iPhone and Samsung (`kanban/phone-app.md`) — not started
+- [x] Phone version: fully usable on iPhone and Samsung (`kanban/phone-app.md`, ADR-033) — built in 0.10.0
+- [ ] Adam: Cloudflare account + 2 GitHub secrets → the mailbox deploys; send me its address (`phone.MAILBOX_URL`)
+- [ ] Adam: pair his Samsung (QR), dub with the PC on and off; an iPhone if one is at hand
 - [x] Dub videos from Facebook, Instagram, TikTok + «Вход на сайты» login file (v0.9.0, ADR-031, `kanban/more-video-sites.md`)
 - [x] Public videos without a login: yt-dlp `curl-cffi` impersonation (v0.9.0, ADR-032)
 - [ ] Adam: dub a real TikTok, Instagram Reel and Facebook video without a login; report what fails

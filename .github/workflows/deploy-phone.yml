@@ -1,0 +1,53 @@
+name: Deploy phone app
+
+# The phone app + mailbox (cloud/worker/, ADR-033) on Adam's free Cloudflare account, on every merge to main —
+# so the phones get the same version as the PCs. Needs the repository secrets CLOUDFLARE_API_TOKEN (template
+# "Edit Cloudflare Workers") and CLOUDFLARE_ACCOUNT_ID; without them this does nothing.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "dubber/web/**"
+      - "dubber/__init__.py"
+      - "cloud/**"
+      - ".github/workflows/deploy-phone.yml"
+  workflow_dispatch:
+
+concurrency: deploy-phone
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Secrets set?
+        if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
+        run: echo "::notice::Cloudflare secrets are not set yet - the phone app was not deployed."
+      - uses: actions/checkout@v4
+        if: env.CLOUDFLARE_API_TOKEN != ''
+      - uses: actions/setup-node@v4
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        with:
+          node-version: "22"
+      - name: Test the worker
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: node --test cloud/worker/worker.test.mjs
+      - name: Build the phone app
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: python3 cloud/build.py
+      - name: Storage for the households' boxes (made on the first deploy)
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        working-directory: cloud/worker
+        run: |
+          find_id() { npx -y wrangler@4 kv namespace list | python3 -c "import json, sys; print(next((n['id'] for n in json.load(sys.stdin) if n['title'].endswith('dubber-box')), ''))"; }
+          id=$(find_id)
+          if [ -z "$id" ]; then npx -y wrangler@4 kv namespace create dubber-box; id=$(find_id); fi
+          test -n "$id"
+          sed -i "s/__KV_ID__/$id/" wrangler.toml
+      - name: Deploy
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        working-directory: cloud/worker
+        run: npx -y wrangler@4 deploy

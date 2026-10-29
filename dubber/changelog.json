@@ -1,4 +1,16 @@
 {
+  "0.10.0": {
+    "ru": [
+      "«Дубляж» на телефоне (Samsung и iPhone): «Настройки» → «Телефон» → наведите камеру телефона на QR-код. Ссылку из TikTok, Instagram, Facebook или YouTube можно отправить с телефона — дома или по мобильному интернету, а озвучит её компьютер.",
+      "Если компьютер выключен, ссылка с телефона подождёт и озвучится сама, когда он включится.",
+      "Готовые видео можно смотреть и скачивать на телефоне."
+    ],
+    "en": [
+      "Dubber on your phone (Samsung and iPhone): Settings → “Phone” → point the phone's camera at the QR code. Send a TikTok, Instagram, Facebook or YouTube link from the phone — at home or on mobile data — and the computer dubs it.",
+      "If the computer is off, the link from the phone waits and is dubbed by itself when it starts.",
+      "Finished videos can be watched and downloaded on the phone."
+    ]
+  },
   "0.9.0": {
     "ru": [
       "Теперь можно озвучивать видео из TikTok, Instagram (Reels) и Facebook — просто вставьте ссылку, как на YouTube. Открытые для всех видео скачиваются без входа в аккаунт.",

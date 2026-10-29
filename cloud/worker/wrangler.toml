@@ -1,0 +1,15 @@
+# Dubber's phone mailbox (worker.js). Deployed by .github/workflows/deploy-phone.yml on every merge to main.
+name = "dubber"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[assets]
+directory = "./public"            # made by `python cloud/build.py` (the website's files)
+binding = "ASSETS"
+run_worker_first = true           # every address goes through worker.js (the token is part of the path)
+html_handling = "none"
+
+[[kv_namespaces]]
+binding = "BOX"
+id = "__KV_ID__"                  # filled in by the deploy workflow (the namespace is created on the first deploy)

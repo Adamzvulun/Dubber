@@ -24,9 +24,15 @@ API
   Instagram, Facebook (sites.py): per site logged in or not; add (merged per site) / remove the login file
 - GET  /api/clone, POST /api/clone/install                          → the original voice (clone.py): graphics card,
   installed or not, install progress; install it (only with an NVIDIA card of 6 GB+)
+- GET  /api/phone, GET /api/phone/qr                                → the phone (phone.py): tunnel state + the phone
+  app's address for this household; that address as a QR code (SVG). On this computer only.
 
 Requests that change something are refused when they come from another website (Origin check): the server listens
 on this computer only, but a page open in the same browser could otherwise send them.
+
+Requests from the phone arrive through the Cloudflare tunnel (phone.py): they must carry the household's token
+(header X-Dubber-Token, or ?t= for video/picture/download addresses) and may only use what the phone needs
+(PHONE_ROUTES) — never settings, logins, updates or disk space.
 """
 
 from __future__ import annotations
@@ -35,6 +41,8 @@ import asyncio
 import contextlib
 import dataclasses
 import hashlib
+import hmac
+import io
 import json
 import os
 import queue
@@ -53,11 +61,11 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import __version__, clone, download, eta, languages, pipeline, sites, translate, update
+from . import __version__, clone, download, eta, languages, phone, pipeline, sites, translate, update
 from .config import Settings, load_settings, save_env
 from .download import is_url
 
@@ -68,6 +76,24 @@ _ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _UPLOAD = re.compile(r"^[0-9a-f]{12}/[^/\\:*?\"<>|]{1,120}$")
 UPLOAD_TYPES = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v", ".wmv", ".flv", ".mpg", ".mpeg", ".ts", ".3gp"}
 UPLOAD_MTIME = 1_000_000_000  # every upload gets this time stamp: the same file again → the same video id → cache
+# What a phone may ask for through the tunnel: dubbing, the job cards, the library and its files.
+PHONE_ROUTES = [(methods, re.compile(path)) for methods, path in (
+    ({"GET"}, r"/api/(version|languages|changelog|settings|clone|jobs|videos)"),
+    ({"GET"}, r"/api/jobs/[0-9a-f]{12}"),
+    ({"POST"}, r"/api/(jobs|upload|playlist)"),
+    ({"POST"}, r"/api/jobs/[0-9a-f]{12}/cancel"),
+    ({"GET", "DELETE"}, r"/api/videos/[A-Za-z0-9_-]{1,64}"),
+    ({"GET"}, r"/files/[A-Za-z0-9_-]{1,64}/[^/]+"),
+)]
+
+
+def via_tunnel(request: Request) -> bool:
+    """Arrived from the internet through the Cloudflare tunnel (Cloudflare adds Cf-Ray), not from this computer."""
+    return "cf-ray" in request.headers or request.headers.get("host", "").endswith(".trycloudflare.com")
+
+
+def phone_may(method: str, path: str) -> bool:
+    return any(method in methods and pattern.fullmatch(path) for methods, pattern in PHONE_ROUTES)
 
 
 def safe_file_name(name: str) -> str:
@@ -432,8 +458,10 @@ def create_app(
     restart: Callable[[], None] | None = None,
     clone_status: Callable[[], dict] = clone.status,
     installer: clone.Installer | None = None,
+    phone_bridge: Callable[[Callable[[dict], None]], phone.PhoneBridge] | None = None,
 ) -> FastAPI:
-    """`restart` (given by main()) stops this server so main() can start the version an update installed."""
+    """`restart` (given by main()) stops this server so main() can start the version an update installed.
+    `phone_bridge(submit)` (given by main()) starts the phone connection; `submit(link)` dubs a link left by a phone."""
     settings = settings or load_settings()
     installer = installer or clone.Installer(settings.work_dir / "omnivoice-install.log")
     jobs = JobRunner(settings, runner, clock)
@@ -442,13 +470,50 @@ def create_app(
     updating = threading.Lock()  # one update at a time; no new dub starts while one is installed
     app = FastAPI(title="Дубляж", docs_url=None, redoc_url=None)
 
+    def submit_from_phone(link: dict) -> None:
+        """A link a phone left in the mailbox while this PC was off (phone.py)."""
+        url = str(link.get("url", "")).strip()
+        if not is_url(url) or any(j.url == url and j.status in ("queued", "running") for j in list(jobs.jobs.values())):
+            return
+        lang = link.get("lang") if link.get("lang") in languages.LANGUAGES else languages.DEFAULT
+        voice = link.get("voice") if link.get("voice") in ("male", "female", clone.VOICE) else "male"
+        jobs.submit(url, voice, link.get("background") is not False, lang, link.get("remove_voice") is True)
+
+    bridge = app.state.phone = phone_bridge(submit_from_phone) if phone_bridge else None
+    phone_origin = "{0.scheme}://{0.netloc}".format(urlsplit(phone.mailbox_url())) if phone.mailbox_url() else None
+
+    def refused(status: int, request: Request | None = None) -> JSONResponse:
+        response = JSONResponse({"detail": _detail("Запрос отклонён.", "Request refused.")}, status_code=status)
+        return with_cors(response, request) if request else response
+
+    def with_cors(response, request: Request):
+        if phone_origin and request.headers.get("origin") == phone_origin:
+            response.headers["Access-Control-Allow-Origin"] = phone_origin
+            response.headers["Access-Control-Allow-Headers"] = "X-Dubber-Token, Content-Type"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE"
+            response.headers["Access-Control-Max-Age"] = "600"
+            response.headers["Vary"] = "Origin"
+        return response
+
     @app.middleware("http")
     async def same_origin_only(request: Request, call_next):
+        path = request.url.path
+        if via_tunnel(request):  # from a phone: the token instead of the Origin check, and only PHONE_ROUTES
+            if bridge is None:
+                return refused(403)
+            if request.method == "OPTIONS":  # the browser asks first whether the phone app may send the token
+                return with_cors(Response(status_code=204), request)
+            token = request.headers.get("x-dubber-token") or request.query_params.get("t") or ""
+            if not hmac.compare_digest(token.encode(), bridge.token.encode()):
+                return refused(401, request)
+            if not phone_may(request.method, path):
+                return refused(403, request)
+            return with_cors(await call_next(request), request)
         # Browsers send Origin with every cross-site POST/PUT/DELETE; ours come from this very server.
         origin = request.headers.get("origin")
-        if (request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path.startswith("/api/")
+        if (request.method not in ("GET", "HEAD", "OPTIONS") and path.startswith("/api/")
                 and origin is not None and urlsplit(origin).netloc != request.headers.get("host")):
-            return JSONResponse({"detail": _detail("Запрос отклонён.", "Request refused.")}, status_code=403)
+            return refused(403)
         return await call_next(request)
 
     def folder_for(video_id: str) -> Path:
@@ -783,6 +848,23 @@ def create_app(
             installer.start()
         return {**state, "install": installer.state}
 
+    @app.get("/api/phone")
+    def phone_state() -> dict:
+        if bridge is None:
+            return {"status": "off", "pair_url": None, "connected": False, "address": None}
+        return bridge.public()
+
+    @app.get("/api/phone/qr")
+    def phone_qr() -> Response:
+        import segno
+
+        if bridge is None or not bridge.public()["pair_url"]:
+            raise HTTPException(404)
+        svg = io.BytesIO()  # a whole SVG file (with xmlns), so <img> can show it
+        segno.make(bridge.public()["pair_url"], error="m").save(svg, kind="svg", scale=6, border=2, dark="#0B111C",
+                                                                 xmldecl=False)
+        return Response(svg.getvalue(), media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
+
     @app.get("/files/{video_id}/{name}")
     def get_file(video_id: str, name: str, download: bool = False) -> FileResponse:
         folder = folder_for(video_id)
@@ -912,8 +994,16 @@ def main() -> int:
         restarting.set()
         server.should_exit = True
 
-    server.config.app = create_app(settings, updater=updater, restart=restart)
-    server.run()
+    def phone_bridge(submit):
+        return phone.PhoneBridge(settings.env_file, port, submit).start()
+
+    server.config.app = create_app(settings, updater=updater, restart=restart,
+                                   phone_bridge=phone_bridge if phone.enabled() else None)
+    try:
+        server.run()
+    finally:
+        if server.config.app.state.phone is not None:
+            server.config.app.state.phone.stop()  # closes the tunnel (cloudflared) with the program
     if restarting.is_set():
         print("Запускаю новую версию…", flush=True)
         return _start_new_version(open_browser=False)

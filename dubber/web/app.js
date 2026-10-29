@@ -16,13 +16,47 @@ const jobNodes = new Map(); // job id → { node, sig }: cards are patched in pl
 const etaShown = new Map(); // job id → { text, at }: the time-left text changes at most every ETA_HOLD ms
 const ETA_HOLD = 10000;
 
+/* Phone mode: this page was opened from the mailbox (https://…workers.dev/p/<token>/, phone.py / ADR-033). The
+   household token is in the address; requests go to the home PC through its tunnel, links wait in the mailbox
+   while the PC is off. On the PC itself PHONE is null and nothing changes. */
+const PHONE = (() => {
+  const m = location.pathname.match(/^\/p\/([A-Za-z0-9_-]{32,64})\//);
+  return m ? { token: m[1], pc: null, online: false, checked: false, box: null, seen: null, install: null,
+               timer: null } : null;
+})();
+
 /* ---------- helpers ---------- */
+/** An abort signal that fires after `ms` (AbortSignal.timeout is missing on older iPhones). */
+function timeout(ms) {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
+/** Where a request goes: on the phone, the mailbox (/api/box…) or the home PC through its tunnel. */
+function target(path) {
+  if (!PHONE || path.startsWith("/api/box")) return path;
+  if (!PHONE.online) throw new Error(PHONE.checked ? t("phone.pcLost") : t("phone.checking"));
+  return PHONE.pc + path;
+}
+
+/** A video, picture or download address: on the phone it points at the PC and carries the token. */
+function media(path) {
+  if (!PHONE || !path) return path;
+  return `${PHONE.pc}${path}${path.includes("?") ? "&" : "?"}t=${PHONE.token}`;
+}
+
 async function api(path, options = {}) {
   let res;
+  const headers = { ...(options.headers || { "Content-Type": "application/json" }) };
+  if (PHONE) headers["X-Dubber-Token"] = PHONE.token;
+  const url = target(path);
   try {
-    res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+    res = await fetch(url, { ...options, headers });
   } catch (_) {
-    throw new Error(t("server.down")); // the program window was closed, or the network is down
+    // the program window was closed, or the network is down
+    if (PHONE && url !== path) { phoneLost(); throw new Error(t("phone.pcLost")); }
+    throw new Error(PHONE ? t("phone.noInternet") : t("server.down"));
   }
   if (!res.ok) {
     let message = res.status === 404 ? t("server.notFound") : t("server.down");
@@ -99,7 +133,10 @@ function route() {
   if (!state.firstRoute) $("#main").focus({ preventScroll: true }); // keyboard/screen-reader users land on the new page
   state.firstRoute = false;
 
-  if (page === "settings") {
+  if (page === "settings" && PHONE) { // the settings stay on the PC
+    location.replace("#/");
+    return;
+  } else if (page === "settings") {
     $("#view-settings").hidden = false;
     $('[data-nav="settings"]').setAttribute("aria-current", "page");
     document.title = t("title.settings");
@@ -107,6 +144,7 @@ function route() {
     loadClone();
     loadLogins();
     loadStorage();
+    loadPhone();
   } else if (page === "library") {
     $("#view-library").hidden = false;
     $('[data-nav="library"]').setAttribute("aria-current", "page");
@@ -131,7 +169,7 @@ function card(dubs) {
   const video = dubs[0];
   const node = $("#tpl-card").content.firstElementChild.cloneNode(true);
   node.href = `#/watch/${encodeURIComponent(video.id)}`;
-  if (video.thumbnail) $("img", node).src = video.thumbnail;
+  if (video.thumbnail) $("img", node).src = media(video.thumbnail);
   $(".card__duration", node).textContent = clock(video.duration);
   $(".card__title", node).textContent = video.title;
   if (dubs.length === 1) {
@@ -448,6 +486,7 @@ async function submitLinks() {
   const bad = links.find((link) => !looksLikeUrl(link));
   if (bad) { showFormError(links.length > 1 ? t("form.badUrlLine", bad) : t("form.badUrl")); field.focus(); return; }
   const choices = formChoices(), sources = [];
+  if (PHONE && !PHONE.online) { await queueOnPhone(links, choices); return; }
   let cancelled = false;
   await busy(async () => {
     for (const link of links) {
@@ -486,6 +525,7 @@ function uploadFile(file) {
   if (!file || uploadRequest) return;
   showFormError("");
   if (!VIDEO_TYPES.test(file.name)) { showFormError(t("upload.badType")); return; }
+  if (PHONE && !PHONE.online) { showFormError(t("phone.fileOffline")); $("#file").value = ""; return; }
   const choices = formChoices(), box = $("#upload");
   $("#upload-name").textContent = file.name;
   const show = (fraction) => {
@@ -500,13 +540,15 @@ function uploadFile(file) {
     uploadRequest = null; box.hidden = true; $("#file").value = "";
     if (message) showFormError(message);
   };
-  xhr.open("POST", `/api/upload?name=${encodeURIComponent(file.name)}`);
+  xhr.open("POST", target(`/api/upload?name=${encodeURIComponent(file.name)}`));
+  if (PHONE) xhr.setRequestHeader("X-Dubber-Token", PHONE.token);
   xhr.upload.onprogress = (e) => { if (e.lengthComputable) show(e.loaded / e.total); };
   xhr.onerror = () => finish(t("server.down"));
   xhr.onabort = () => finish("");
   xhr.onload = async () => {
     let body = {};
     try { body = JSON.parse(xhr.responseText); } catch (_) {}
+    if (PHONE && xhr.status === 413) { finish(t("phone.tooBig")); return; } // Cloudflare takes up to 100 MB
     if (xhr.status !== 200) {
       const detail = body.detail && typeof body.detail === "object" ? (body.detail[uiLang] || body.detail.ru) : "";
       finish(detail || t("server.down"));
@@ -549,8 +591,8 @@ async function showVideo(id) {
   state.video = video;
   const player = $("#player");
   // Subtitles come from renderCaptions (the switches under the player), not from <track> files.
-  player.replaceChildren(el("source", { src: video.video, type: "video/mp4" }));
-  player.poster = video.thumbnail;
+  player.replaceChildren(el("source", { src: media(video.video), type: "video/mp4" }));
+  player.poster = media(video.thumbnail);
   player.load();
   renderWatchDetails();
   renderCaptions();
@@ -684,7 +726,7 @@ function renderWatchDetails() {
   })));
 
   const files = video.files || {};
-  const file = (name) => `/files/${video.id}/${name}?download=1`;
+  const file = (name) => media(`/files/${video.id}/${name}?download=1`);
   const link = (name, text, primary) => name
     ? el("a", { class: primary ? "btn btn--primary" : "btn", href: file(name), download: true, text }) : null;
   $("#downloads").replaceChildren(...[
@@ -799,6 +841,8 @@ function applyUiLang() {
   renderNews();
   renderPlaylistAsk();
   renderStorage();
+  renderPhonePanel();
+  renderPhoneBar();
   if (state.video) renderWatchDetails();
   else if (!$("#view-settings").hidden) document.title = t("title.settings");
   else if (!$("#view-library").hidden) document.title = t("title.library");
@@ -1181,18 +1225,184 @@ async function init() {
 
   initCaptions();
   initSettings();
+  if (PHONE) initPhone();
   applyUiLang(); // interface language first, before waiting for the server (no flash of the other language)
-  try { state.languages = await api("/api/languages"); fillLanguageSelect(); renderLibrary(); } catch (_) {}
+  if (PHONE) await phoneConnect(); // finds the home PC (or not) before the first requests
+  await loadLanguages();
   window.addEventListener("hashchange", route);
   route();
   if (!state.settings) loadSettings(); // the note under the dub form says which translator is used
   if (!state.clone) loadClone(); // the "Original" voice is offered once it is installed
-  try { state.version = (await api("/api/version")).version; renderVersion(); checkNews(); } catch (_) {}
+  try {
+    state.version = (await api("/api/version")).version; renderVersion();
+    if (!PHONE) checkNews(); // "What's new" is about the PC program; the phone would show its whole history at once
+  } catch (_) {}
   $("#news-close").addEventListener("click", () => { state.news = []; renderNews(); markNewsSeen(); });
   $("#update-btn").addEventListener("click", installUpdate);
-  checkUpdate();
-  setInterval(checkUpdate, 60 * 60 * 1000); // the server asks GitHub at most once an hour
+  if (!PHONE) { // the PC updates itself; the phone app is updated with the mailbox
+    checkUpdate();
+    setInterval(checkUpdate, 60 * 60 * 1000); // the server asks GitHub at most once an hour
+  }
   pollJobs();
+}
+
+/** Dub languages from the PC; the phone keeps a copy for when the PC is off (links are queued with a language). */
+async function loadLanguages() {
+  try {
+    state.languages = await api("/api/languages");
+    try { localStorage.setItem("dubber.languages", JSON.stringify(state.languages)); } catch (_) {}
+  } catch (_) {
+    try { state.languages = JSON.parse(localStorage.getItem("dubber.languages")) || state.languages; } catch (_) {}
+  }
+  fillLanguageSelect();
+  renderLibrary();
+}
+
+/* ---------- the phone (phone mode only) ---------- */
+function initPhone() {
+  document.documentElement.classList.add("is-phone");
+  $("#phone-bar").hidden = false;
+  $("#pick-file").dataset.i18n = "form.pickFilePhone";
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {}); // opens offline too
+  // Samsung: Share → Дубляж hands the link over in the address (share_target in the manifest).
+  const params = new URLSearchParams(location.search);
+  const shared = ["url", "text", "title"].map((k) => params.get(k) || "").join(" ").match(/https?:\/\/\S+/);
+  if (shared) { $("#url").value = shared[0]; autoGrow(); }
+  if (location.search) history.replaceState(null, "", location.pathname + location.hash);
+  // Paste: one tap instead of a long press in the field.
+  if (navigator.clipboard?.readText) {
+    $("#paste").hidden = false;
+    $("#paste").addEventListener("click", async () => {
+      let text = "";
+      try { text = await navigator.clipboard.readText(); } catch (_) {}
+      const link = (text || "").match(/https?:\/\/\S+/);
+      if (!link) { showFormError(t("phone.pasteEmpty")); $("#url").focus(); return; }
+      showFormError("");
+      const field = $("#url");
+      field.value = field.value.trim() ? `${field.value.trim()}\n${link[0]}` : link[0];
+      autoGrow();
+    });
+  }
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); PHONE.install = e; renderPhoneBar(); });
+  window.addEventListener("appinstalled", () => { PHONE.install = null; renderPhoneBar(); });
+  $("#phone-install").addEventListener("click", async () => {
+    if (!PHONE.install) return;
+    PHONE.install.prompt();
+    try { await PHONE.install.userChoice; } catch (_) {}
+    PHONE.install = null; renderPhoneBar();
+  });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) phoneConnect(); });
+}
+
+/** Ask the mailbox where the PC is, then ask the PC itself. Repeats: often while the PC is off. */
+async function phoneConnect() {
+  clearTimeout(PHONE.timer);
+  let box = null, online = false;
+  try { box = await api("/api/box"); } catch (_) {}
+  if (box?.pc) {
+    try {
+      const res = await fetch(`${box.pc.url}/api/version`, { headers: { "X-Dubber-Token": PHONE.token }, signal: timeout(6000) });
+      online = res.ok;
+    } catch (_) {}
+  }
+  const was = PHONE.online;
+  Object.assign(PHONE, { box, pc: box?.pc?.url || null, seen: box?.pc?.seen || null, online, checked: true });
+  renderPhoneBar();
+  if (online && !was && state.version !== undefined) { // the PC came back while the app was open
+    await loadLanguages(); loadLibrary(); loadSettings(); loadClone(); pollJobs();
+  }
+  PHONE.timer = setTimeout(phoneConnect, online ? 60000 : 20000);
+}
+
+/** A request to the PC failed: show it as off and look for it again soon. */
+function phoneLost() {
+  if (!PHONE.online) return;
+  PHONE.online = false;
+  renderPhoneBar();
+  clearTimeout(PHONE.timer);
+  PHONE.timer = setTimeout(phoneConnect, 5000);
+}
+
+function seenLabel(iso) {
+  if (!iso) return "";
+  const date = new Date(iso), today = new Date();
+  const time = date.toLocaleTimeString(uiLang === "ru" ? "ru-RU" : "en-GB", { hour: "2-digit", minute: "2-digit" });
+  return date.toDateString() === today.toDateString() ? time : `${dateLabel(iso)} ${time}`;
+}
+
+function renderPhoneBar() {
+  if (!PHONE) return;
+  const bar = $("#phone-bar");
+  bar.classList.toggle("is-on", PHONE.online);
+  bar.classList.toggle("is-off", PHONE.checked && !PHONE.online);
+  $("#phone-state-text").textContent = !PHONE.checked ? t("phone.checking")
+    : PHONE.online ? t("phone.pcOn") : PHONE.box === null ? t("phone.noInternet")
+    : PHONE.pc ? t("phone.pcOff", seenLabel(PHONE.seen)) : t("phone.noPc");
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  $("#phone-install").hidden = standalone || !PHONE.install;
+  $("#phone-ios").hidden = standalone || !ios;
+  $("#phone-install-box").hidden = $("#phone-install").hidden && $("#phone-ios").hidden;
+  renderPhoneQueue();
+}
+
+function renderPhoneQueue() {
+  const links = PHONE.box?.links || [];
+  $("#phone-queue-box").hidden = !links.length;
+  $("#phone-queue").replaceChildren(...links.map((link) => {
+    let label = link.url;
+    try { const u = new URL(link.url); label = u.hostname.replace(/^www\./, "") + u.pathname; } catch (_) {}
+    return el("li", { class: "phone-queue__item" },
+      el("span", { class: "phone-queue__link", text: label, title: link.url }),
+      el("span", { class: "phone-queue__lang muted", text: langName(link.lang) }),
+      el("button", { class: "btn btn--quiet", type: "button", text: t("phone.remove"), onclick: async (e) => {
+        e.currentTarget.disabled = true;
+        try { await api(`/api/box/links/${link.id}`, { method: "DELETE" }); } catch (_) {}
+        try { PHONE.box = await api("/api/box"); } catch (_) {}
+        renderPhoneQueue();
+      } }));
+  }));
+}
+
+/** PC off: the links wait in the mailbox with the form's choices; the PC dubs them when it starts. */
+async function queueOnPhone(links, choices) {
+  await busy(async () => {
+    for (const url of [...new Set(links)]) {
+      await api("/api/box/links", { method: "POST", body: JSON.stringify({ url, ...choices }) });
+    }
+    $("#url").value = ""; autoGrow();
+    $("#jobs-status").textContent = t("phone.queued", new Set(links).size);
+    try { PHONE.box = await api("/api/box"); } catch (_) {}
+    renderPhoneQueue();
+  });
+}
+
+/* ---------- the phone panel in Settings (on the PC) ---------- */
+let phonePanelTimer = null;
+
+async function loadPhone() {
+  clearTimeout(phonePanelTimer);
+  try { state.phone = await api("/api/phone"); } catch (_) { return; }
+  renderPhonePanel();
+  // still getting ready: look again soon, while the settings page is open
+  if (["starting", "downloading", "waiting"].includes(state.phone.status) && !$("#view-settings").hidden) {
+    phonePanelTimer = setTimeout(loadPhone, 3000);
+  }
+}
+
+function renderPhonePanel() {
+  const phone = state.phone;
+  if (!phone) return;
+  const ready = phone.status === "ready" || (phone.pair_url && phone.status !== "unconfigured");
+  $("#phone-badge").textContent = phone.status === "ready" ? t("phone.badge.ready")
+    : phone.status === "off" ? t("phone.badge.off") : "";
+  $("#phone-badge").hidden = !$("#phone-badge").textContent;
+  $("#phone-badge").classList.toggle("badge--on", phone.status === "ready");
+  $("#pair").hidden = !ready;
+  const qr = $("#pair-qr");
+  qr.alt = t("phone.qrAlt");
+  if (ready && !qr.getAttribute("src")) qr.src = "/api/phone/qr";
+  $("#phone-note").textContent = t(`phone.status.${phone.status}`);
 }
 
 init();
