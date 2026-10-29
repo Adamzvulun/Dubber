@@ -364,7 +364,7 @@ CLAUDE_MODELS = {
 DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
 
 # Part of the Claude cache key (pipeline.py): changing the prompt or the request translates cached videos again.
-CLAUDE_PROMPT_VERSION = 2
+CLAUDE_PROMPT_VERSION = 3
 CLAUDE_SYSTEM_PROMPT = """You translate the speech of a video into natural spoken {target} for a voice-over.
 The speech may be in any language, or several (each line says its language); translate every line into {target}.
 The listener is a {target}-speaking professional learning from this video. "video" gives its title and channel: use
@@ -378,8 +378,11 @@ Rules:
 - Each line is spoken in the time the speaker took ("seconds"). Aim for about "max_chars" characters: prefer short,
   natural spoken wording over a literal translation. Meaning comes first: never drop or change what is said to fit;
   a little over the budget is fine.
-- Keep technical terms accurate and consistent through the whole video; keep names, product names, code and
-  acronyms as in the original.
+- Keep technical terms accurate and consistent through the whole video.
+- A {target} voice reads your text aloud, and it says anything in another alphabet with a foreign accent. So write
+  every word in the {target} writing system, as a {target} speaker would say it: names, product names and acronyms
+  by their established {target} form or spelled as pronounced. Translate everything else; never leave a word in the
+  original language or alphabet.
 - "context_before" holds earlier lines of the same video, for context only: do not translate them."""
 
 # Spelling that a speech engine needs (it reads exactly what is written), added to the prompt for that dub language.
@@ -387,7 +390,8 @@ SPEECH_NOTES = {
     "he": "Write standard Hebrew spelling (ktiv male as the Academy of the Hebrew Language defines it), without "
           "niqqud. A speech engine reads it aloud exactly as written, so an extra yod or vav changes the word: "
           "\"ייתר\" is read \"yiter\", the word for \"the rest\" is \"יתר\" (yeter).",
-    "ru": "Write \"ё\" wherever it is pronounced (всё, её, ещё): a speech engine reads \"е\" otherwise.",
+    "ru": "Write \"ё\" wherever it is pronounced (всё, её, ещё): a speech engine reads \"е\" otherwise. Names and "
+          "acronyms in Russian letters, e.g. FBI -> ФБР, Kay -> Кей, iPhone -> айфон.",
 }
 
 
