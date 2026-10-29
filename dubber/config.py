@@ -22,6 +22,15 @@ def use_local_ffmpeg(root: Path = PROJECT_ROOT) -> None:
 use_local_ffmpeg()
 
 
+def _use_nvidia_dlls() -> None:
+    from .gpu import use_dll_dirs  # NVIDIA's DLLs for Whisper on the card, when gpu.py installed them (ADR-034)
+
+    use_dll_dirs()
+
+
+_use_nvidia_dlls()
+
+
 def _load_dotenv(path: Path) -> None:
     """Minimal .env loader (KEY=VALUE lines) so users don't need extra packages."""
     if not path.is_file():

@@ -36,7 +36,8 @@ node tools/phone_dev.mjs 7871                                  # local Cloudflar
   removal), `mux`, `subtitles`), orchestrated by
   `pipeline.py`; `languages.py` (the 12 dub languages: voices, codes), `timing.py` (pace planner), `segments.py`
   (lines from word timings), `sites.py` (TikTok/Instagram/Facebook, the «Вход на сайты» login file — ADR-031), `clone.py` (optional «Оригинал» voice: OmniVoice voice cloning, NVIDIA GPU only, installed
-  from Settings — ADR-028), `phone.py` (the phone: cloudflared quick tunnel + mailbox — ADR-033), `hub.py` (model downloads), `cli.py`, `app.py` (FastAPI server + JSON API, jobs, cancel,
+  from Settings — ADR-028), `phone.py` (the phone: cloudflared quick tunnel + mailbox — ADR-033), `gpu.py` (NVIDIA libraries for Whisper,
+  CPU fallback — ADR-034), `hub.py` (model downloads), `cli.py`, `app.py` (FastAPI server + JSON API, jobs, cancel,
   settings: Claude key/model/glossary saved to `.env` + `glossary.txt`), `config.py` (settings, `save_env`).
 - `dubber/web/` — the website front-end (plain HTML/CSS/JS, no build step): `index.html`, `styles.css`, `app.js`,
   `i18n.js` (every UI string in RU + EN — never hard-code text elsewhere). The same files are the phone app

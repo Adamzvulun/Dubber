@@ -21,3 +21,4 @@ Safari (the on-screen subtitles are native text tracks, so they already show in 
   (send-and-forget); home-screen icon; one-click install, no accounts for users. Built 0.10.0: Cloudflare quick
   tunnel + mailbox Worker + the same website as a PWA (ADR-033), PR #15. Next: Adam's Cloudflare account + secrets,
   `phone.MAILBOX_URL`, then a real Samsung/iPhone test. (by @claude)
+- 2026-10-29: PR #15 merged (0.10.0). Waiting for the Cloudflare address to switch it on. (by @claude)

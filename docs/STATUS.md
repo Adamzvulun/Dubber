@@ -6,8 +6,9 @@ _Last updated: 2026-10-28 (session 8). Update this page at the end of every sess
 Dubber is a local website (FastAPI + hand-built front-end) that turns a **YouTube, TikTok, Instagram or Facebook**
 video **or a video file** in **any spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version **0.9.0** on `main` (PR #14 merged); **0.10.0 = the phone version** (ADR-033) on branch
-`claude/focused-fermat-9gqp5q`, PR #15 — waits for Adam's Cloudflare account (mailbox address) and review. The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
+Current version **0.10.0** on `main` (PR #15 merged: the phone version, ADR-033 — switched on once Adam's Cloudflare
+mailbox address is in `phone.MAILBOX_URL`); **0.10.1** (NVIDIA PCs: no more "cublas64_12.dll" failures, Whisper on
+the card, ADR-034) on branch `claude/focused-fermat-9gqp5q` in a new PR. The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
 shipping. Adam confirmed 0.6.0 arrived on his PC by itself.
 Session 7 (2026-10-28): **0.8.0 (merged, PR #13)** — the Windows install broke for anyone with Python 3.15 (released
 Oct 2026; no onnxruntime build) → launchers use only Python 3.10–3.14, Microsoft C++ runtime installed, no-winget
@@ -123,6 +124,8 @@ original voice; the voice-free background goes under the dub, ducked while it sp
 - Timing (ADR-013), all 12 dub languages (ADR-014/016: 24 real QA dubs), real YouTube runs (session 1).
 
 ## Not verified yet
+- **Whisper on a real NVIDIA card (0.10.1):** the CPU fallback and the installer are unit-tested and the NVIDIA wheels
+  resolve on Windows CI; no NVIDIA card here or in CI.
 - **Phone version (0.10.0):** a real quick tunnel and the real Worker (blocked here; the Windows CI step runs real
   cloudflared through a real tunnel), a real Samsung / iPhone (install, share target, paste, video playback). Needs
   Adam's Cloudflare account first.
@@ -135,10 +138,12 @@ original voice; the voice-free background goes under the dub, ducked while it sp
   voice removal, Google, H.264 playback).
 
 ## Next steps (in order)
-0. **Phone version 0.10.0 (PR #15):** Adam: (a) free Cloudflare account, open "Workers & Pages" once (choose the
+0. **0.10.1 (NVIDIA fix, ADR-034):** Adam merges, then re-dubs the Instagram reel on the new PC: it must work at once
+   (processor); after the background download (`work/gpu-install.log`) and a restart it should be faster.
+   **Phone version 0.10.0 (merged, not switched on yet):** Adam: (a) free Cloudflare account, open "Workers & Pages" once (choose the
    `workers.dev` name), API token from the template "Edit Cloudflare Workers", add GitHub secrets
    `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`; (b) send the address `https://dubber.<name>.workers.dev` →
-   put it into `phone.MAILBOX_URL` on the PR before merging (until then the «Телефон» panel says "not switched on
+   put it into `phone.MAILBOX_URL` in a small PR (until then the «Телефон» panel says "not switched on
    yet"); (c) merge → `deploy-phone.yml` deploys; (d) pair his Samsung, dub with the PC on and off. Adam (0.9.0 is merged) dubs a real TikTok, an Instagram Reel and a Facebook video **without** a login;
    if one fails, read the job card's message (login-only → «Вход на сайты»; rate limit → wait an hour). Ask him
    whether Instagram worked without a login; if not reliably, propose the in-program login window (ADR-032 "Next").

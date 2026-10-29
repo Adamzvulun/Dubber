@@ -427,3 +427,19 @@ Newest at the bottom. Format: context → decision → consequences.
   tunnel, PC off → queued → PC back → dubbed (in the chosen language), share target, paste, offline app, RU/EN,
   dark. **Not verified:** a real quick tunnel and the real Worker (sandbox: running downloaded binaries is blocked;
   the Windows CI job runs real cloudflared), real Samsung/iPhone.
+
+## ADR-034 — Whisper on an NVIDIA card: never fail, fetch NVIDIA's libraries automatically (2026-10-29)
+- **Context:** Adam's new PC (0.10.0): every dub failed with "Library cublas64_12.dll is not found or cannot be
+  loaded". faster-whisper/ctranslate2 4.8 with `device="auto"` picks CUDA whenever an NVIDIA driver is present, but
+  needs NVIDIA's cuBLAS 12 and cuDNN 9 DLLs, which neither Python nor the driver installs. Older test PCs had no card.
+- **Decision (Adam: "fix + auto speed-up"):**
+  - `transcribe.transcribe` runs on the requested device and, on an error naming cublas/cudnn/cudart/nvrtc/cuda,
+    redoes the work on the CPU (int8) and remembers that for the rest of the run (`_gpu_failed`). A dub never fails
+    for a missing or broken GPU library.
+  - `dubber/gpu.py`: on Windows with an NVIDIA card (`clone.gpu_info`, nvidia-smi) and the packages missing, `main()`
+    starts a background `pip install nvidia-cublas-cu12 "nvidia-cudnn-cu12>=9,<10"` (~1 GB, once, log
+    `work/gpu-install.log`); `use_dll_dirs()` (called from `config.py` at import and after the install) adds
+    `site-packages/nvidia/{cublas,cudnn}/bin` to PATH and `os.add_dll_directory`. `DUBBER_DEVICE=cpu` opts out.
+  - Any GPU-library error that still reaches the job card gets a clear RU/EN message.
+- **Rejected:** CPU only (slower on the PCs that have a card); asking the user to install CUDA (clicks, 3 GB).
+- **Not verified:** a real NVIDIA card (none here or in CI). Windows CI checks the wheels resolve for the PCs' Python.

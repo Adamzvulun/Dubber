@@ -12,6 +12,7 @@ on:
       - "dubber/config.py"
       - "dubber/deps.py"
       - "dubber/phone.py"
+      - "dubber/gpu.py"
       - "pyproject.toml"
       - ".github/workflows/windows-install.yml"
   workflow_dispatch:
@@ -107,6 +108,12 @@ jobs:
           "through the tunnel with the token: $($v.version)"
           Stop-Process -Id $p.Id -Force
           Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
+      - name: NVIDIA's libraries for Whisper on the card resolve as wheels (installed only on NVIDIA PCs, ADR-034)
+        shell: powershell
+        run: |
+          .venv\Scripts\python.exe -c "from dubber import gpu; print(' '.join(gpu.PACKAGES))"
+          .venv\Scripts\python.exe -m pip install --dry-run --only-binary=:all: --disable-pip-version-check nvidia-cublas-cu12 "nvidia-cudnn-cu12>=9,<10"
+          if ($LASTEXITCODE -ne 0) { throw "NVIDIA's libraries have no wheels for this Python" }
       - name: Start Dubber.cmd starts the program
         shell: powershell
         run: |

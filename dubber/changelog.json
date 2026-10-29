@@ -1,4 +1,12 @@
 {
+  "0.10.1": {
+    "ru": [
+      "На компьютерах с видеокартой NVIDIA озвучка больше не прерывается с ошибкой «cublas64_12.dll». Программа сама (один раз, в фоне) скачивает нужные файлы NVIDIA, и речь распознаётся на видеокарте — в несколько раз быстрее. Пока они скачиваются, всё работает на процессоре."
+    ],
+    "en": [
+      "On computers with an NVIDIA graphics card, dubbing no longer stops with a “cublas64_12.dll” error. The program downloads NVIDIA's files by itself (once, in the background), and speech is recognised on the card — several times faster. Until then, everything runs on the processor."
+    ]
+  },
   "0.10.0": {
     "ru": [
       "«Дубляж» на телефоне (Samsung и iPhone): «Настройки» → «Телефон» → наведите камеру телефона на QR-код. Ссылку из TikTok, Instagram, Facebook или YouTube можно отправить с телефона — дома или по мобильному интернету, а озвучит её компьютер.",
