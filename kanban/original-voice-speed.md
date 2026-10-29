@@ -14,3 +14,4 @@ voice studio install, whether the background switches should be on with «Ори
 ## Narrative
 - 2026-10-29: 0.10.2 (ADR-035): card check + no CPU crawl, device/timing lines, `tts_clone` ETA, voice-free background
   with «Оригинал», install progress bar; phone QA fixes. Waiting for Adam's numbers from the real card. (by @claude)
+- 2026-10-29: PR #17 open. Next: Adam's numbers from the RTX 5060 Ti (see STATUS "Next steps" 0). (by @claude)

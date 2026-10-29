@@ -545,7 +545,9 @@ Full Russian user guide: [`docs/README.ru.md`](docs/README.ru.md). Design: [`doc
 ```
 YouTube ─yt-dlp─► video ─faster-whisper (language per stretch of speech)─► text ─Google/Claude─► translation
         ─edge-tts─► voice in the dub language ─align─► timed track ─ffmpeg─► dubbed MP4 + SRT + TXT
-        (optional: Demucs removes the original voice, keeping music and sounds under the dub)
+        (optional: Demucs removes the original voice, keeping music and sounds under the dub;
+         «Оригинал»: OmniVoice speaks in the speaker's own voice on an NVIDIA card)
+Phone (home-screen web app on a Cloudflare Worker) ─► mailbox / quick tunnel ─► this PC does the dubbing
 ```
 Details and tool research: [`docs/RESEARCH.md`](docs/RESEARCH.md). Why each choice: [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
@@ -586,7 +588,10 @@ only its last 4 characters are ever shown), the model, Claude on/off, and a glos
 |---|---|---|
 | `DUBBER_WHISPER_MODEL` | `small` | `tiny`/`base` faster; `large-v3-turbo` more accurate on French/Hebrew but ~1.5× slower and it skipped English lines in tests (RESEARCH "Session 3") |
 | `DUBBER_VOICE` | `ru-RU-DmitryNeural` | or `ru-RU-SvetlanaNeural`, or `original` = the speaker's own voice (OmniVoice, installed from the Settings page; NVIDIA card ≥ 6 GB; not for Hebrew — ADR-028) |
-| `DUBBER_CLONE_DEVICE` | `cuda` if available | device for the original voice (`cpu` works but is ~20× slower than real time) |
+| `DUBBER_CLONE_DEVICE` | `cuda` if available | device for the original voice; set, it skips the card check (`cpu` works but is ~20× slower than real time) |
+| `DUBBER_DEVICE` | `auto` | Whisper's device: `auto` = the NVIDIA card when its libraries work (installed by the program on Windows, ADR-034), else the processor; `cpu` = never the card and no NVIDIA download |
+| `DUBBER_PHONE` | `1` | `0` = no phone connection (no cloudflared tunnel, ADR-033) |
+| `DUBBER_MAILBOX_URL` | `phone.MAILBOX_URL` | the phone mailbox Worker's address (tests, a second mailbox) |
 | `DUBBER_TRANSLATOR` | `auto` | `auto` = Claude if a key is set, else free Google; `google` (free only), `claude`, `offline` (NLLB on this PC). Fallback chain: Claude → Google → offline |
 | `ANTHROPIC_API_KEY` | – | enables Claude translation (paid, ~$0.09 per 10 min of speech on Opus 5.5) — normally entered on the website's **Settings** page, which saves it here |
 | `DUBBER_CLAUDE_MODEL` | `claude-opus-5-5` | `claude-opus-5-5`, `claude-sonnet-5-5` or `claude-haiku-5-5` (also on the Settings page) |
@@ -602,7 +607,9 @@ only its last 4 characters are ever shown), the model, Claude on/off, and a glos
 ```bash
 .venv/bin/ruff check . && .venv/bin/pytest
 ```
-Tests run offline (network services are stubbed). Project docs: [`docs/PLAN.md`](docs/PLAN.md) (roadmap),
+Tests run offline (network services are stubbed); the phone mailbox Worker has Node tests
+(`node --test cloud/worker/worker.test.mjs`), and `node tools/phone_dev.mjs` stands in for Cloudflare locally. Start
+with [`docs/STATUS.md`](docs/STATUS.md). Project docs: [`docs/PLAN.md`](docs/PLAN.md) (roadmap),
 [`docs/PROGRESS.md`](docs/PROGRESS.md) (log), [`kanban/`](kanban) (tasks), [`docs/SKILLS.md`](docs/SKILLS.md) (Claude skills),
 [`CLAUDE.md`](CLAUDE.md) (rules for Claude Code sessions).
 

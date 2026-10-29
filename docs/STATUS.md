@@ -1,15 +1,15 @@
 # Status — read this first
 
-_Last updated: 2026-10-28 (session 8). Update this page at the end of every session._
+_Last updated: 2026-10-29 (end of session 8). Update this page at the end of every session._
 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a **YouTube, TikTok, Instagram or Facebook**
 video **or a video file** in **any spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version **0.10.1** on `main` (phone version ADR-033 — switched on once Adam's Cloudflare mailbox address is
-in `phone.MAILBOX_URL`; NVIDIA fix ADR-034). **0.10.2** (ADR-035: «Оригинал» card check + no CPU crawl, install
-progress bar, voice-free background with «Оригинал», QA fixes) on branch `claude/focused-fermat-9gqp5q` in a new PR. The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
-shipping. Adam confirmed 0.6.0 arrived on his PC by itself.
+Current version: **0.10.1** on `main`; **0.10.2 = PR #17** (branch `claude/focused-fermat-9gqp5q`, waiting for Adam's
+merge). The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
+shipping. The phone version (0.10.0) is merged but **switched off** until Adam's Cloudflare mailbox address is put in
+`phone.MAILBOX_URL` (see Next steps 1).
 Session 7 (2026-10-28): **0.8.0 (merged, PR #13)** — the Windows install broke for anyone with Python 3.15 (released
 Oct 2026; no onnxruntime build) → launchers use only Python 3.10–3.14, Microsoft C++ runtime installed, no-winget
 fallback, component self-check `dubber/deps.py` at every start (ADR-029); on-screen subtitles: two switches under the
@@ -23,10 +23,18 @@ switched to Consolas (Russian showed as `?` in the window) and the shortcut appe
 **README.md now opens with full user guides in Russian and Hebrew** (every function, Claude step by step).
 Earlier: per-dub library entries + self-update (session 4), voice removal and transcription fixes (session 3).
 
-Session 8 (2026-10-28): Settings stays one 760 px column (Adam). **Phone version 0.10.0 (ADR-033):** the same
-website as a home-screen app on Samsung/iPhone; the PC is reached through a free Cloudflare quick tunnel
-(`dubber/phone.py`, cloudflared downloaded by the program), a mailbox Worker on Adam's Cloudflare account
-(`cloud/worker/`) serves the phone app and keeps links while the PC is off; pairing by QR code in Settings → «Телефон».
+Session 8 (2026-10-28/29), PRs #15–#17:
+- Settings stays one 760 px column (Adam turned down two columns).
+- **0.10.0 — phone version (ADR-033):** the same website as a home-screen app on Samsung/iPhone. The PC is reached
+  through a free Cloudflare quick tunnel (`dubber/phone.py`, cloudflared downloaded by the program, no account); a
+  mailbox Worker on Adam's Cloudflare account (`cloud/worker/`) serves the phone app and keeps links while the PC is
+  off; pairing by QR code in Settings → «Телефон».
+- **0.10.1 — NVIDIA PCs (ADR-034):** every dub failed on a PC with an NVIDIA card ("cublas64_12.dll is not found"):
+  Whisper now falls back to the processor, and `dubber/gpu.py` installs NVIDIA's cuBLAS/cuDNN in the background so
+  Whisper runs on the card.
+- **0.10.2 — «Оригинал» (ADR-035, PR #17):** a real card check (Settings line; no hours-long CPU dubs: `clone:no_gpu`
+  → Edge voice), device/timing lines in the program window, the install progress bar, voice-free background always
+  with «Оригинал»; a QA pass by two agents (desktop + phone) and its fixes.
 
 ## Where things are
 - **Git:** `main` = stable and **shipped** (PCs self-update from it; every release bumps the version and adds a
@@ -38,20 +46,27 @@ website as a home-screen app on Samsung/iPhone; the PC is reached through a free
   `uploads/…` branches in `dev-uploads/`.
 - **Code:** `dubber/` (pipeline stages, `app.py` = server/API/jobs/settings, `eta.py` = time left, `config.py` =
   settings + `save_env` + local ffmpeg on PATH, `separate.py` = voice removal, `sites.py` = TikTok/Instagram/Facebook +
-  login file, `deps.py` = component self-check run by the launcher, `clone.py` = «Оригинал» voice, `phone.py` = the phone: cloudflared tunnel + mailbox), `dubber/web/`
-  (also the phone app: `manifest.webmanifest`, `sw.js`, `icons/`), `cloud/` (mailbox Worker `cloud/worker/` + its
-  Node tests, `cloud/build.py` = phone app build), `dubber/web/`
-  (site; `i18n.js` = all UI text RU/EN), `update.py` = self-update, `changelog.json` = "What's new", `assets/` = logo +
-  Windows icon), `tests/` (182 tests, offline), `tools/` (stub server, 12-language QA, Hebrew voice QA, `make_icon.py`), `Start Dubber.cmd` +
+  login file, `deps.py` = component self-check run by the launcher, `clone.py` = «Оригинал» voice + its installer +
+  card check, `phone.py` = the phone: cloudflared tunnel + mailbox, `gpu.py` = NVIDIA libraries for Whisper),
+  `dubber/web/` (site; `i18n.js` = all UI text RU/EN; also the phone app: `manifest.webmanifest`, `sw.js`, `icons/`,
+  phone mode in `app.js` under `/p/<token>/` — keep file addresses relative), `cloud/` (mailbox Worker
+  `cloud/worker/` + its Node tests, `cloud/build.py` = phone app build), `update.py` = self-update, `changelog.json` =
+  "What's new", `assets/` = logo + Windows icon), `tests/` (194 tests, offline), `tools/` (stub server,
+  `phone_dev.mjs` = local Cloudflare stand-in, 12-language QA, Hebrew voice QA, `make_icon.py`,
+  `make_phone_icons.js`), `Start Dubber.cmd` +
   `scripts/windows/dubber.ps1` (Windows start: install, shortcut, font, start; `-NoStart`, `-ShortcutOnly`; ADR-025),
   `scripts/` (old `.bat` launchers that now call `dubber.ps1`; macOS/Linux scripts), `.github/workflows/`
   (`ci.yml`; `windows-install.yml` = jobs `install` + `clean-pc` (no winget, Cyrillic folder, too-new venv rebuilt,
-  repair, curl-cffi check); `original-voice-install.yml`). Conventions: `CLAUDE.md`.
-- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…032), `DESIGN.md`
+  repair, curl-cffi check, real cloudflared tunnel 401/200, NVIDIA wheels resolve); `original-voice-install.yml` (also
+  runs pytest on Windows); `deploy-phone.yml` (mailbox Worker on merges to `main`; no-op without the Cloudflare
+  secrets)). Conventions: `CLAUDE.md`.
+- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…035), `DESIGN.md`
   (design system), `RESEARCH.md` (tools, timing research, 12-language QA, VoiceStudio/OmniVoice, TikTok/Instagram/Facebook without a
   login), `SKILLS.md`, `README.ru.md` (longer Russian
   reference). **User guides (RU + HE) are at the top of `README.md`** — they quote UI labels from `i18n.js`. Task cards: `kanban/` (hand-off list: `kanban/next-steps.md`).
-- **Data on a user's PC (git-ignored):** `.env` (settings saved by the website, incl. the Claude key),
+- **Data on a user's PC (git-ignored):** `.env` (settings saved by the website, incl. the Claude key and
+  `DUBBER_PHONE_TOKEN` = the household's phone secret), `cloudflared/` (the tunnel program, downloaded at the first
+  start), `work/gpu-install.log` / `work/omnivoice-install.log` (NVIDIA libraries / «Оригинал» installs),
   `cookies.txt` (site logins from «Вход на сайты»: only YouTube/TikTok/Instagram/Facebook cookies), `ffmpeg/` (when
   winget was missing),
   `glossary.txt`, `install.log` (last installer run), `.venv/dubber-installed` (components installed),
@@ -69,7 +84,8 @@ website as a home-screen app on Samsung/iPhone; the PC is reached through a free
 ## How it works (one line per stage — details in the `dubber-pipeline` skill)
 1. Download (yt-dlp + deno + curl-cffi impersonation; YouTube/TikTok/Instagram/Facebook or a file; optional
 `cookies.txt` login file; anything not H.264 re-encoded to H.264) → 2. Transcribe: Whisper `base` detects the language of every speech region, Whisper
-`small` transcribes each language run with word timings (each region gets one of the video's languages,
+`small` transcribes each language run with word timings (on the NVIDIA card when its libraries work, else the
+processor — `transcribe.gpu_error` fallback) (each region gets one of the video's languages,
 `transcribe.video_languages`; runs keep up to 1 s around them) → sentence lines (`segments.split_into_units`) → 3. Translate
 (`translate.Translator`): lines already in the dub language kept; Claude (opt-in key) gets the whole video with time
 slots, else one-language batches to Google (retries 2-4-8-16-30 s); fallback chain Claude → Google → NLLB-200 1.3B
@@ -79,6 +95,16 @@ offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 original voice; the voice-free background goes under the dub, ducked while it speaks.
 
 ## What works (verified by running it)
+- **0.10.2 (ADR-035):** unit tests (card check ok / "no kernel image" / cached / non-blocking, `clone:no_gpu`,
+  voice-free background, install progress from bytes checked against a real pip log, `tts_clone` estimate,
+  logged-out login files refused); Chromium on the stub server (progress bar RU/EN, Settings card line with
+  `STUB_CUDA=broken`, the locked switch) + QA agents' fixes re-checked (phone 360×640, desktop 1366).
+- **0.10.1 (ADR-034):** the cublas failure reproduced with a stand-in Whisper and fixed (test); NVIDIA wheels resolve
+  on Windows CI.
+- **0.10.0 phone version (ADR-033):** Worker Node tests; PC side unit tests (token, routes, CORS, bridge); Windows CI
+  runs a real cloudflared tunnel (401 without the token, 200 with it); end-to-end in Chromium with the local
+  stand-in (pairing, PC on → dub, library/video/download through the tunnel, PC off → queued → PC back → dubbed,
+  share target, paste, offline app, Samsung/iPhone sizes, RU/EN, dark).
 - **0.9.0 (TikTok/Instagram/Facebook, ADR-031/032, PR #14):** unit tests with a yt-dlp stand-in (HEVC → H.264, ids,
   login file merge/summary, API, error texts incl. Instagram's anonymous rate limit); yt-dlp lists curl_cffi
   impersonation targets (test + Windows CI step); the «Вход на сайты» panel in Chromium on the stub server (RU/EN,
@@ -124,9 +150,9 @@ original voice; the voice-free background goes under the dub, ducked while it sp
 - Timing (ADR-013), all 12 dub languages (ADR-014/016: 24 real QA dubs), real YouTube runs (session 1).
 
 ## Not verified yet
-- **«Оригинал» card check + speed on a real NVIDIA card (0.10.2).**
-- **Whisper on a real NVIDIA card (0.10.1):** the CPU fallback and the installer are unit-tested and the NVIDIA wheels
-  resolve on Windows CI; no NVIDIA card here or in CI.
+- **On a real NVIDIA card (Adam's new PC, RTX 5060 Ti 16 GB):** Whisper on the card after the background install
+  (0.10.1), the «Оригинал» card check and its real speed (0.10.2). His first «Оригинал» try on 0.10.0/0.10.1 estimated
+  90 min for 5 min of video with the card looking idle — most likely OmniVoice running on the CPU (ADR-035).
 - **Phone version (0.10.0):** a real quick tunnel and the real Worker (blocked here; the Windows CI step runs real
   cloudflared through a real tunnel), a real Samsung / iPhone (install, share target, paste, video playback). Needs
   Adam's Cloudflare account first.
@@ -134,31 +160,36 @@ original voice; the voice-free background goes under the dub, ducked while it sp
   Instagram's anonymous path holds up in practice is the big unknown. If it fails often → offer the in-program login
   window (RESEARCH option 5, ADR-032 "Next").
 - **0.8.0 on a real Windows 11 PC** (father's): fresh install, the C++ runtime prompt, subtitles with both switches.
-- **«Оригинал» voice on a real NVIDIA card** (needs ≥ 6 GB; Adam's own PC).
 - Earlier items were all verified by Adam on 2026-10-19 (0.6.1, clean-PC install, playlists, uploads, Claude dubs,
   voice removal, Google, H.264 playback).
 
 ## Next steps (in order)
-0. **0.10.2 (ADR-035):** Adam merges; on the RTX 5060 Ti PC: Settings → «Голос оригинала» must say it runs on the
-   card (else «Установить ещё раз»); dub 5 min with «Оригинал» and send the program window's «Распознаю речь: …» /
-   «Голос оригинала: … с на группу» lines + the job's total time. Task Manager's "3D" graph doesn't show CUDA: pick
-   "Cuda" in a graph's drop-down to see the card work. 0.10.1's NVIDIA fix: the Instagram reel re-dub.
-   **Phone version 0.10.0 (merged, not switched on yet):** Adam: (a) free Cloudflare account, open "Workers & Pages" once (choose the
-   `workers.dev` name), API token from the template "Edit Cloudflare Workers", add GitHub secrets
-   `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`; (b) send the address `https://dubber.<name>.workers.dev` →
-   put it into `phone.MAILBOX_URL` in a small PR (until then the «Телефон» panel says "not switched on
-   yet"); (c) merge → `deploy-phone.yml` deploys; (d) pair his Samsung, dub with the PC on and off. Adam (0.9.0 is merged) dubs a real TikTok, an Instagram Reel and a Facebook video **without** a login;
-   if one fails, read the job card's message (login-only → «Вход на сайты»; rate limit → wait an hour). Ask him
-   whether Instagram worked without a login; if not reliably, propose the in-program login window (ADR-032 "Next").
-   Also open: fresh 0.8.0 install on the father's Windows 11 PC, a dub with both subtitle switches.
-1. **0.7.0 on an NVIDIA PC (Adam's own; the father's has an RTX 3050 4 GB — below the 6 GB minimum):** then Settings → «Голос оригинала» →
-   «Установить» (watch `work/omnivoice-install.log` if it fails: CUDA wheel for his Python, driver too old), dub a
-   short video with «Оригинал», listen, and report the time it took (the job card's clock). Tune `BATCH` / steps if slow.
-2. Other ideas from the VoiceStudio research, not chosen yet: listen-back check of the dub, slight video slow-down
-   instead of rushed speech (`kanban/voicestudio-omnivoice.md`).
-3. Ideas not yet chosen (offer, don't build unasked): voice speed control; Hebrew spelling fix on the free path
-   (PLAN M7); offline TTS fallback (Silero) for Edge outages; Telegram bot; ElevenLabs (paid).
-4. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;
+0. **PR #17 (0.10.2):** Adam reviews/merges (CI must be green). Then on the RTX 5060 Ti PC: Settings → «Голос
+   оригинала» must say «Голос оригинала работает на видеокарте» (else «Установить ещё раз»); dub 5 min with
+   «Оригинал» and get from him the program window's «Распознаю речь: …» and «Голос оригинала: … с на группу» lines +
+   the total time (and `work/gpu-install.log` if Whisper still says «процессор»). Task Manager's "3D" graph doesn't
+   show CUDA work — pick "Cuda" in a graph's drop-down. If OmniVoice is on the card and still slow: tune `clone.BATCH`
+   / generation steps; the separation (Demucs ONNX) runs on the CPU — next candidate for the card.
+1. **Switch the phone version on:** Adam (a) creates a free Cloudflare account, opens "Workers & Pages" once (choose
+   the `workers.dev` name), makes an API token from the template "Edit Cloudflare Workers" and adds GitHub secrets
+   `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`; (b) sends the address `https://dubber.<name>.workers.dev` →
+   set `phone.MAILBOX_URL` in a small PR (until then «Телефон» says "not switched on yet"); (c) merge →
+   `deploy-phone.yml` deploys (check its log: KV namespace made, `wrangler deploy` ok); (d) he pairs his Samsung
+   (QR), dubs with the PC on and off; an iPhone if at hand. If quick tunnels prove flaky → named tunnel (ADR-033
+   "Risks").
+2. **Real TikTok / Instagram Reel / Facebook links without a login** (0.9.0): ask what the job card said for any
+   failure; login-only → «Вход на сайты»; rate limit → wait an hour; Instagram often failing → propose the
+   in-program login window (ADR-032 "Next") — ask first.
+3. **Father's Windows 11 PC:** fresh install (Visual C++ prompt → «Да»), a dub with both subtitle switches
+   (`kanban/install-and-subtitles.md`). His RTX 3050 has 4 GB — no «Оригинал» there, but 0.10.1's Whisper-on-card
+   applies.
+4. QA leftovers (`kanban/nice-to-haves.md`, 2026-10-29): own dialogs instead of confirm(), accent-insensitive search,
+   remember voice/background choices, confirm before per-video «Очистить кэш», offline banner on the PC, glossary
+   validation, playlist-cancel keeps the other links, re-check the Haiku price in `translate.py`, Cyrillic voice names.
+5. Ideas not yet chosen (offer, don't build unasked): voice speed control; Hebrew spelling fix on the free path
+   (PLAN M7); offline TTS fallback (Silero); Telegram bot; ElevenLabs (paid); listen-back check of the dub / slight
+   video slow-down (`kanban/voicestudio-omnivoice.md`).
+6. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;
    speaker gender unknown to the translator; offline-backup slips (Hebrew "flour" → "acid/vinegar").
 
 ## Gotchas for Claude in the cloud sandbox
@@ -175,7 +206,13 @@ original voice; the voice-free background goes under the dub, ducked while it sp
   "tunnel" :7872 adding Cf-Ray), then `STUB_MAILBOX=http://127.0.0.1:8787 STUB_TUNNEL=http://127.0.0.1:7872
   STUB_PULL=3 .venv/bin/python tools/stub_server.py DIR 7871`; the phone app is `/api/phone` → `pair_url`. Phone
   viewports in Playwright: `devices['Galaxy S9+']`, `devices['iPhone 13']`. Running downloaded binaries (cloudflared)
-  is blocked here. Worker tests: `node --test cloud/worker/worker.test.mjs`.
+  is blocked here (the auto-mode classifier refuses "code from external"), and so is a force-push: when restarting
+  the session branch from `main` after a merge, a plain fast-forward push works (the old tip is in `main`). Worker
+  tests: `node --test cloud/worker/worker.test.mjs`.
+- **NVIDIA / «Оригинал» without a card:** the stub server fakes the card check (`STUB_CUDA=broken` for the failure
+  path) and the install (`STUB_GPU`, `STUB_CLONE_FAIL`); `clone.cuda_ok` / `gpu.wanted` are monkeypatched in tests.
+- **QA agents:** spawning `general-purpose` agents with the `webapp-testing` / `web-design-guidelines` skills worked
+  well (session 8d) — give each its own stub port and scratch folder, tell them not to edit the repo.
 - **TikTok, Instagram and Facebook are unreachable from the sandbox** (network policy; they also block datacenter
   IPs): test with the yt-dlp stand-in in `tests/test_download.py`; real links only on Adam's PC.
 - **Always install/upgrade `yt-dlp[default,curl-cffi]`, never plain `yt-dlp`:** without curl_cffi TikTok and

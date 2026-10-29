@@ -1,6 +1,6 @@
 ---
 id: 35
-status: review
+status: done
 priority: High
 blocked_by: []
 tags: [bug, nvidia, whisper, v0.10.1]
@@ -17,3 +17,4 @@ card, whose cuBLAS/cuDNN libraries are not installed. Adam chose: never fail, an
   installs `nvidia-cublas-cu12` + `nvidia-cudnn-cu12` in the background on Windows NVIDIA PCs and puts their DLL
   folders on the search path; clear message if the card still fails. Unit tests; Windows CI checks the wheels
   resolve. Not verified on a real NVIDIA card. (by @claude)
+- 2026-10-29: Merged (PR #16). Real-card check still open — folded into `original-voice-speed.md`. (by @claude)
