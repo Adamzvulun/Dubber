@@ -2,6 +2,12 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-29 — Session 8c: NVIDIA PCs (v0.10.1, ADR-034)
+- Adam merged PR #15 (0.10.0) and dubbed an Instagram reel on a new PC: the download worked, then «cublas64_12.dll is
+  not found» — Whisper picked the NVIDIA card without NVIDIA's libraries. Reproduced with a stand-in model (test
+  first), fixed: CPU fallback, background install of `nvidia-cublas-cu12` + `nvidia-cudnn-cu12` on Windows NVIDIA
+  PCs (`dubber/gpu.py`), DLL folders on the search path, clear error text. Branch restarted from main; new PR.
+
 ## 2026-10-28 — Session 8b: phone version (v0.10.0, ADR-033)
 - Adam: same flow as on the PC (scroll TikTok/Instagram/Facebook/YouTube, copy, paste into Dubber on the phone);
   Samsung for both, iPhone must work; anywhere; dub at once if the PC is on, else send-and-forget; home-screen icon;

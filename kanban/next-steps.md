@@ -9,8 +9,9 @@ tags: [handoff, next]
 # Next steps (hand-off at the end of session 7, 2026-10-28)
 
 Read `docs/STATUS.md` first. Open items, in order:
-1. **Phone version 0.10.0** (PR #15, `kanban/phone-app.md`, ADR-033): Adam creates the Cloudflare account + GitHub
-   secrets and sends the workers.dev address → set `phone.MAILBOX_URL` → merge → pair his Samsung. (0.9.0 merged.)
+0. **0.10.1 NVIDIA fix** (`kanban/nvidia-whisper.md`, ADR-034): Adam merges, re-dubs on the new PC.
+1. **Phone version 0.10.0** (merged as PR #15, `kanban/phone-app.md`, ADR-033): Adam creates the Cloudflare account
+   + GitHub secrets and sends the workers.dev address → set `phone.MAILBOX_URL` (small PR) → pair his Samsung.
 2. **Adam tests real links without a login:** a public TikTok, an Instagram Reel, a Facebook video. Ask what the
    job card said for any failure. Login-only/private → «Вход на сайты» (cookies file); "rate limit" → wait an hour.
    If Instagram needs a login often → propose the in-program login window (`docs/RESEARCH.md` → option 5,

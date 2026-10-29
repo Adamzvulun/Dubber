@@ -65,7 +65,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import __version__, clone, download, eta, languages, phone, pipeline, sites, translate, update
+from . import __version__, clone, download, eta, gpu, languages, phone, pipeline, sites, translate, update
 from .config import Settings, load_settings, save_env
 from .download import is_url
 
@@ -138,6 +138,11 @@ def file_info(name: str, target: str) -> tuple[str, str | None] | None:
 
 # (words that identify the error, Russian message, English message) — checked in order.
 _ERRORS: list[tuple[Callable[[str], bool], str, str]] = [
+    (lambda t: any(w in t for w in ("cublas", "cudnn", "cudart", "nvrtc")),  # the card failed after the fallback too
+     "Видеокарта NVIDIA сейчас не работает. Закройте программу и запустите её снова — "
+     "тогда речь будет распознаваться на процессоре.",
+     "The NVIDIA graphics card isn't working right now. Close the program and start it again — speech will then be "
+     "recognised on the processor."),
     (lambda t: "ffmpeg" in t and "not found" in t,
      "Не найдена программа ffmpeg. Запустите установку ещё раз (install_windows.bat).",
      "ffmpeg was not found. Run the installer again (install_windows.bat)."),
@@ -993,6 +998,10 @@ def main() -> int:
     def restart() -> None:
         restarting.set()
         server.should_exit = True
+
+    if gpu.wanted():  # an NVIDIA card without its libraries: fetch them in the background (ADR-034)
+        print("Готовлю видеокарту NVIDIA для быстрого распознавания речи (один раз, около 1 ГБ, в фоне)…", flush=True)
+        gpu.Installer(settings.work_dir / "gpu-install.log").start()
 
     def phone_bridge(submit):
         return phone.PhoneBridge(settings.env_file, port, submit).start()

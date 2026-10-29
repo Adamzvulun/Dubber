@@ -8,6 +8,7 @@ on its own. A video in a single language is still transcribed in one go.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -22,6 +23,13 @@ EDGE = 1.0  # at most this much audio is kept around a run when it is cut out (n
 MAIN_SHARE = 0.15
 # …or when one stretch of at least SURE_SECONDS is detected this surely (a short quote in another language).
 SURE, SURE_SECONDS = 0.9, 2.0
+# NVIDIA's libraries missing or broken: Whisper picks the card ("auto") and fails on first use (cuBLAS/cuDNN DLLs).
+_GPU_ERROR = re.compile(r"cublas|cudnn|cudart|nvrtc|cuda", re.I)
+_gpu_failed = False  # the card failed once in this run of the program: use the processor from now on (gpu.py resets)
+
+
+def gpu_error(exc: BaseException) -> bool:
+    return bool(_GPU_ERROR.search(str(exc)))
 
 
 def merge_runs(pieces: list[tuple[float, float, str, float]]) -> list[tuple[float, float, str]]:
@@ -101,7 +109,21 @@ def transcribe(
 
     `progress(fraction)` is called with 0..1 as transcription advances, if given.
     `info_out`, if given, receives {"language": main language, "languages": all languages by speaking time}.
+    An NVIDIA card whose libraries are missing (ADR-034) never stops the dub: it goes on with the processor.
     """
+    global _gpu_failed
+    if device != "cpu" and not _gpu_failed:
+        try:
+            return _transcribe(audio_wav, model_size, device, progress, info_out)
+        except Exception as exc:
+            if not gpu_error(exc):
+                raise
+            _gpu_failed = True
+            print(f"Видеокарта не готова ({str(exc).splitlines()[0]}) — распознаю речь на процессоре.", flush=True)
+    return _transcribe(audio_wav, model_size, "cpu", progress, info_out)
+
+
+def _transcribe(audio_wav: Path, model_size: str, device: str, progress, info_out: dict | None) -> list[Segment]:
     from faster_whisper import WhisperModel
 
     compute_type = "int8" if device in ("auto", "cpu") else "float16"

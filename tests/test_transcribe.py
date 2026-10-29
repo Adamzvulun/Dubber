@@ -83,3 +83,55 @@ def test_stray_language_guesses_are_relabelled_to_the_video_languages(monkeypatc
     import faster_whisper.vad as vad
     monkeypatch.setattr(vad, "get_speech_timestamps", lambda samples, options: regions)
     assert transcribe.language_runs(Detector(hebrew), np.zeros(16000 * 44, np.float32)) == [(0.0, 44.0, "he")]
+
+
+def test_nvidia_card_without_its_libraries_falls_back_to_the_processor(tmp_path, tone, monkeypatch):
+    """A PC with an NVIDIA card but no cuBLAS/cuDNN: ctranslate2 picks the card and fails on first use (Adam's new PC,
+    2026-10-29). The dub must go on with the processor, and later dubs must not try the card again."""
+    wav = tone(tmp_path / "a.wav", 1.0)
+    devices = []
+
+    class FakeModel:
+        def __init__(self, size, device, compute_type):
+            devices.append((size, device, compute_type))
+            self.device = device
+
+        def transcribe(self, audio, **kw):
+            if self.device != "cpu":
+                raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+            seg = types.SimpleNamespace(start=0.0, end=1.0, text="Hi", words=[])
+            return iter([seg]), None
+
+    monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=FakeModel))
+    monkeypatch.setattr(transcribe, "language_runs", lambda model, samples: [(0.0, 1.0, "en")])
+    monkeypatch.setattr(transcribe, "_gpu_failed", False)
+    assert transcribe.transcribe(wav, "tiny")[0].text == "Hi"
+    assert devices[-1][1:] == ("cpu", "int8") and any(d[1] == "auto" for d in devices)
+    devices.clear()
+    transcribe.transcribe(wav, "tiny")
+    assert {d[1] for d in devices} == {"cpu"}  # remembered: straight to the processor
+
+
+def test_other_whisper_errors_are_not_hidden(tmp_path, tone, monkeypatch):
+    wav = tone(tmp_path / "a.wav", 1.0)
+
+    class FakeModel:
+        def __init__(self, *a, **k):
+            pass
+
+        def transcribe(self, audio, **kw):
+            raise RuntimeError("out of memory")
+
+    monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=FakeModel))
+    monkeypatch.setattr(transcribe, "language_runs", lambda model, samples: [(0.0, 1.0, "en")])
+    monkeypatch.setattr(transcribe, "_gpu_failed", False)
+    import pytest
+    with pytest.raises(RuntimeError, match="out of memory"):
+        transcribe.transcribe(wav, "tiny")
+
+
+def test_gpu_errors_are_recognised():
+    assert transcribe.gpu_error(RuntimeError("Library cublas64_12.dll is not found or cannot be loaded"))
+    assert transcribe.gpu_error(RuntimeError("Could not load library cudnn_ops64_9.dll. Error code 126"))
+    assert transcribe.gpu_error(RuntimeError("CUDA failed with error unknown error"))
+    assert not transcribe.gpu_error(RuntimeError("out of memory"))
