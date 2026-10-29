@@ -150,6 +150,15 @@ def test_claude_knows_what_the_video_is_and_that_lines_come_from_speech_recognit
     assert "part of a sentence" in system and "Meaning comes first" in system
 
 
+def test_claude_writes_every_word_for_the_voice_in_the_dub_language():
+    # Adam, 2026-10-29: names and words kept "as in the original" were read out in English by the Russian voice.
+    client = FakeClaude()
+    ClaudeBackend(client=client).translate_texts(["Hi"])
+    system = client.requests[0]["system"]
+    assert "as in the original" not in system
+    assert "Russian writing system" in system and "never leave" in system
+
+
 def test_claude_long_video_is_chunked_with_context():
     client = FakeClaude()
     engine = ClaudeBackend(client=client)

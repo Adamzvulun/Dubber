@@ -171,3 +171,35 @@ def _transcribe(audio_wav: Path, model_size: str, device: str, progress, info_ou
             if progress and total:
                 progress(min(1.0, (start + float(s.end)) / total))
     return segments
+
+
+def reader(model_size: str = "small", device: str = "auto"):
+    """`read(clip, lang)` -> what Whisper hears in a short clip (the original voice's listen-back check, clone.py).
+
+    The model loads on the first clip; on the card when it works, else the processor (as `transcribe`)."""
+    from faster_whisper import WhisperModel
+
+    models: dict[str, object] = {}
+
+    def model_on(where: str):
+        if where not in models:
+            compute_type = "int8" if where in ("auto", "cpu") else "float16"
+            models[where] = retry(lambda: WhisperModel(model_size, device=where, compute_type=compute_type))
+        return models[where]
+
+    def read(clip: Path, lang: str) -> str:
+        global _gpu_failed
+        samples = decode_audio(clip, SAMPLE_RATE)
+        if device != "cpu" and not _gpu_failed:
+            try:
+                segments, _ = model_on(device).transcribe(samples, language=lang, beam_size=5)
+                return " ".join(s.text.strip() for s in segments)
+            except Exception as exc:
+                if not gpu_error(exc):
+                    raise
+                _gpu_failed = True
+        segments, _ = model_on("cpu").transcribe(samples, language=lang, beam_size=5)
+        return " ".join(s.text.strip() for s in segments)
+
+    return read
+

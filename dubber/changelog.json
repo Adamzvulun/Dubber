@@ -1,4 +1,14 @@
 {
+  "0.10.4": {
+    "ru": [
+      "Голос «Оригинал» проверяет себя на слух: каждую фразу программа прослушивает, и если слова неразборчивы или потерялись — озвучивает её ещё раз. Голос больше не торопится.",
+      "Перевод через Claude: имена и названия пишутся русскими буквами (Кей, ФБР), поэтому русский голос больше не читает их по-английски."
+    ],
+    "en": [
+      "The “Original” voice checks itself by ear: the program listens to every line and speaks it again if words are unclear or lost. The voice is no longer rushed.",
+      "Claude translation: names and titles are written in the dub language's letters (e.g. Kay → Кей in Russian), so the voice no longer reads them in English."
+    ]
+  },
   "0.10.3": {
     "ru": [
       "Голос «Оригинал»: слова больше не «проглатываются» и не искажаются — программа не просит голос говорить быстрее, чем говорят люди.",

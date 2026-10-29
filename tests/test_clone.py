@@ -277,3 +277,67 @@ def test_cuda_check_does_not_block_the_settings_page(monkeypatch):
     monkeypatch.setattr(clone, "installed", lambda: False)
     monkeypatch.setattr(clone, "_cuda", {})
     assert clone.cuda_status(run=slow, wait=True) is None  # nothing to check
+
+
+def test_heard_share_forgives_small_slips_but_not_garbled_words():
+    assert clone.heard_share("Прекрасно.", "Рекрасно.") == 1.0  # Whisper clips a first sound on a lone word
+    assert clone.heard_share("Кей, ты видел, что он сделал с машиной?", "Кей, ты видел, что он сделал с машиной") == 1
+    assert clone.heard_share("Кей, ты видел, что он сделал с машиной?", "КТ-Виддл.Стон.Сделал с машиной.") < 0.5
+    assert clone.heard_share("Всё хорошо", "Все хорошо") == 1.0
+    assert clone.heard_share("你好吗", "你好") == 2 / 3  # no spaces: each character is a word
+    assert clone.heard_share("—", "") == 1.0  # nothing to hear
+    # words that aren't in the text count against it (e.g. the reference's English spoken in the copied voice)
+    assert clone.heard_share("Мы не одни.", "Listen to me мы не одни, listen carefully") < clone.HEARD_ENOUGH
+    assert clone.heard_share("Мы не одни во вселенной.", "Затем мы не одни во вселенной.") >= clone.HEARD_ENOUGH
+
+
+class Garbling(FakeEngine):
+    """Garbles a line on its first try (its clip says nothing a listener can make out)."""
+
+    def __init__(self, bad_tries=1):
+        super().__init__()
+        self.tries, self.bad_tries = {}, bad_tries
+
+    def speak(self, texts, prompts, durations, lang):
+        out = super().speak(texts, prompts, durations, lang)
+        for n, text in enumerate(texts):
+            self.tries[text] = self.tries.get(text, 0) + 1
+            if self.tries[text] <= self.bad_tries and "плохо" in text:
+                out[n] = out[n] * 0.5  # a quieter tone = "garbled" for the fake listener below
+        return out
+
+
+def test_a_garbled_line_is_spoken_again_and_the_best_try_kept(tmp_path, vocals):
+    lines = [seg(0.0, 3.2, "a", "Тут всё хорошо."), seg(4.0, 7.5, "b", "А тут плохо слышно.")]
+    engine = Garbling(bad_tries=1)
+    heard = []
+
+    def listen(clip, lang):
+        i = int(clip.name[:5])
+        heard.append(i)
+        return "" if engine.tries[lines[i].ru] <= engine.bad_tries and i == 1 else lines[i].ru
+
+    clips, rates = clone.synthesize(lines, vocals, "ru", tmp_path / "w" / "c", 1.6, engine=engine, listen=listen)
+    assert engine.tries == {"Тут всё хорошо.": 1, "А тут плохо слышно.": 2}
+    assert heard.count(0) == 1 and heard.count(1) == 2
+    report = clone.check_report(tmp_path / "w" / "c")
+    assert report["1"]["heard"] == "А тут плохо слышно." and report["1"]["tries"] == 2
+
+
+def test_the_last_try_is_at_the_voices_own_pace(tmp_path, vocals):
+    lines = [seg(0.0, 1.0, "b", "А тут плохо слышно, совсем ничего не понять."), seg(1.2, 3.0, "c", "Да.")]
+    engine = Garbling(bad_tries=99)  # never comes out right
+    clips, rates = clone.synthesize(lines, vocals, "ru", tmp_path / "w" / "c", 1.6, engine=engine,
+                                    listen=lambda clip, lang: "")
+    asked = [d for texts, durations, _ in engine.calls for t, d in zip(texts, durations, strict=True)
+             if t == lines[0].ru]
+    assert len(asked) == clone.TRIES and asked[-1] >= 0.1 * len(lines[0].ru) - 0.01  # natural = 0.1 s per char
+    assert clips[0].exists()  # the best try is still used
+    assert clone.check_report(tmp_path / "w" / "c")["0"]["share"] < 1
+
+
+def test_the_copied_voice_is_never_hurried_much(tmp_path, vocals):
+    lines = [seg(0.0, 1.0, "x", "Очень длинная строка, которую никак не успеть сказать за секунду.")]
+    engine = FakeEngine()
+    _, rates = clone.synthesize(lines, vocals, "ru", tmp_path / "w" / "c", 1.6, engine=engine)
+    assert rates[0] <= clone.MAX_RATE + 1e-6

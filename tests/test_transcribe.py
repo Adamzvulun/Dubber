@@ -135,3 +135,27 @@ def test_gpu_errors_are_recognised():
     assert transcribe.gpu_error(RuntimeError("Could not load library cudnn_ops64_9.dll. Error code 126"))
     assert transcribe.gpu_error(RuntimeError("CUDA failed with error unknown error"))
     assert not transcribe.gpu_error(RuntimeError("out of memory"))
+
+
+def test_reader_hears_a_clip_and_falls_back_to_the_processor(tmp_path, tone, monkeypatch):
+    """The original voice's listen-back check (clone.py): one model, loaded once; a broken card -> processor."""
+    wav = tone(tmp_path / "a.wav", 1.0)
+    devices, asked = [], []
+
+    class FakeModel:
+        def __init__(self, size, device, compute_type):
+            devices.append(device)
+            self.device = device
+
+        def transcribe(self, audio, **kw):
+            asked.append(kw["language"])
+            if self.device != "cpu":
+                raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+            return iter([types.SimpleNamespace(text=" Привет,"), types.SimpleNamespace(text=" мир.")]), None
+
+    monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=FakeModel))
+    monkeypatch.setattr(transcribe, "_gpu_failed", False)
+    read = transcribe.reader("small", "auto")
+    assert read(wav, "ru") == "Привет, мир."
+    assert read(wav, "ru") == "Привет, мир."
+    assert devices == ["auto", "cpu"] and set(asked) == {"ru"}
