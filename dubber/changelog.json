@@ -1,4 +1,14 @@
 {
+  "0.10.3": {
+    "ru": [
+      "Голос «Оригинал»: слова больше не «проглатываются» и не искажаются — программа не просит голос говорить быстрее, чем говорят люди.",
+      "Голос «Оригинал» на мощной видеокарте озвучивает быстрее: за один раз идёт больше строк, похожие по длине — вместе."
+    ],
+    "en": [
+      "“Original” voice: words are no longer swallowed or warped — the program never asks the voice to speak faster than people do.",
+      "The “Original” voice is faster on a powerful graphics card: more lines at once, lines of similar length together."
+    ]
+  },
   "0.10.2": {
     "ru": [
       "«Настройки» → «Голос оригинала»: при установке видна полоска — сколько уже скачано.",

@@ -2,6 +2,16 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-29 — Session 9: «Оригинал» swallowed words, card at 50% (v0.10.3, ADR-036)
+- PR #17 (0.10.2) merged. Adam on the RTX 5060 Ti: the voice copy works and runs on the card (~50% load); but no
+  background music, and sentences "swallowed or warped"; asked whether Claude Opus causes it (no — it only
+  translates text). His `meta.json`/`timing.json`: `"background": false` (the switch was off for that job); lines
+  spoken in 0.14–0.26 s with seconds of room, stretches planned at 1.6×.
+- Built: a per-line speed floor (`clone.min_seconds`, syllables at most 7/s), groups sized by the card's memory
+  (`clone.batch_for`), longest lines first, a failing group halved; rates in `timing.json` = what was asked.
+- Verified: 199 tests (5 new: syllables, the floor, length grouping, batch from memory, halving). Not verified: the
+  real card.
+
 ## 2026-10-29 — Session 8d: «Оригинал» on a real card, install progress, QA pass (v0.10.2, ADR-035)
 - Adam merged 0.10.1. On his RTX 5060 Ti PC a 5-min «Оригинал» dub estimated 90 min with the card looking idle. He
   asked: a progress bar for the voice studio install; whether the background switches should be on with «Оригинал»;

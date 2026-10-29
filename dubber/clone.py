@@ -48,7 +48,11 @@ MIN_REF = 3.0  # seconds of the speaker a line's reference should have (OmniVoic
 MAX_REF = 15.0  # longer references are refused by OmniVoice (with a transcript: 20 s)
 JOIN_GAP = 1.0  # neighbouring lines join one reference only across pauses this short (likely the same speaker)
 LOUDNESS = 0.1  # RMS every clip is brought to (the copied voices are as loud as their references otherwise)
-BATCH = 4  # lines per model call: several at once use the graphics card better
+BATCH = 4  # lines per model call on a 6-8 GB card (batch_for): several at once use the graphics card better
+# Never ask for a line faster than people speak: told to fit less time, the model swallows and warps the words
+# (Adam's dub, 2026-10-29: its own guess was ~0.15 s for whole words, and crowded stretches were planned 1.6x fast).
+MAX_SYLLABLES_PER_SECOND = 7.0  # fast but clear speech
+LINE_EDGES = 0.2  # seconds a line needs beyond its syllables (onset and release)
 # The install's progress bar (Installer.progress): each step's share of the whole and how many bytes it downloads.
 STEP_SHARES = {"torch": 0.5, "omnivoice": 0.12, "model": 0.38}
 STEP_BYTES = {"torch": 3.4e9, "omnivoice": 0.45e9, "model": 3_267_470_260}  # model: k2-fsa/OmniVoice on Hugging Face
@@ -71,6 +75,29 @@ def ready() -> bool:
 
 def supports(lang: str) -> bool:
     return lang not in UNSUPPORTED
+
+
+_CYRILLIC_VOWELS = set("аеёиоуыэюяіїє")
+_LATIN_VOWEL_RUN = re.compile(r"[aeiouyàáâãäåæèéêëìíîïòóôõöøùúûüýÿœ]+")
+_SYLLABLE_SIGNS = re.compile(r"[぀-ヿ一-鿿]")  # kana and Chinese characters: one syllable each
+_ARABIC_LETTERS = re.compile(r"[ء-ي]")
+
+
+def syllables(text: str) -> int:
+    """About how many syllables `text` has, in any dub language the original voice speaks."""
+    text = text.lower()
+    return (sum(ch in _CYRILLIC_VOWELS for ch in text) + len(_LATIN_VOWEL_RUN.findall(text))
+            + len(_SYLLABLE_SIGNS.findall(text)) + len(_ARABIC_LETTERS.findall(text)) // 2)  # short vowels unwritten
+
+
+def min_seconds(text: str) -> float:
+    """The shortest time a line can be said in and still be understood."""
+    return LINE_EDGES + syllables(text) / MAX_SYLLABLES_PER_SECOND
+
+
+def batch_for(vram_gb: float) -> int:
+    """Lines per model call for a card with this much memory (more at once keeps a big card busy)."""
+    return 12 if vram_gb >= 14 else 8 if vram_gb >= 10 else BATCH
 
 
 def gpu_info(run=subprocess.run) -> dict | None:
@@ -284,6 +311,8 @@ class OmniVoiceEngine:
         device = device or os.environ.get("DUBBER_CLONE_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
         dtype = torch.float16 if device.startswith("cuda") else torch.float32
         self.device = torch.cuda.get_device_name(0) if device.startswith("cuda") else device
+        self.batch = batch_for(torch.cuda.get_device_properties(0).total_memory / 2**30) \
+            if device.startswith("cuda") else BATCH
         self.model = retry(lambda: OmniVoice.from_pretrained(MODEL_REPO, device_map=device, dtype=dtype))
 
     def prompt(self, audio, text: str) -> object:
@@ -301,8 +330,12 @@ class OmniVoiceEngine:
     def speak(self, texts, prompts, durations, lang):
         import numpy as np
 
-        out = self.model.generate(text=texts, language=LANG_IDS.get(lang, lang), voice_clone_prompt=prompts,
-                                  duration=durations)
+        try:
+            out = self.model.generate(text=texts, language=LANG_IDS.get(lang, lang), voice_clone_prompt=prompts,
+                                      duration=durations)
+        except self.torch.cuda.OutOfMemoryError:
+            self.torch.cuda.empty_cache()  # free what the failed call held before a smaller group is tried
+            raise
         return [np.asarray(a, dtype=np.float32).reshape(-1) for a in out]
 
     def close(self) -> None:
@@ -379,13 +412,15 @@ def synthesize(
     max_speedup: float,
     engine: Engine | None = None,
     progress: Callable[[float], None] | None = None,
-    batch: int = BATCH,
+    batch: int | None = None,
 ) -> tuple[list[Path | None], list[float]]:
     """Speak every line in the voice of whoever said it; returns one clip per line (None = nothing to say) and the
-    planned speaking-rate factors (for timing.json).
+    speaking-rate factors asked for (for timing.json).
 
     Like the Edge voice, the pace follows the speaker (timing.plan_rates), but instead of asking for a rate the model
-    is told each line's length. Finished clips are reused; `progress` may raise to cancel between model calls.
+    is told each line's length — never less than `min_seconds` (a line that then runs long pushes the next one back,
+    align.py). Lines of similar length share a model call (`batch` lines, default: what the card's memory allows).
+    Finished clips are reused; `progress` may raise to cancel between model calls.
     """
     clips_dir.mkdir(parents=True, exist_ok=True)
     voice = VoiceTrack(vocals_wav, clips_dir.parent)
@@ -416,18 +451,24 @@ def synthesize(
         clips: list[Path | None] = [None] * len(segments)
         missing = []
         for i in todo:
-            seconds = round(natural[i] / rates[i], 2)
+            seconds = round(max(natural[i] / rates[i], min_seconds(segments[i].ru)), 2)
+            rates[i] = natural[i] / seconds
             digest = hashlib.sha1(f"{segments[i].ru}|{lang}|{refs[i]}|{seconds}".encode()).hexdigest()[:10]
             clips[i] = clips_dir / f"{i:05d}_{digest}.wav"
             if not (clips[i].exists() and clips[i].stat().st_size > 0):
                 missing.append((i, seconds))
+        # Longest first: lines of similar length share a call (no card time spent on padding short ones), and a
+        # group too big for the card's memory shows up at once.
+        missing.sort(key=lambda item: -item[1])
+        batch = batch or getattr(engine, "batch", BATCH)
         # In the program's window: where the voice runs and how fast (Adam's 90-minute estimate, 2026-10-29).
         where = getattr(engine, "device", "")
         if missing:
-            print(f"Голос оригинала: {len(missing)} строк, {where or 'устройство не известно'}", flush=True)
-        began = time.monotonic()
-        for n in range(0, len(missing), batch):
-            group = missing[n:n + batch]
+            print(f"Голос оригинала: {len(missing)} строк, {where or 'устройство не известно'}, по {batch} за раз",
+                  flush=True)
+        began, done = time.monotonic(), 0
+        while done < len(missing):
+            group = missing[done:done + batch]
             tick = time.monotonic()
             texts, group_prompts = [segments[i].ru for i, _ in group], [prompt_for(i) for i, _ in group]
             try:
@@ -435,16 +476,17 @@ def synthesize(
             except Exception:
                 if len(group) == 1:
                     raise
-                # e.g. the card ran out of memory with several long lines at once: one at a time instead
-                audios = [engine.speak([text], [prompt], [s], lang)[0]
-                          for text, prompt, (_, s) in zip(texts, group_prompts, group, strict=True)]
+                # e.g. the card ran out of memory with several long lines at once: half as many from now on
+                batch = max(1, len(group) // 2)
+                log.warning("The original voice: %d lines at once failed; trying %d", len(group), batch)
+                continue
             for (i, _), audio in zip(group, audios, strict=True):
                 write_wav(_level(audio), clips[i], SAMPLE_RATE)
-            done = min(n + batch, len(missing))
+            done += len(group)
             print(f"Голос оригинала: {done}/{len(missing)} строк, {time.monotonic() - tick:.1f} с на группу, "
                   f"всего {time.monotonic() - began:.0f} с", flush=True)
             if progress:
-                progress(min(n + batch, len(missing)) / len(missing))
+                progress(done / len(missing))
         return clips, rates
     finally:
         voice.close()
