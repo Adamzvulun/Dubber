@@ -134,6 +134,7 @@ def main() -> None:
     print(f"Stub Dubber on http://127.0.0.1:{port} (library: {settings.output_dir})", flush=True)
     download.playlist_entries = fake_playlist
     stub_clone = StubClone()
+    clone.cuda_ok = lambda run=None: os.environ.get("STUB_CUDA") != "broken"  # the stand-in card computes (or not)
     bridge = None
     if os.environ.get("STUB_MAILBOX"):
         os.environ["DUBBER_MAILBOX_URL"] = os.environ["STUB_MAILBOX"]

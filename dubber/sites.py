@@ -39,6 +39,10 @@ class CookieError(ValueError):
     """The uploaded file is not a cookies.txt file, or has no cookies of the supported sites."""
 
 
+class NoLogin(CookieError):
+    """The file has cookies of a supported site but no login among them (exported while logged out)."""
+
+
 def _matches(host: str, domains: tuple[str, ...]) -> bool:
     host = host.lower().lstrip(".")
     return any(host == d or host.endswith("." + d) for d in domains)
@@ -126,6 +130,8 @@ def merge(existing: str, uploaded: str) -> str:
     new = parse(uploaded)
     if not new:
         raise CookieError("no cookies of the supported sites")
+    if not any(s["logged_in"] for s in summary("".join(c.line + "\n" for c in new))):
+        raise NoLogin("the file has no login")  # and must not replace a saved login of that site
     renewed = {site_for_host(c.domain).key for c in new}
     kept = [c for c in parse(existing) if site_for_host(c.domain).key not in renewed]
     return HEADER + "".join(c.line + "\n" for c in kept + new)

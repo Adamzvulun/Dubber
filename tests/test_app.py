@@ -493,6 +493,8 @@ def test_site_logins_add_merge_and_remove(tmp_path):
     state = c.post("/api/cookies", content=fb.encode()).json()
     assert {s["site"] for s in state["sites"] if s["logged_in"]} == {"instagram", "facebook"}
 
+    logged_out = c.post("/api/cookies", content=b".tiktok.com\tTRUE\t/\tTRUE\t4000000000\tttwid\tx\n")
+    assert logged_out.status_code == 422 and "не вошли" in logged_out.json()["detail"]["ru"]
     bad = c.post("/api/cookies", content=b"hello")
     assert bad.status_code == 422 and "cookies.txt" in bad.json()["detail"]["ru"]
     assert c.post("/api/cookies", content=fb.encode(), headers={"Origin": "https://evil.example"}).status_code == 403

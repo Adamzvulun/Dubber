@@ -824,12 +824,19 @@ def create_app(
             raise HTTPException(413, _detail("Файл слишком большой для файла входа.", "Too big for a login file."))
         try:
             merged = sites.merge(sites.read(settings.cookies_file), body.decode("utf-8", errors="replace"))
+        except sites.NoLogin as exc:
+            raise HTTPException(422, _detail(
+                "В этом файле нет входа: похоже, когда его сохраняли, вы не вошли в аккаунт на сайте. Войдите на "
+                "сайт в браузере и сохраните файл ещё раз.",
+                "This file has no login: it looks like you weren't logged in on the site when it was saved. Log in "
+                "on the site in the browser and save the file again.")) from exc
         except sites.CookieError as exc:
             raise HTTPException(422, _detail(
                 "В этом файле нет входа на YouTube, TikTok, Instagram или Facebook. Сохраните файл cookies.txt "
-                "расширением, когда открыт нужный сайт и вы вошли в аккаунт (см. шаги выше).",
+                "расширением, когда открыт нужный сайт и вы вошли в аккаунт (см. «Если видео не скачивается…» выше).",
                 "This file has no login for YouTube, TikTok, Instagram or Facebook. Save cookies.txt with the "
-                "extension while the site is open and you are logged in (see the steps above).")) from exc
+                "extension while the site is open and you are logged in (see “If a video won't download…” above).")) \
+                from exc
         settings.cookies_file.parent.mkdir(parents=True, exist_ok=True)
         partial = settings.cookies_file.with_name(settings.cookies_file.name + ".partial")
         partial.write_text(merged, encoding="utf-8")

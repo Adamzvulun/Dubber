@@ -14,8 +14,15 @@ Newest entries at the top. One entry per working session / milestone.
   identical queue labels, placeholder scrolled sideways after clearing, plurals, no visible "sent" note, form below
   the fold on small phones, no Android install hint, the whole bar as a live region, focus lost after «Убрать», a
   heading out of order, tap targets < 44 px (touch screens), «Готово» green 3.45:1 → 5:1, 13 px subtitles on phones.
-- Verified: 194 tests; browser checks of the bar, the Settings card line (ok/broken stub), the locked switch, and
-  the phone fixes (360×640). Not verified: a real NVIDIA card.
+- Desktop findings fixed: a logged-out cookies file was "added" (now refused, and it no longer replaces a saved
+  login), the remove-voice choice was lost around «Оригинал», links inside other text («Посмотри https://…») are
+  taken out, the background hint contradicted the remove-voice one, "work is kept" on a job cancelled in the queue,
+  "other dubs stay" with no other dubs, the Settings intro, an EN label quote; the stub now fakes the card check.
+- Left for later (`kanban/nice-to-haves.md`): native confirm() dialogs, accent-folding search, remembering the
+  voice/background choices, a confirm on per-video «Очистить кэш», an offline banner on the PC, glossary validation,
+  playlist-cancel dropping the other links, the Haiku price in `translate.py` to re-check, voice names in Cyrillic.
+- Verified: 194 tests; browser checks of the bar, the Settings card line (ok/broken stub), the locked switch, the
+  phone fixes (360×640) and the desktop fixes. Not verified: a real NVIDIA card.
 
 ## 2026-10-29 — Session 8c: NVIDIA PCs (v0.10.1, ADR-034)
 - Adam merged PR #15 (0.10.0) and dubbed an Instagram reel on a new PC: the download worked, then «cublas64_12.dll is

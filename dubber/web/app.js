@@ -303,7 +303,8 @@ function jobCard(job) {
       el("a", { class: "btn btn--primary", "data-action": "watch", href: `#/watch/${encodeURIComponent(job.video_id)}`, text: t("btn.watch") }),
       hide()));
   } else if (job.status === "cancelled") {
-    node.append(el("p", { class: "job__note", text: t("job.cancelledNote") }),
+    // a job cancelled while it waited in the queue did no work: no "the work done is kept"
+    node.append(job.started ? el("p", { class: "job__note", text: t("job.cancelledNote") }) : null,
       el("div", { class: "job__actions" },
         el("button", { class: "btn", type: "button", "data-action": "retry", text: t("btn.restart"), onclick: () => retryJob(job) }), hide()));
   } else if (job.status === "error") {
@@ -493,7 +494,9 @@ function renderPlaylistAsk() {
 
 /** The links in the field (one per line, or separated by spaces) → queued jobs; playlists become their videos. */
 async function submitLinks() {
-  const field = $("#url"), links = field.value.split(/\s+/).filter(Boolean);
+  // Links inside other text (a messenger's "Look: https://…") are taken out of it; plain text stays an error.
+  const field = $("#url"), found = field.value.match(/https?:\/\/\S+/gi);
+  const links = found || field.value.split(/\s+/).filter(Boolean);
   if (!links.length) { showFormError(t("form.badUrl")); field.focus(); return; }
   const bad = links.find((link) => !looksLikeUrl(link));
   if (bad) { showFormError(links.length > 1 ? t("form.badUrlLine", bad) : t("form.badUrl")); field.focus(); return; }
@@ -803,7 +806,7 @@ function renderTranscript(video) {
 }
 
 async function deleteVideo(video) {
-  if (!confirm(t("watch.delete", video.title, dubLabel(video)))) return;
+  if (!confirm(t("watch.delete", video.title, dubLabel(video), (video.siblings || []).length > 0))) return;
   try { await api(`/api/videos/${encodeURIComponent(video.id)}`, { method: "DELETE" }); } catch (e) { alert(e.message); return; }
   location.hash = "#/library";
 }
@@ -838,10 +841,14 @@ function originalVoiceChosen() {
 
 function updateBackgroundHint() {
   const background = $("#background").checked, removeVoice = $("#remove-voice"), original = originalVoiceChosen();
-  $("#background-hint").textContent = t(background ? "form.background.on" : "form.background.off");
-  if (original && !removeVoice.disabled) state.removeVoiceChoice = removeVoice.checked; // restored when switching back
+  // without the speaker's voice only the music and sounds stay under the dub
+  $("#background-hint").textContent = t(!background ? "form.background.off"
+    : original || removeVoice.checked ? "form.background.music" : "form.background.on");
+  // The user's own choice is kept while «Оригинал» locks the switch, and comes back when another voice is picked.
+  if (original && !state.originalLock) state.removeVoiceChoice = removeVoice.checked;
+  if (!original && state.originalLock) removeVoice.checked = state.removeVoiceChoice;
+  state.originalLock = original;
   if (original) removeVoice.checked = background;
-  else if (state.removeVoiceChoice !== undefined) { removeVoice.checked = state.removeVoiceChoice; state.removeVoiceChoice = undefined; }
   removeVoice.disabled = !background || original; // without a background there is no voice to remove
   $("#remove-voice-hint").textContent = t(!background ? "form.removeVoice.disabled"
     : original ? "form.removeVoice.original" : removeVoice.checked ? "form.removeVoice.on" : "form.removeVoice.off");
