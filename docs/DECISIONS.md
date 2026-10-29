@@ -520,6 +520,10 @@ Newest at the bottom. Format: context → decision → consequences.
   - `clone.speaker_references`: each speaker's longest run of consecutive lines (pauses <= 1 s), up to 10 s (<= 15 s).
   - `align.build_track(speakers=...)`: a line waits only for the same speaker's previous line; unknown speakers wait
     for everyone. The Edge voice (one voice for all) never overlaps. `timing.json` lines carry `speaker`.
+- **Verified:** real voice prints + OmniVoice + Whisper listener on CPU, the 3-voice test with Russian lines: speakers
+  right, one reference per speaker, 7 of 8 lines heard exactly ("О какой…" heard "А какой…", one French-voiced line
+  "Я тоже" → "Вято же" after 3 tries), every line on time. (With references whose text didn't match their audio the
+  model spoke the reference text — "Turn. Buy." — so a reference's text must be what is said in it, as Whisper's is.)
 - **Limit:** real crosstalk is mostly missing from Whisper's text (it writes the louder voice); dubbing both needs
   separating the voices first — not done.
 
