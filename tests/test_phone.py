@@ -105,9 +105,10 @@ def test_tunnel_reports_its_address_and_restarts():
         if not runs:
             tunnel.stop()
 
-    tunnel = phone.Tunnel(phone.Path("/x/cloudflared"), 7860, seen.append, popen=popen, sleep=sleep)
+    exe = phone.Path("/x/cloudflared")  # "\\x\\cloudflared" on Windows
+    tunnel = phone.Tunnel(exe, 7860, seen.append, popen=popen, sleep=sleep)
     tunnel.run()
-    assert commands[0] == ["/x/cloudflared", "tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:7860"]
+    assert commands[0] == [str(exe), "tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:7860"]
     assert seen == ["https://brave-lucky-words-here.trycloudflare.com", None,
                     "https://second-run-address.trycloudflare.com", None]
 

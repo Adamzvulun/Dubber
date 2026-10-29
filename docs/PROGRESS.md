@@ -20,6 +20,8 @@ Newest entries at the top. One entry per working session / milestone.
   no xmlns (blank image), a restarted PC made a new token when its .env was not loaded, the full "What's new"
   history popped up on the phone.
 - Waiting for Adam: Cloudflare account + secrets + the workers.dev address (then `phone.MAILBOX_URL`).
+- CI: the Windows pytest run (in "Original voice install") failed on a phone test that assumed `/` in paths; fixed.
+  The Windows tunnel step was green: real cloudflared, 401 without the token, 200 with it.
 
 ## 2026-10-28 — Session 8: phone version
 - Adam merged PR #14 (0.9.0). He: the Settings window is squeezed — fix it and check it on a PC; then start the phone
