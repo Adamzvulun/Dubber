@@ -68,3 +68,16 @@ def test_lines_fade_in_and_out_instead_of_starting_and_stopping_hard(tmp_path, t
     assert level(end - 0.01, end + 0.2) < 0.5 * level(start + 0.3, start + 0.6)  # dies away
     assert report[1]["delay"] == 0.0  # the softer tail never pushes the next line back
     assert FADE_OUT >= 0.05
+
+
+def test_different_speakers_may_overlap_but_one_speaker_never_does(tmp_path, tone):
+    """Two people talking: a long line of A no longer pushes B's answer back (Adam, 2026-10-29)."""
+    segs = [Segment(0.0, 1.0, "a", "а"), Segment(1.3, 2.0, "b", "б"), Segment(2.2, 3.0, "a", "а")]
+    clips = [tone(tmp_path / "0.wav", 3.0), tone(tmp_path / "1.wav", 0.5), tone(tmp_path / "2.wav", 0.5)]
+    report = []
+    build_track(segs, clips, 4.0, tmp_path / "t.wav", report=report, speakers=[0, 1, 0])
+    assert report[1]["delay"] == 0.0  # B starts on time while A still talks
+    assert report[2]["delay"] > 0.0  # A's next line waits for A's long one
+    report = []
+    build_track(segs, clips, 4.0, tmp_path / "t2.wav", report=report)  # speakers unknown: nobody overlaps
+    assert report[1]["delay"] > 0.0

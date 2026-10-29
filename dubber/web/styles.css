@@ -103,6 +103,8 @@ main.wrap { padding-bottom: 80px; }
 .btn:hover { border-color: color-mix(in srgb, var(--ink) 25%, var(--line)); }
 .btn:active { transform: translateY(1px); }
 .btn svg { width: 18px; height: 18px; }
+/* another dub of the video: language, voice, sound and its date + time — may wrap on a phone */
+#other-dubs-list .btn { white-space: normal; height: auto; min-height: 44px; padding-block: 8px; text-align: left; }
 .btn--primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .btn--primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--ink)); border-color: transparent; }
 .btn--lg { height: 56px; padding: 0 28px; font-size: 17px; }

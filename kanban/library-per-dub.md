@@ -14,3 +14,5 @@ Adam (2026-10-18): dubbed the same video twice with other settings/language; bot
 - 2026-10-18: Cause: all dubs of a video shared `output/<video-id>/`. Now one folder per dub
   (`<video-id>--<lang>-<hash>`), same choices replace it (Adam's choice), watch page links the other dubs; old
   folders untouched (ADR-022, v0.4.1). Verified with real pipeline runs + Chromium. (by @claude)
+- 2026-10-29: Adam: every dub its own entry, even with the same settings, with the exact time — ADR-039
+  (timestamped dub ids; date + time on cards, watch page, other dubs). (by @claude)

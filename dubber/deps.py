@@ -20,8 +20,8 @@ from pathlib import Path
 from .config import PROJECT_ROOT
 
 # Components with native code (DLLs) that must load: Whisper (ctranslate2, av), the offline translator and voice
-# removal (onnxruntime).
-NATIVE = ("ctranslate2", "av", "onnxruntime", "tokenizers", "numpy")
+# removal (onnxruntime), who says each line (sherpa_onnx).
+NATIVE = ("ctranslate2", "av", "onnxruntime", "tokenizers", "numpy", "sherpa_onnx")
 
 _DEPENDENCIES = re.compile(r"^dependencies\s*=\s*\[(.*?)^\]", re.M | re.S)
 _REQUIREMENT = re.compile(r"^\s*([A-Za-z0-9_.-]+)\s*(?:\[([^\]]*)\])?\s*(?:>=\s*([0-9][0-9.]*))?")

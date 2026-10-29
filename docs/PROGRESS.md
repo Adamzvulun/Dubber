@@ -2,6 +2,20 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-29 — Session 9c: who speaks, two voices at once, soft edges, every dub its own entry (v0.11.0)
+- Adam merged 0.10.4 (PR #19): "better", sent `check.json`; "very rough chops between sentences, harsh on the ear";
+  asked to build the speaker proposal (who speaks, overlap, one sample per speaker); and (as asked at the start of the
+  project) every dub its own library entry with the exact time, even the same video with the same settings.
+- Built: `speakers.py` (CAM++ voice prints of Whisper's lines, grouped — ADR-038, measured in RESEARCH), per-speaker
+  references (`clone.speaker_references`), per-speaker placement (`align.build_track(speakers=)`); soft line edges +
+  smoother ducking (ADR-040); timestamped dub ids, date + time in the library/watch page/other dubs (ADR-039); guides
+  RU/HE + README.ru updated.
+- Verified: 213 tests; the real voice-print model on a 3-voice test conversation (all lines right); real OmniVoice +
+  Whisper end to end with speakers on CPU; Chromium: library/watch page RU/EN, 360-1280 px (a long other-dub label
+  overflowed a 390-px phone — fixed). Not verified: by ear on Adam's PC.
+- Seen in Adam's `check.json`: lines Claude transliterated from misheard Spanish ("Йо, хани, че…") stay unclear; "Да."
+  came out as babble after 3 tries — OmniVoice is weak on one-word lines (next idea: say them with a neighbour).
+
 ## 2026-10-29 — Session 9b: «Оригинал» listens to itself; names in Russian letters (v0.10.4, ADR-037)
 - Adam merged 0.10.3 (PR #18): "a lot better", but sentences still cut off, some words left in English or said as
   the English word in the copied voice; asked for two dubbed voices at once when two people talk.

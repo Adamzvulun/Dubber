@@ -19,3 +19,5 @@ voice studio install, whether the background switches should be on with «Ори
   line, bigger length-sorted groups. Next: Adam re-dubs the same video and reports. (by @claude)
 - 2026-10-29: 0.10.3 merged; Adam: better, still cut off + English words. 0.10.4 (ADR-037): listen-back
   check, ≤1.25×, Claude prompt v3. Next: his re-dub + `check.json`. (by @claude)
+- 2026-10-29: 0.10.4 merged; Adam: rough edges, wants speakers/overlap + separate dubs with time. 0.11.0
+  (ADR-038/039/040). Next: his ears. (by @claude)

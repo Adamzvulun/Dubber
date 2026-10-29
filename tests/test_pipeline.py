@@ -430,6 +430,44 @@ def test_original_voice_copies_the_speaker(tmp_path, sample_video):
     assert edge.id != result.id
 
 
+def test_original_voice_knows_who_speaks_each_line(tmp_path, sample_video):
+    """Speakers (speakers.py, ADR-038): found once per video on the separated voice, given to the voice copy, used to
+    place the lines (different speakers may overlap) and noted in timing.json; a failure never stops the dub."""
+    from dubber import clone
+    from dubber.media import write_wav
+
+    found, given = [], []
+
+    def finder(segments, vocals_wav):
+        found.append(vocals_wav.name)
+        return [k % 2 for k in range(len(segments))]
+
+    def stub_cloner(segments, vocals_wav, lang, clips_dir, max_speedup, progress=None, speakers=None):
+        given.append(speakers)
+        clips_dir.mkdir(parents=True, exist_ok=True)
+        return [write_wav([0.1] * 24000, clips_dir / f"{i}.wav") for i, _ in enumerate(segments)], [1.0] * len(segments)
+
+    def run(finder):
+        settings = Settings(work_dir=tmp_path / "work", output_dir=tmp_path / "out", voice=clone.VOICE)
+        return pipeline.run(str(sample_video), settings, translator=StubTranslator(), synth=stub_synth,
+                            transcriber=stub_transcriber, separator=stub_separator_with_vocals([]), cloner=stub_cloner,
+                            speaker_finder=finder)
+
+    result = run(finder)
+    assert found == ["vocals_htdemucs.wav"] and given == [[0, 1]]
+    detail = json.loads((result.folder / "timing.json").read_text(encoding="utf-8"))["detail"]
+    assert [line["speaker"] for line in detail] == [0, 1]
+    run(finder)
+    assert found == ["vocals_htdemucs.wav"]  # cached
+
+    def broken(segments, vocals_wav):
+        raise RuntimeError("model download failed")
+
+    for cache in (tmp_path / "work").glob("*/speakers_*.json"):
+        cache.unlink()
+    assert run(broken).video.exists() and given[-1] is None
+
+
 def test_original_voice_falls_back_to_edge(tmp_path, sample_video, monkeypatch):
     from dubber import clone
 

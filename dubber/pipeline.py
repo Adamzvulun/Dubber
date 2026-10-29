@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import align, clone, languages, media, separate, sites, subtitles, timing, transcribe, translate, tts
+from . import align, clone, languages, media, separate, sites, speakers, subtitles, timing, transcribe, translate, tts
 from .config import Settings
 from .download import download, fetch_info, is_url, local_video_id
 from .mux import mux
@@ -42,6 +42,8 @@ STAGES = [
 SeparateFn = Callable[..., Path]
 # (segments, vocals_wav, lang, clips_dir, max_speedup, progress) -> (clips, rates): the original voice (clone.py)
 CloneFn = Callable[..., tuple[list, list[float]]]
+# (lines, separated voice track) -> speaker number per line (speakers.py; tests inject a stand-in)
+SpeakersFn = Callable[[list, Path], list]
 
 
 def stages(separate: bool = False, voice_first: bool = False) -> list[tuple[str, str, float]]:
@@ -134,6 +136,27 @@ def timing_report(lines: list[dict]) -> dict:
     }
 
 
+def line_speakers(segments: list, vocals_wav: Path, work: Path, finder: SpeakersFn | None = None) -> list | None:
+    """Who says each line (ADR-038), cached per set of lines; None when it can't be told (the dub goes on without:
+    per-line voice samples, and no two lines at once)."""
+    key = hashlib.sha1(json.dumps([(s.start, s.end) for s in segments]).encode()).hexdigest()[:10]
+    cache = work / f"speakers_{key}.json"
+    if cache.exists():
+        return json.loads(cache.read_text(encoding="utf-8"))
+    try:
+        if finder:
+            who = finder(segments, vocals_wav)
+        else:
+            who = speakers.assign(segments, media.decode_audio(vocals_wav, speakers.SAMPLE_RATE))
+    except Exception:  # e.g. the voice-print model couldn't be downloaded
+        log.exception("Telling the speakers apart failed; going on without")
+        return None
+    cache.write_text(json.dumps(who), encoding="utf-8")
+    count = len({w for w in who if w is not None})
+    print(f"Голоса: в видео говорят {count} (разных голосов)", flush=True)
+    return who
+
+
 def clone_choice(settings: Settings, cloner: CloneFn | None = None) -> tuple[bool, list[str]]:
     """Whether this run speaks in the original voice, and why not when it was asked for (notes for meta.json)."""
     if settings.voice != clone.VOICE:
@@ -191,6 +214,7 @@ def run(
     transcriber: Callable[[Path], list] | None = None,
     separator: SeparateFn | None = None,
     cloner: CloneFn | None = None,
+    speaker_finder: SpeakersFn | None = None,
 ) -> Result:
     """Dub `source` (YouTube URL or local file). Backends can be injected (used by tests)."""
     media.require_ffmpeg()
@@ -296,16 +320,25 @@ def run(
             # sound like the same person twice, so the background is always the voice-free one (Adam, 2026-10-29).
             background_audio = background
 
+    # Who says each line (the original voice only): one voice sample per speaker, and two people may talk at once.
+    who = None
+    if use_clone and (cloner is None or speaker_finder):
+        who = line_speakers(segments, vocals_wav, work, speaker_finder)
+
     # 5. Text to speech
     report = p.stage("tts")
     clips: list[Path | None] = []
     if use_clone:
         try:
             # Whisper listens to every new line and garbled ones are spoken again (clone.TRIES, ADR-037)
-            listen = {} if cloner else {"listen": transcribe.reader(settings.whisper_model, settings.whisper_device)}
+            extra: dict = {}
+            if cloner is None:
+                extra["listen"] = transcribe.reader(settings.whisper_model, settings.whisper_device)
+            if who:
+                extra["speakers"] = who
             clips, rates = (cloner or clone.synthesize)(
                 segments, vocals_wav, target.code, work / f"clips_{voice}_{target.code}", settings.max_speedup,
-                progress=report, **listen)
+                progress=report, **extra)
         except Exception:
             # e.g. the graphics card's driver is too old: the Edge voice instead, and the watch page says so.
             # (A cancelled job raises again from the Edge voice's first progress report.)
@@ -328,14 +361,19 @@ def run(
     track_lines = [(s.start, s.end, s.ru) for s in segments]
     if use_clone:
         track_lines.append([c.name if c else None for c in clips])
+        track_lines.append(who)
     key = hashlib.sha1(json.dumps(track_lines).encode()).hexdigest()[:10]
     track = work / f"dub_track_{voice}_{key}.wav"
     timing_json = work / f"timing_{voice}_{key}.json"
     if not track.exists() or not timing_json.exists():
         lines: list[dict] = []
-        align.build_track(segments, clips, media.duration(video), track, progress=report, report=lines)
+        placed_by = who if use_clone else None  # the Edge voice is one voice: its lines never overlap
+        align.build_track(segments, clips, media.duration(video), track, progress=report, report=lines,
+                          speakers=placed_by)
         for line in lines:
             line["rate"] = round(rates[line["index"]], 3)
+            if placed_by:
+                line["speaker"] = placed_by[line["index"]]
         timing_json.write_text(json.dumps(timing_report(lines), ensure_ascii=False, indent=1), encoding="utf-8")
 
     # 7. Optional: the original soundtrack without the speaker's voice

@@ -6,8 +6,9 @@ _Last updated: 2026-10-29 (session 9). Update this page at the end of every sess
 Dubber is a local website (FastAPI + hand-built front-end) that turns a **YouTube, TikTok, Instagram or Facebook**
 video **or a video file** in **any spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version: **0.10.3** on `main` (PR #18); **0.10.4** (ADR-037: «Оригинал» listen-back check, names in the dub
-language's letters) on branch `claude/modest-thompson-pp54kx`, waiting for a PR / Adam's merge. The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
+Current version: **0.10.4** on `main` (PR #19); **0.11.0** (ADR-038/039/040: who speaks each line, two voices at once,
+one voice sample per speaker, soft line edges, every dub its own library entry with its time) on branch
+`claude/modest-thompson-pp54kx`, waiting for a PR / Adam's merge. The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
 shipping. The phone version (0.10.0) is merged but **switched off** until Adam's Cloudflare mailbox address is put in
 `phone.MAILBOX_URL` (see Next steps 1).
 Session 7 (2026-10-28): **0.8.0 (merged, PR #13)** — the Windows install broke for anyone with Python 3.15 (released
@@ -42,7 +43,9 @@ for at least `clone.min_seconds` (≤ 7 syllables/s); 12/8/4 lines per call by c
 group halved. His "no background" was a job with the background switch off (`meta.json`). **0.10.4 (ADR-037):**
 "still cut off; words left in English" → measured OmniVoice (slips are random and word-dependent), so the copied voice
 is hurried ≤ 1.25× and Whisper listens to every clip (garbled → up to 3 tries, `check.json`); Claude prompt v3 writes
-names in the dub language's letters.
+names in the dub language's letters. **0.11.0:** `speakers.py` (voice prints of the lines, sherpa-onnx CAM++,
+ADR-038) → one sample per speaker + different speakers may overlap; soft fades at line edges (ADR-040); every dub its
+own library entry with date + time (ADR-039, replaces ADR-022's "same choices replace").
 
 ## Where things are
 - **Git:** `main` = stable and **shipped** (PCs self-update from it; every release bumps the version and adds a
@@ -176,11 +179,11 @@ original voice; the voice-free background goes under the dub, ducked while it sp
    window's «проверено на слух … неразборчиво осталось N» line, total time, and `work/<id>/clips_original_ru/check.json`
    (what Whisper heard per line — text only). Still slow → offer 16 generation steps (≈ 2×, ask first) and Demucs on
    the card.
-0b. **Two voices at once + one voice per speaker (proposed, Adam to decide):** speaker grouping with sherpa-onnx's
-   free diarization (pyannote segmentation-3.0 ONNX + a speaker-embedding model, ~30 MB, CPU) → each line knows its
-   speaker → lines of different speakers may overlap as in the original (align.py today never overlaps), and each
-   speaker's copied voice comes from one longer clean reference (fixes "AI-like ↔ real" flips). True crosstalk (both
-   talking at once) is mostly missing from Whisper's text; dubbing both needs speech separation per speaker — larger.
+0b. **0.11.0 by ear:** does each person keep one voice? do the edges sound soft? overlaps natural? The window prints
+   «Голоса: в видео говорят N»; `timing.json` lines carry `speaker`. Known weak spots: one-word lines ("Да.") babble
+   in OmniVoice (idea: speak them together with a neighbouring line of the same speaker); misheard foreign speech
+   that Claude transliterates. True crosstalk (both talking at once) is mostly missing from Whisper's text — dubbing
+   both needs separating the voices first (offer, don't build unasked).
 1. **Switch the phone version on:** Adam (a) creates a free Cloudflare account, opens "Workers & Pages" once (choose
    the `workers.dev` name), makes an API token from the template "Edit Cloudflare Workers" and adds GitHub secrets
    `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`; (b) sends the address `https://dubber.<name>.workers.dev` →

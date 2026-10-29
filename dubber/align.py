@@ -81,16 +81,19 @@ def build_track(
     max_correction: float = MAX_CORRECTION,
     progress=None,
     report: list[dict] | None = None,
+    speakers: list[int | None] | None = None,
 ) -> Path:
     """Mix all clips into one mono WAV of length `total_seconds`.
 
     If `report` is given, one dict per spoken line is appended: when it was meant to start, how late it actually
     started (pushed back by an over-long previous line), and the extra time-stretch it needed.
+    `speakers` (who says each line, speakers.py): a line only waits for the same speaker's previous line, so two
+    people may talk at once as in the original; a line of an unknown speaker waits for everyone.
     """
     import numpy as np
 
     track = np.zeros(int(total_seconds * SAMPLE_RATE) + 1, dtype=np.float32)
-    cursor = 0  # first free sample
+    cursor: dict[int | None, int] = {None: 0}  # first free sample, per speaker (None: lines nobody may overlap)
     for i, (seg, clip, slot) in enumerate(zip(segments, clips, slots(segments), strict=True)):
         if clip is None or not clip.exists():
             continue
@@ -102,12 +105,14 @@ def build_track(
         # placed with its soft tail and faded, but the next line may start where the speech ends
         sound = fade(trim_silence(raw, tail=TAIL))
 
-        start = max(int(seg.start * SAMPLE_RATE), cursor)
+        who = speakers[i] if speakers else None
+        free = max(cursor.values()) if who is None else max(cursor.get(who, 0), cursor[None])
+        start = max(int(seg.start * SAMPLE_RATE), free)
         end = start + len(sound)
         if end > len(track):
             track = np.concatenate([track, np.zeros(end - len(track), dtype=np.float32)])
         track[start:end] += sound
-        cursor = start + spoken
+        cursor[who] = start + spoken
         if report is not None:
             report.append({
                 "index": i,
