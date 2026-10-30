@@ -75,3 +75,12 @@ def test_uploaded_hevc_file_is_converted_and_kept(tmp_path):
     original = _clip(tmp_path / "iphone.mov", "libx265")
     got = download(str(original), tmp_path / "work")
     assert media.video_codec(got.path) == "h264" and original.exists()  # the user's file is never touched
+
+
+def test_hevc_is_reencoded_on_the_card_or_else_the_processor(tmp_path):
+    """ADR-045: with an NVIDIA card the video is encoded by the card (h264_nvenc); this sandbox has no card, so the
+    real ffmpeg refuses and the processor's encoder must still give H.264."""
+    src = tmp_path / "in.mp4"
+    media.run_ffmpeg(["-f", "lavfi", "-i", "testsrc=size=320x240:rate=10:duration=1", "-c:v", "mpeg4", str(src)])
+    out = media.to_h264(src, tmp_path / "out.mp4", card=True)
+    assert media.video_codec(out) == "h264"

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from dubber import languages
+from dubber import languages, translate
 from dubber.segments import Segment
 from dubber.translate import (
     ClaudeBackend,
@@ -344,3 +344,40 @@ def test_gate_accepts_a_line_google_says_is_already_in_the_dub_language():
     t = Translator("en", GoogleBackend("en", fetch=fetch))
     assert t.translate_texts(["So patience and good flour are the secret."], ["fr"]) == [
         "So patience and good flour are the secret."]
+
+
+def test_haiku_costs_more_for_a_prompt_over_100k_tokens():
+    """Anthropic's prices checked 2026-10-30: Haiku 5.5 is $0.10/$0.50 per M tokens up to 100K, $0.50/$2.50 beyond."""
+    haiku, opus = translate.CLAUDE_MODELS["claude-haiku-5-5"], translate.CLAUDE_MODELS["claude-opus-5-5"]
+    assert haiku.cost_usd(100_000, 1_000_000) == pytest.approx(0.01 + 0.50)
+    assert haiku.cost_usd(200_000, 1_000_000) == pytest.approx(0.10 + 2.50)
+    assert opus.cost_usd(1_000_000, 1_000_000) == pytest.approx(24.0)
+
+
+def test_the_offline_translator_falls_back_to_the_processor_when_the_card_fails(monkeypatch):
+    """ADR-045: NLLB runs on the NVIDIA card when it can; a missing CUDA library shows on first use → the processor."""
+    import sys
+    import types
+
+    made = []
+
+    class Translator:
+        def __init__(self, path, device, compute_type):
+            made.append((device, compute_type))
+            self.device = device
+
+        def translate_batch(self, tokens, **kw):
+            if self.device == "cuda":
+                raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+            return ["ok"] * len(tokens)
+
+    monkeypatch.setitem(sys.modules, "ctranslate2", types.SimpleNamespace(Translator=Translator))
+    backend = NllbBackend.__new__(NllbBackend)
+    backend._path, backend._on_card, backend._model = "model", True, Translator("model", "cuda", "int8_float16")
+    assert backend._translate_batch([["a"], ["b"]]) == ["ok", "ok"]
+    assert made[-1] == ("cpu", "int8") and backend._on_card is False
+
+    backend._model = Translator("model", "cpu", "int8")  # other errors on the processor are real errors
+    backend._model.translate_batch = lambda tokens, **kw: (_ for _ in ()).throw(ValueError("bad input"))
+    with pytest.raises(ValueError):
+        backend._translate_batch([["a"]])

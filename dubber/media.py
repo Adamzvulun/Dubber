@@ -42,12 +42,29 @@ def video_codec(path: Path) -> str:
     return next((s.get("codec_name", "") for s in probe(path)["streams"] if s.get("codec_type") == "video"), "")
 
 
-def to_h264(src: Path, dst: Path, max_height: int = 720) -> Path:
+_X264 = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "21"]
+_NVENC = ["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "23", "-b:v", "0"]  # the NVIDIA card's encoder
+
+
+def to_h264(src: Path, dst: Path, max_height: int = 720, card: bool | None = None) -> Path:
     """Re-encode the video as H.264 (at most `max_height` high), audio as AAC: the one format every browser,
-    Windows player and phone plays. TikTok and iPhones often give HEVC, which many Windows browsers can't show."""
-    run_ffmpeg(["-i", str(src), "-map", "0:v:0", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast",
-                "-crf", "21", "-pix_fmt", "yuv420p", "-vf", f"scale=-2:'min({max_height},ih)'",
-                "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(dst)])
+    Windows player and phone plays. TikTok and iPhones often give HEVC, which many Windows browsers can't show.
+
+    With an NVIDIA card (`card`, default: gpu.has_card()) its own encoder does it, several times faster than the
+    processor; an ffmpeg without it, or a card that refuses, → the processor (ADR-045)."""
+    if card is None:
+        from .gpu import has_card
+
+        card = has_card()
+    common = ["-pix_fmt", "yuv420p", "-vf", f"scale=-2:'min({max_height},ih)'", "-c:a", "aac", "-b:a", "160k",
+              "-movflags", "+faststart", str(dst)]
+    if card:
+        try:
+            run_ffmpeg(["-i", str(src), "-map", "0:v:0", "-map", "0:a?", *_NVENC, *common])
+            return dst
+        except MediaError:
+            dst.unlink(missing_ok=True)
+    run_ffmpeg(["-i", str(src), "-map", "0:v:0", "-map", "0:a?", *_X264, *common])
     return dst
 
 

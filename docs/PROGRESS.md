@@ -2,6 +2,27 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-30 — Session 10e: the graphics card for every stage (v0.13.0, PR #23, ADR-045)
+- Voice removal (Demucs) on the card via onnxruntime-gpu in its own folder + a child process; the offline translator
+  (NLLB) on the card; HEVC → H.264 with NVENC. All fall back to the processor. 0.12.1's changes are now 0.13.0.
+- Verified: 222 tests; the real onnxruntime-gpu here (no card: clean hand-back); Windows CI step added.
+
+## 2026-10-30 — Session 10d: QA leftovers (still v0.12.1, PR #23)
+- Adam: "start with 4" (the QA list). Built: the page's own dialog instead of confirm()/alert() (delete, cache,
+  logins, key); a question before a per-video «Очистить кэш»; accent-insensitive library search; voice + sound choices
+  remembered (`dubber.choices`, «Оригинал» restored once installed); an offline banner on the PC (any failed request
+  shows it, the next answer hides it and reloads the library); glossary lines without "=" pointed out after saving;
+  "Отмена" in a playlist question keeps the other links (the playlist link stays in the field); every Edge voice name
+  in Cyrillic in the RU interface; Haiku 5.5's price above 100K prompt tokens ($0.50/$2.50, checked 2026-10-30).
+- Verified: 215 tests; Chromium on the stub server (all items, RU, 1280 + 360 px dark; offline banner by stopping and
+  restarting the stub).
+- Adam asked: use the graphics card for everything. Already on the card: Whisper, «Оригинал». Still on the processor:
+  voice removal (Demucs ONNX, `separate.py`), the offline translator (NLLB, `translate.py`) — next.
+
+## 2026-10-30 — Session 10c: the accent fix taken out (v0.12.1)
+- Adam merged 0.12.0 (PR #22), didn't like the accent change. A first PR (#23) wrongly reverted all of 0.12.0; on the
+  same branch it now removes only the accent fix (ADR-044) — library cards and the foreign-line check stay.
+
 ## 2026-10-30 — Session 10b: foreign lines, the accent fix (v0.12.0)
 - Foreign lines inside a video (ADR-042): reproduced Spanish-in-English under noise; second-opinion language check by
   the transcription model; Claude prompt v4. Verified on the noisy clip ("Sí, sí, vámonos." transcribed exactly).

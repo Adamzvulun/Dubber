@@ -176,12 +176,33 @@ class NllbBackend:
         from huggingface_hub import snapshot_download
         from tokenizers import Tokenizer
 
+        from . import transcribe
         from .hub import retry
 
         self.target = languages.get(target)
-        path = retry(lambda: snapshot_download(self.REPO))
+        self._path = path = retry(lambda: snapshot_download(self.REPO))
         self._tok = Tokenizer.from_file(os.path.join(path, "tokenizer.json"))
-        self._model = ctranslate2.Translator(path, device="cpu", compute_type="int8")
+        # On the NVIDIA card when Whisper's libraries work there (gpu.py, ADR-045); its errors show on first use
+        card = (os.environ.get("DUBBER_DEVICE", "auto") != "cpu" and not transcribe._gpu_failed
+                and ctranslate2.get_cuda_device_count() > 0)
+        self._model = ctranslate2.Translator(path, device="cuda" if card else "cpu",
+                                             compute_type="int8_float16" if card else "int8")
+        self._on_card = card
+
+    def _translate_batch(self, *args, **kwargs):
+        try:
+            return self._model.translate_batch(*args, **kwargs)
+        except Exception as exc:
+            from . import transcribe
+
+            if not (self._on_card and transcribe.gpu_error(exc)):
+                raise
+            import ctranslate2
+
+            log.warning("The offline translator failed on the graphics card (%s); using the processor", exc)
+            self._model = ctranslate2.Translator(self._path, device="cpu", compute_type="int8")
+            self._on_card = False
+            return self._model.translate_batch(*args, **kwargs)
 
     def _decode(self, tokens: list[str]) -> str:
         text = self._tok.decode([self._tok.token_to_id(t) for t in tokens]).strip()
@@ -189,7 +210,7 @@ class NllbBackend:
 
     def _generate(self, texts: list[str], src: str, prefixes=None, min_length: int = 0) -> list[list[str]]:
         tokens = [[src, *self._tok.encode(t, add_special_tokens=False).tokens, "</s>"] for t in texts]
-        results = self._model.translate_batch(
+        results = self._translate_batch(
             tokens, target_prefix=prefixes or [[self.target.nllb]] * len(texts), beam_size=4, length_penalty=1.5,
             min_decoding_length=min_length, max_decoding_length=256,
         )
@@ -353,13 +374,21 @@ class ClaudeModel:
     input_usd: float  # per million input tokens
     output_usd: float  # per million output tokens (thinking included)
     fallbacks: bool = True  # supports the server-side refusal fallback
+    # (prompt tokens, input, output): a request whose prompt is longer than this is billed at these rates
+    long_prompt: tuple[int, float, float] | None = None
+
+    def cost_usd(self, tokens_in: int, tokens_out: int) -> float:
+        rate_in, rate_out = self.input_usd, self.output_usd
+        if self.long_prompt and tokens_in > self.long_prompt[0]:
+            rate_in, rate_out = self.long_prompt[1:]
+        return (tokens_in * rate_in + tokens_out * rate_out) / 1e6
 
 
-# Anthropic API prices, 2026-10 (docs: platform.claude.com pricing). Opus 5.5 is the default.
+# Anthropic API prices, checked 2026-10-30 (docs: platform.claude.com pricing). Opus 5.5 is the default.
 CLAUDE_MODELS = {
     "claude-opus-5-5": ClaudeModel("Opus 5.5", 4.0, 20.0),
     "claude-sonnet-5-5": ClaudeModel("Sonnet 5.5", 2.0, 10.0),
-    "claude-haiku-5-5": ClaudeModel("Haiku 5.5", 0.10, 0.50, fallbacks=False),
+    "claude-haiku-5-5": ClaudeModel("Haiku 5.5", 0.10, 0.50, fallbacks=False, long_prompt=(100_000, 0.50, 2.50)),
 }
 DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
 
@@ -507,8 +536,7 @@ class ClaudeBackend:
         tokens_out = getattr(usage, "output_tokens", 0) or 0
         self.input_tokens += tokens_in
         self.output_tokens += tokens_out
-        price = CLAUDE_MODELS[self.model]
-        self.cost_usd += (tokens_in * price.input_usd + tokens_out * price.output_usd) / 1e6
+        self.cost_usd += CLAUDE_MODELS[self.model].cost_usd(tokens_in, tokens_out)
 
     def _chunk(self, lines: list[dict], context: list[str]) -> list[str]:
         try:

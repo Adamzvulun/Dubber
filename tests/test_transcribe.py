@@ -194,14 +194,9 @@ def test_reader_hears_a_clip_and_falls_back_to_the_processor(tmp_path, tone, mon
                 raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
             return iter([types.SimpleNamespace(text=" Привет,"), types.SimpleNamespace(text=" мир.")]), None
 
-        def detect_language(self, audio):  # an English accent: Whisper is less sure it is Russian
-            return "ru", 0.62, [("ru", 0.62), ("en", 0.3)]
-
     monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=FakeModel))
     monkeypatch.setattr(transcribe, "_gpu_failed", False)
     read = transcribe.reader("small", "auto")
     assert read(wav, "ru") == "Привет, мир."
-    heard = read(wav, "ru")
-    assert heard == "Привет, мир." and heard.native == 0.62
-    assert read(wav, "xx").native == 1.0  # a language Whisper doesn't know: no judgement
-    assert devices == ["auto", "cpu"] and set(asked) == {"ru", "xx"}
+    assert read(wav, "ru") == "Привет, мир."
+    assert devices == ["auto", "cpu"] and set(asked) == {"ru"}

@@ -1,5 +1,6 @@
 import os
 import subprocess
+from pathlib import Path
 
 from dubber import app, gpu, transcribe
 
@@ -40,6 +41,7 @@ def test_installer_runs_pip_and_lets_the_card_be_tried_again(tmp_path, monkeypat
 
     monkeypatch.setattr(gpu, "use_dll_dirs", lambda: [])
     monkeypatch.setattr(transcribe, "_gpu_failed", True)
+    monkeypatch.setattr(gpu, "ort_ready", lambda ort_dir=None: True)  # voice removal's part: its own test below
     installer = gpu.Installer(tmp_path / "w" / "gpu-install.log", python="py", run=run)
     assert installer.install() is True
     assert ran == [["py", "-m", "pip", "install", "--disable-pip-version-check", *gpu.PACKAGES]]
@@ -60,3 +62,56 @@ def test_gpu_errors_get_a_clear_message():
     message = app.friendly_error(RuntimeError("Library cublas64_12.dll is not found or cannot be loaded"))
     assert "Видеокарта NVIDIA" in message and "Подробности" not in message
     assert "NVIDIA graphics card" in app.friendly_error(RuntimeError("cudnn64_9.dll missing"), "en")
+
+
+METADATA = """Metadata-Version: 2.1
+Name: onnxruntime-gpu
+Requires-Dist: numpy>=1.21.6
+Provides-Extra: cuda
+Requires-Dist: nvidia-cuda-runtime~=13.0; extra == "cuda"
+Requires-Dist: nvidia-cufft~=12.0; extra == "cuda"
+Provides-Extra: cudnn
+Requires-Dist: nvidia-cudnn-cu13~=9.0; extra == "cudnn"
+Requires-Dist: ml_dtypes; extra == "quantization"
+"""
+
+
+def test_voice_removal_gets_onnxruntime_gpu_and_its_cuda_libraries_in_their_own_folder(tmp_path, monkeypatch, capsys):
+    """ADR-045: onnxruntime-gpu (same version as onnxruntime) with --no-deps, then the NVIDIA wheels its cuda/cudnn
+    extras name (not numpy etc.: the program's own are used), all into one folder that appears only when complete."""
+    ran = []
+
+    def run(cmd, **kw):
+        ran.append(cmd)
+        target = Path(cmd[cmd.index("--target") + 1])
+        if "--no-deps" in cmd:
+            info = target / "onnxruntime_gpu-1.31.1.dist-info"
+            info.mkdir(parents=True)
+            (info / "METADATA").write_text(METADATA, encoding="utf-8")
+            (target / "onnxruntime" / "capi").mkdir(parents=True)
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(gpu, "_ort_version", lambda: "1.31.1")
+    monkeypatch.delenv("DUBBER_DEVICE", raising=False)
+    ort = tmp_path / "venv" / "onnxruntime-gpu"
+    ort.parent.mkdir()
+    installer = gpu.Installer(tmp_path / "gpu-install.log", python="py", run=run, ort_dir=ort)
+    assert installer.install_ort() is True
+    assert "onnxruntime-gpu==1.31.1" in ran[0] and "--no-deps" in ran[0]
+    assert ran[1][-3:] == ["nvidia-cuda-runtime~=13.0", "nvidia-cufft~=12.0", "nvidia-cudnn-cu13~=9.0"]
+    assert gpu.ort_ready(ort) and not (tmp_path / "venv" / "onnxruntime-gpu.partial").exists()
+
+    failing = gpu.Installer(tmp_path / "gpu-install.log", python="py",
+                            run=lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1), ort_dir=tmp_path / "v2" / "o")
+    (tmp_path / "v2").mkdir()
+    assert failing.install_ort() is False
+    assert (tmp_path / "v2" / "onnxruntime-gpu-failed-1.31.1").exists()  # not retried at every start
+    assert not (tmp_path / "v2" / "o").exists()
+
+
+def test_the_card_is_not_asked_for_when_the_user_chose_the_processor(tmp_path, monkeypatch):
+    (tmp_path / "onnxruntime" / "capi").mkdir(parents=True)
+    monkeypatch.delenv("DUBBER_DEVICE", raising=False)
+    assert gpu.ort_ready(tmp_path)
+    monkeypatch.setenv("DUBBER_DEVICE", "cpu")
+    assert not gpu.ort_ready(tmp_path)

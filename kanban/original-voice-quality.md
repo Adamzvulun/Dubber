@@ -42,3 +42,4 @@ have removed most). Candidate approaches — research and measure before proposi
   + Claude prompt v4 (ADR-042). Accent: measuring OmniVoice with a voice-converted Russian reference. (by @claude)
 - 2026-10-30: Accent: Adam chose (b); built in 0.12.0 (ADR-043). One-word lines: fine with a clean reference at the
   current floor (1 seed) — next: look at the reference of his babbled lines. (by @claude)
+- 2026-10-30: Adam didn't like the accent fix; removed in 0.12.1 (ADR-044). The accent is open again. (by @claude)

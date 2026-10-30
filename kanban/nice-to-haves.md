@@ -17,3 +17,4 @@ See docs/PLAN.md M4.
   кэш»; an "offline" banner when the PC program stops; glossary lines without "=" flagged; cancelling one playlist
   question keeps the other links; re-check the Haiku price in `translate.py`; Hebrew/German voice names in Cyrillic
   in the RU interface. (by @claude)
+- 2026-10-30: All nine QA leftovers built in 0.12.1 (PR #23); see PROGRESS session 10d. (by @claude)

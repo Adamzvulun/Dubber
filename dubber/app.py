@@ -475,9 +475,6 @@ def create_app(
     `phone_bridge(submit)` (given by main()) starts the phone connection; `submit(link)` dubs a link left by a phone."""
     settings = settings or load_settings()
     installer = installer or clone.Installer(settings.work_dir / "omnivoice-install.log")
-    if clone.converter_missing():  # installed before 0.12.0: add the accent converter once, in the background
-        print("Голос оригинала: докачиваю исправление акцента (один раз, около 1 ГБ, в фоне)…", flush=True)
-        installer.start(clone.CONVERTER_STEPS)
     jobs = JobRunner(settings, runner, clock)
     updater = updater or update.Updater()
     newest: dict = {"version": None, "checked": None}  # GitHub is asked at most once an hour
@@ -706,7 +703,7 @@ def create_app(
     def settings_view() -> dict:
         prices = []
         for model_id, model in translate.CLAUDE_MODELS.items():
-            per10 = (_TEN_MIN_TOKENS[0] * model.input_usd + _TEN_MIN_TOKENS[1] * model.output_usd) / 1e6
+            per10 = model.cost_usd(*_TEN_MIN_TOKENS)
             prices.append({"id": model_id, "label": model.label, "per_10_min_usd": round(per10, 3)})
         return {
             "claude": {"key_set": bool(settings.claude_key), "key_hint": _key_hint(settings.claude_key),
@@ -1019,8 +1016,9 @@ def main() -> int:
         restarting.set()
         server.should_exit = True
 
-    if gpu.wanted():  # an NVIDIA card without its libraries: fetch them in the background (ADR-034)
-        print("Готовлю видеокарту NVIDIA для быстрого распознавания речи (один раз, около 1 ГБ, в фоне)…", flush=True)
+    if gpu.wanted():  # an NVIDIA card without its libraries: fetch them in the background (ADR-034, ADR-045)
+        print("Готовлю видеокарту NVIDIA для быстрого распознавания речи и отделения голоса (один раз, около 3 ГБ, "
+              "в фоне)…", flush=True)
         gpu.Installer(settings.work_dir / "gpu-install.log").start()
 
     def phone_bridge(submit):

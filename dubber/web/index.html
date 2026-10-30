@@ -54,6 +54,10 @@
         <ul class="phone-queue__list" id="phone-queue"></ul>
       </div>
     </section>
+    <div class="offline" id="offline" role="alert" hidden>
+      <span class="offline__dot" aria-hidden="true"></span>
+      <p class="offline__text" data-i18n="offline.text">Программа на компьютере не отвечает.</p>
+    </div>
     <div class="update" id="update" hidden>
       <p class="update__text" id="update-text" role="status"></p>
       <button class="btn btn--primary" type="button" id="update-btn" data-i18n="update.button">Обновить</button>
@@ -294,6 +298,7 @@
             <button class="btn" type="button" id="glossary-save" data-i18n="settings.glossary.save">Сохранить глоссарий</button>
             <span class="saved-note" id="glossary-saved" hidden></span>
           </div>
+          <p class="field-warn" id="glossary-warn" role="status" hidden></p>
         </section>
 
         <section class="panel" aria-labelledby="logins-title" id="logins">
@@ -379,6 +384,16 @@
   </main>
 
   <footer class="footer wrap"><span id="app-version"></span></footer>
+
+  <dialog class="ask" id="ask" aria-labelledby="ask-text">
+    <form method="dialog" class="ask__body">
+      <p class="ask__text" id="ask-text"></p>
+      <div class="ask__actions">
+        <button class="btn" value="no" id="ask-no" data-i18n="ask.cancel">Отмена</button>
+        <button class="btn btn--primary" value="yes" id="ask-yes"></button>
+      </div>
+    </form>
+  </dialog>
 
   <template id="tpl-card">
     <a class="card">

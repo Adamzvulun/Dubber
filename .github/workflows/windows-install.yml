@@ -13,6 +13,7 @@ on:
       - "dubber/deps.py"
       - "dubber/phone.py"
       - "dubber/gpu.py"
+      - "dubber/separate.py"
       - "pyproject.toml"
       - ".github/workflows/windows-install.yml"
   workflow_dispatch:
@@ -114,6 +115,16 @@ jobs:
           .venv\Scripts\python.exe -c "from dubber import gpu; print(' '.join(gpu.PACKAGES))"
           .venv\Scripts\python.exe -m pip install --dry-run --only-binary=:all: --disable-pip-version-check nvidia-cublas-cu12 "nvidia-cudnn-cu12>=9,<10"
           if ($LASTEXITCODE -ne 0) { throw "NVIDIA's libraries have no wheels for this Python" }
+      - name: Voice removal's onnxruntime-gpu installs into its own folder, and without a card hands back (ADR-045)
+        shell: powershell
+        env:
+          PYTHONIOENCODING: utf-8  # the program prints Russian; this step's output is a pipe, not a console
+        run: |
+          .venv\Scripts\python.exe -c "from pathlib import Path; from dubber import gpu; i = gpu.Installer(Path('gpu-install.log')); assert i.install_ort(), 'install failed'; assert gpu.ort_ready(), gpu.ORT_DIR; print('installed in', gpu.ORT_DIR)"
+          if ($LASTEXITCODE -ne 0) { if (Test-Path gpu-install.log) { Get-Content gpu-install.log -Tail 30 }; throw "onnxruntime-gpu did not install" }
+          ffmpeg -hide_banner -loglevel error -y -f lavfi -i "sine=frequency=220:duration=8" -ac 2 -ar 44100 tone.wav
+          .venv\Scripts\python.exe -c "from pathlib import Path; from dubber import separate; ok = separate.on_card(Path('tone.wav'), Path('sep/bg.wav'), None, None); print('on the card:', ok); assert ok is False; out = separate.separate_background(Path('tone.wav'), Path('sep/bg.wav')); assert out.stat().st_size > 0 and separate._gpu_failed"
+          if ($LASTEXITCODE -ne 0) { throw "without a card, voice removal must fall back to the processor" }
       - name: Start Dubber.cmd starts the program
         shell: powershell
         run: |

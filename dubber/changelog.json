@@ -1,13 +1,29 @@
 {
+  "0.13.0": {
+    "ru": [
+      "Видеокарта NVIDIA теперь работает на большее: отделение голоса диктора (и голос «Оригинал») идёт на ней в несколько раз быстрее, на ней же запасной переводчик и перекодирование видео с телефонов и TikTok. Нужные файлы программа скачает сама один раз (около 2 ГБ, в фоне); если видеокарта не справится, всё работает на процессоре, как раньше.",
+      "Голос «Оригинал» снова звучит как в версии 0.11.0: исправление акцента убрано.",
+      "Вопросы «Удалить?» и «Очистить кэш?» теперь в окне самой программы; перед очисткой кэша одного видео программа тоже спрашивает.",
+      "Выбор голоса и звука запоминается. Если окно программы закрыто, страница пишет об этом и подключается сама, когда программа снова запущена.",
+      "Поиск в библиотеке не различает буквы с акцентами (lecon найдёт «Leçon»). Глоссарий показывает строки без «=». «Отмена» в вопросе о плейлисте больше не отменяет остальные ссылки.",
+      "Имена голосов других языков написаны по-русски (Эндрю, Хила…)."
+    ],
+    "en": [
+      "The NVIDIA graphics card now does more: removing the speaker's voice (and the “Original” voice) runs on it several times faster, and so do the backup translator and re-encoding videos from phones and TikTok. The program downloads what it needs once (about 2 GB, in the background); if the card can't do it, everything runs on the processor as before.",
+      "The “Original” voice sounds as in version 0.11.0 again: the accent fix is removed.",
+      "“Delete?” and “Clear cache?” questions now appear in the program's own window; clearing one video's cache asks first too.",
+      "Your voice and sound choices are remembered. When the program window is closed, the page says so and reconnects by itself once the program runs again.",
+      "Library search ignores accents (lecon finds “Leçon”). The glossary points out lines without “=”. “Cancel” in the playlist question no longer cancels the other links.",
+      "In the Russian interface, the voices of other languages have their names in Russian letters (Эндрю, Хила…)."
+    ]
+  },
   "0.12.0": {
     "ru": [
       "Библиотека: у каждой озвучки своя карточка — даже у повторной с теми же настройками; новые первыми.",
-      "Голос «Оригинал» без иностранного акцента: если во фразе слышен акцент, программа озвучивает её заново с правильным произношением — тем же голосом говорящего. Если голос оригинала уже был установлен, исправление акцента докачается само (около 1 ГБ, в фоне).",
       "Короткие фразы на другом языке внутри видео (например, испанский в английском фильме) распознаются лучше, а перевод через Claude передаёт их смысл, а не набор букв."
     ],
     "en": [
       "Library: every dub has its own card — even a repeat with the same settings; newest first.",
-      "The “Original” voice without a foreign accent: a line that sounds accented is spoken again with native pronunciation, in the same speaker's voice. If the original voice is already installed, the accent fix downloads by itself (about 1 GB, in the background).",
       "Short lines in another language inside a video (e.g. Spanish in an English film) are recognised better, and the Claude translation gives their meaning instead of a jumble of letters."
     ]
   },
