@@ -49,6 +49,7 @@ SAMPLE_RATE = 24000
 MIN_REF = 3.0  # seconds of the speaker a line's reference should have (OmniVoice: 3-10 s is best)
 MAX_REF = 15.0  # longer references are refused by OmniVoice (with a transcript: 20 s)
 JOIN_GAP = 1.0  # neighbouring lines join one reference only across pauses this short (likely the same speaker)
+IDEAL_REF = 10.0  # seconds: a speaker's reference is made as long as this when they have that much in one go
 LOUDNESS = 0.1  # RMS every clip is brought to (the copied voices are as loud as their references otherwise)
 BATCH = 4  # lines per model call on a 6-8 GB card (batch_for): several at once use the graphics card better
 # Never ask for a line faster than people speak: told to fit less time, the model swallows and warps the words
@@ -412,6 +413,31 @@ def reference_lines(segments: list[Segment], i: int) -> list[int]:
     return list(range(lo, hi + 1))
 
 
+def speaker_references(segments: list[Segment], speakers: list[int | None]) -> dict[int, list[int]]:
+    """One reference per speaker (speakers.py): their longest run of consecutive lines (pauses <= JOIN_GAP), up to
+    IDEAL_REF seconds — so every line of a person sounds like the same person, not like whatever 1-3 s were around it.
+    A speaker with less than a second of speech in one go gets none (their lines use `reference_lines`)."""
+    best: dict[int, tuple[tuple[float, float], list[int]]] = {}
+    for lo in range(len(segments)):
+        who = speakers[lo]
+        if who is None or segments[lo].duration > MAX_REF:
+            continue
+        hi = lo
+        while True:
+            total = segments[hi].end - segments[lo].start
+            if total > MAX_REF:
+                break
+            score = (min(total, IDEAL_REF), -total)  # long enough, then the shortest such
+            if total >= 1.0 and (who not in best or score > best[who][0]):
+                best[who] = (score, list(range(lo, hi + 1)))
+            nxt = hi + 1
+            if (nxt >= len(segments) or speakers[nxt] != who or segments[nxt].duration > MAX_REF
+                    or segments[nxt].start - segments[hi].end > JOIN_GAP):
+                break
+            hi = nxt
+    return {who: lines for who, (_, lines) in best.items()}
+
+
 class VoiceTrack:
     """The separated voice of the whole video at 24 kHz mono, read from disk one reference at a time."""
 
@@ -456,6 +482,7 @@ def synthesize(
     progress: Callable[[float], None] | None = None,
     batch: int | None = None,
     listen: Callable[[Path, str], str] | None = None,
+    speakers: list[int | None] | None = None,
 ) -> tuple[list[Path | None], list[float]]:
     """Speak every line in the voice of whoever said it; returns one clip per line (None = nothing to say) and the
     speaking-rate factors asked for (for timing.json).
@@ -464,7 +491,8 @@ def synthesize(
     a rate the model is told each line's length — never less than `min_seconds` (a line that then runs long pushes the
     next one back, align.py). Lines of similar length share a model call (`batch` lines, default: what the card's
     memory allows). `listen(clip, lang)` -> the words heard: a line whose words aren't heard is spoken again (TRIES,
-    the last at the voice's own pace) and the best try kept; `check_report` says what was heard.
+    the last at the voice's own pace) and the best try kept; `check_report` says what was heard. `speakers` (who says
+    each line, speakers.py): each speaker's lines copy one longer sample of them (`speaker_references`).
     Finished clips are reused; `progress` may raise to cancel between model calls.
     """
     clips_dir.mkdir(parents=True, exist_ok=True)
@@ -473,7 +501,9 @@ def synthesize(
     engine = engine or OmniVoiceEngine()
     try:
         todo = [i for i, s in enumerate(segments) if speakable(s.ru)]
-        refs = {i: reference_lines(segments, i) for i in todo}
+        own_refs = speaker_references(segments, speakers) if speakers else {}
+        refs = {i: own_refs.get(speakers[i]) if speakers and speakers[i] in own_refs else reference_lines(segments, i)
+                for i in todo}
         prompts: dict[tuple, object] = {}
         for i in todo:
             key = tuple(refs[i])

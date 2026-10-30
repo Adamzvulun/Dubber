@@ -9,8 +9,8 @@ tags: [handoff, next]
 # Next steps (hand-off at the end of session 8, 2026-10-29)
 
 Read `docs/STATUS.md` first (its "Next steps" has the details). Open items, in order:
-0. **0.10.4 (ADR-037)** — «Оригинал» listen-back check + names in Russian letters: PR → Adam merges → re-dub, report
-   + `check.json`. Then his decision on two voices at once / speaker grouping (STATUS Next steps 0b).
+0. **0.11.0 (ADR-038/039/040)** — speakers, two voices at once, one sample per speaker, soft edges, every dub its own
+   entry with its time: PR → Adam merges → a re-dub by ear (STATUS Next steps 0/0b).
 1. **Switch the phone version on** (`kanban/phone-app.md`, ADR-033): Adam's Cloudflare account + 2 GitHub secrets
    + the workers.dev address → set `phone.MAILBOX_URL` (small PR) → deploy → pair his Samsung.
 2. **Real TikTok / Instagram / Facebook links without a login** — ask what failed; login window only if asked.
@@ -26,3 +26,4 @@ Read `docs/STATUS.md` first (its "Next steps" has the details). Open items, in o
 - 2026-10-29: Rewritten at the end of session 8 (0.10.0 phone, 0.10.1 NVIDIA merged; 0.10.2 = PR #17). (by @claude)
 - 2026-10-29: Session 9: 0.10.2 merged; 0.10.3 for Adam's «Оригинал» findings. (by @claude)
 - 2026-10-29: Session 9b: 0.10.3 merged; 0.10.4 listen-back + names. (by @claude)
+- 2026-10-29: Session 9c: 0.10.4 merged; 0.11.0 speakers + library times. (by @claude)

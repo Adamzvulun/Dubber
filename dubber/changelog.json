@@ -1,4 +1,18 @@
 {
+  "0.11.0": {
+    "ru": [
+      "Голос «Оригинал» различает, кто говорит: голос каждого человека копируется с одного длинного отрывка его речи и звучит одинаково во всём видео.",
+      "Когда двое говорят одновременно или перебивают друг друга, их озвучки тоже звучат одновременно — как в оригинале.",
+      "Фразы начинаются и заканчиваются мягко, без резких обрывов; музыка под озвучкой притихает плавно.",
+      "Каждая озвучка сохраняется в библиотеке отдельно — даже повторная с теми же настройками. У каждой видны дата и точное время."
+    ],
+    "en": [
+      "The “Original” voice tells speakers apart: each person's voice is copied from one longer stretch of their speech and sounds the same through the whole video.",
+      "When two people talk at once or interrupt each other, their dubs can be heard at once too — as in the original.",
+      "Lines start and end softly, without abrupt cuts; the music under the dub dips smoothly.",
+      "Every dub is kept as its own library entry — even a repeat with the same settings — with its date and exact time."
+    ]
+  },
   "0.10.4": {
     "ru": [
       "Голос «Оригинал» проверяет себя на слух: каждую фразу программа прослушивает, и если слова неразборчивы или потерялись — озвучивает её ещё раз. Голос больше не торопится.",

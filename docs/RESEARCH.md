@@ -363,6 +363,27 @@ each at its own length and at 5/6/7/8 syllables per second (+0.2 s); Whisper `sm
 - Decision (ADR-037): hurry the copied voice at most 1.25× and listen to every clip; garbled lines are spoken again,
   the last try at the voice's own pace.
 
+## Who speaks each line — measured 2026-10-29 (ADR-038)
+Test conversation (session scratchpad, not in the repo): 8 turns of three Edge voices — Andrew (en, male), Ava (en,
+female), Henri (fr, male) — 0.6-s pauses, turn 7 starting 1 s before turn 6 ends (crosstalk). `sherpa-onnx` 2.0.1.
+
+- **Full diarization** (pyannote segmentation 3.0 + voice prints + clustering, thresholds 0.5/0.7/0.9): never right.
+  Andrew's and Henri's adjacent turns (6.9-9.8 s, 10.4-13.8 s) became one segment with every voice-print model
+  (3D-Speaker ERes2Net, WeSpeaker CAM++, 3D-Speaker CAM++ advanced); WeSpeaker CAM++ also merged everyone at 0.7.
+- **Voice prints of the turns themselves** (what Dubber has: Whisper's lines), cosine similarity, crosstalk turns
+  left out of the min/max:
+
+| model (sherpa-onnx `speaker-embedding-models`) | same speaker, min | different, max |
+|---|---|---|
+| 3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k | 0.58 | 0.26 |
+| wespeaker_en_voxceleb_CAM++ | 0.40 | 0.79 |
+| **3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced** (28 MB) | **0.71** | **0.19** |
+| nemo_en_titanet_small | 0.60 | 0.30 |
+| wespeaker_en_voxceleb_resnet34_LM | 0.79 | 0.61 |
+
+- `speakers.assign` with the CAM++ advanced model: all 8 turns + two shorter cut-outs (1.1 s, 0.6 s) right, 1.8 s on
+  2 CPU threads. The overlapped turns still group right (their prints stay closest to their own speaker).
+
 ## Phone version and NVIDIA libraries — notes 2026-10-28/29 (ADR-033, ADR-034, ADR-035)
 - **Reaching a home PC from a phone, no accounts for users:** Tailscale works anywhere but needs an app + sign-in on
   every PC and phone (rejected: Adam wants one click). Cloudflare **quick tunnels** (`cloudflared tunnel --url …`)

@@ -503,3 +503,43 @@ Newest at the bottom. Format: context → decision → consequences.
   reference: one line unclear on its first try, spoken again, all 3 heard (`check.json`), the window lines printed.
 - **Not verified:** on Adam's card and his video. Not done: two voices at once (needs speakers — proposal in STATUS).
 
+## ADR-038 — «Оригинал» knows who speaks: one voice sample per speaker, two voices at once (2026-10-29)
+- **Context:** Adam (after 0.10.4, his `check.json` attached): asked to build the proposal — tell speakers apart, let
+  lines of different people overlap as in the original (align.py never overlapped), copy each person from one longer
+  sample (per-line 1-3 s references made the voice flip between "robot" and the real speaker).
+- **Measured** (RESEARCH "Who speaks each line"): sherpa-onnx's full diarization (pyannote segmentation 3.0 + voice
+  prints) merged two male voices that took turns 0.6 s apart. Voice prints of Whisper's lines, grouped, were exact
+  with 3D-Speaker CAM++ `campplus_sv_zh_en_16k-common_advanced` (same speaker >= 0.71, different <= 0.19 on a 3-voice
+  English + French test; WeSpeaker CAM++ / ResNet34 overlapped).
+- **Decision:**
+  - `speakers.py`: a voice print per line (>= 0.5 s) from the separated voice track; lines >= 1 s grouped by average
+    linkage at cosine 0.45; shorter lines join the closest group; lines without a print go with the nearest line in
+    time. Model: 28 MB from Hugging Face, run by `sherpa-onnx` (new dependency, wheels for Windows/Python 3.10-3.15;
+    `deps.NATIVE` checks it loads). Only for «Оригинал» dubs, cached per set of lines (`work/<id>/speakers_*.json`);
+    a failure never stops the dub (per-line samples, no overlap).
+  - `clone.speaker_references`: each speaker's longest run of consecutive lines (pauses <= 1 s), up to 10 s (<= 15 s).
+  - `align.build_track(speakers=...)`: a line waits only for the same speaker's previous line; unknown speakers wait
+    for everyone. The Edge voice (one voice for all) never overlaps. `timing.json` lines carry `speaker`.
+- **Verified:** real voice prints + OmniVoice + Whisper listener on CPU, the 3-voice test with Russian lines: speakers
+  right, one reference per speaker, 7 of 8 lines heard exactly ("О какой…" heard "А какой…", one French-voiced line
+  "Я тоже" → "Вято же" after 3 tries), every line on time. (With references whose text didn't match their audio the
+  model spoke the reference text — "Turn. Buy." — so a reference's text must be what is said in it, as Whisper's is.)
+- **Limit:** real crosstalk is mostly missing from Whisper's text (it writes the louder voice); dubbing both needs
+  separating the voices first — not done.
+
+## ADR-039 — Every dub its own library entry, with the exact time (2026-10-29)
+- **Context:** Adam: "each time we dub a video, even the same video with the same settings, it should appear
+  separately in the library, with the exact hour it was dubbed". Supersedes ADR-022's "the same choices replace".
+- **Decision:** `pipeline.dub_id` ends with the dub's time (`…--ru-<hash6>-YYYYMMDD-HHMMSS`, `-2` if two finish in
+  the same second); ids may be 96 characters (`app._ID`, phone routes). The grouped library stays (Adam's choice,
+  ADR-027): a video's card shows the newest dub's date and time; the language tags' tooltip and «Другие озвучки этого
+  видео» list each dub with its date and time; the watch page shows it too (`dateLabel` = date + hh:mm).
+
+## ADR-040 — Soft line edges in the dub track (2026-10-29)
+- **Context:** Adam: "very rough chops between sentences, harsh on the ear (the transitions between talking and
+  silence)". Lines were cut at 1% of their peak with 30 ms kept, no fades; the background dropped in 20 ms.
+- **Decision:** every line fades in (15 ms) and out (80 ms, raised cosine) and keeps 120 ms of its quiet tail, which
+  may run under the next line (placement still uses the speech's end). The voice-free background ducks with 80 ms
+  attack / 800 ms release, ratio 4.
+- **Not verified:** by ear on Adam's PC.
+

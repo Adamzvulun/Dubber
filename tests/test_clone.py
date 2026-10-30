@@ -341,3 +341,17 @@ def test_the_copied_voice_is_never_hurried_much(tmp_path, vocals):
     engine = FakeEngine()
     _, rates = clone.synthesize(lines, vocals, "ru", tmp_path / "w" / "c", 1.6, engine=engine)
     assert rates[0] <= clone.MAX_RATE + 1e-6
+
+
+def test_each_speaker_is_copied_from_one_longer_sample_of_them(tmp_path):
+    vocals = tmp_path / "vocals.wav"
+    run_ffmpeg(["-f", "lavfi", "-i", "sine=frequency=220:duration=30", "-ac", "2", "-ar", "44100", str(vocals)])
+    lines = [seg(0.0, 1.5, "A one.", "А один."), seg(1.8, 3.0, "B one.", "Б один."),
+             seg(3.2, 6.0, "A two.", "А два."), seg(6.3, 9.5, "A three.", "А три."), seg(9.8, 11.0, "B two.", "Б два."),
+             seg(11.2, 14.5, "B three.", "Б три."), seg(14.8, 15.6, "B four.", "Б четыре.")]
+    who = [0, 1, 0, 0, 1, 1, 1]
+    engine = FakeEngine()
+    clone.synthesize(lines, vocals, "ru", tmp_path / "w" / "c", 1.6, engine=engine, speakers=who)
+    # one reference per speaker: A's lines 2+3 (6.3 s, joined across a 0.3-s pause), B's lines 4-6
+    assert sorted(text for _, text in engine.prompts) == ["A two. A three.", "B two. B three. B four."]
+    assert clone.speaker_references(lines, who) == {0: [2, 3], 1: [4, 5, 6]}
