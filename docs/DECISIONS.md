@@ -560,3 +560,22 @@ Newest at the bottom. Format: context → decision → consequences.
   that language (transcribed and translated as such). Claude prompt v4 (re-translates cached Claude dubs once): a line
   that makes no sense in its language is a misheard foreign phrase → translate the meaning, never spell it out.
 - **Not done:** the free translators get no such rule; truly short phrases (~1 s) can still be misheard.
+
+## ADR-043 — «Оригинал» without the English accent: re-speak accented lines natively, convert to the speaker (2026-10-30)
+- **Context:** Adam: Russian «Оригинал» dubs sometimes have an American accent. OmniVoice carries the reference's
+  accent into another language and has no setting against it. Measured (RESEARCH "The English accent…"): cloning
+  keeps the voice best (voice print 0.75) but sounds accented (Whisper "ru" 0.82, one line 0.43); OmniVoice from a
+  native Russian sample + Chatterbox voice conversion into the speaker sounds native (0.99) and keeps most of the voice
+  (0.67; the speaker vs himself 0.89, another person 0.35). Adam chose (2026-10-30) option (b): today's clone, the
+  conversion only for lines that sound accented — "the dub must still be the original voice".
+- **Decision:** the listen-back check (`transcribe.reader`) also returns Whisper's confidence that a clip is in the
+  dub language (`Heard.native`, in `check.json` as `native`). Lines ≥ `ACCENT_MIN_SECONDS` (1 s) under
+  `ACCENT_SURE` (0.9) are spoken again by OmniVoice from a native Edge sample (the dub language's male/female voice by
+  the speaker's median pitch, `MALE_BELOW_HZ` 165 Hz; it says the dub's first lines), at the same length, then
+  converted into the speaker's own reference (`VoiceConverter`: Chatterbox `s3gen`, MIT, 1 GB, loaded without the
+  package's `__init__`). Kept only when it is heard as clearly and sounds more native (`check.json` → `accent`).
+  Installed with «Оригинал» (step "converter": deps, then `chatterbox-tts`/`conformer`/`s3tokenizer` with `--no-deps`
+  because chatterbox pins PyTorch 2.6, too old for RTX 50xx); PCs that installed «Оригинал» before 0.12.0 fetch it in
+  the background at start. No converter, no Edge (offline) or a load failure → the lines keep their accent.
+- **Not verified:** on an NVIDIA card (speed, memory next to OmniVoice), by Adam's ear on a real film; the 0.9
+  threshold rests on 4 test lines.

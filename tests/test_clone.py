@@ -181,7 +181,14 @@ def test_installer_steps(tmp_path, monkeypatch):
     installer._install()  # what start() runs in the background
     assert installer.state == {"running": False, "step": "model", "error": "", "done": True}
     assert (tmp_path / "dubber-omnivoice").exists()
-    assert clone.TORCH_INDEX in ran[0] and clone.OMNIVOICE in ran[1] and ran[2][:2] == ["py", "-c"]
+    assert clone.TORCH_INDEX in ran[0] and clone.OMNIVOICE in ran[1] and ran[4][:2] == ["py", "-c"]
+    # the accent converter: its dependencies, then its own packages without theirs (they pin an old PyTorch)
+    assert "diffusers" in ran[2] and "--no-deps" in ran[3] and clone.CONVERTER_PACKAGES[0] in ran[3]
+
+    ran.clear()  # a PC that installed the original voice before the converter: only the converter + its model
+    installer._lock.acquire()
+    installer._install(clone.CONVERTER_STEPS)
+    assert len(ran) == 3 and "--no-deps" in ran[1] and ran[2][:2] == ["py", "-c"]
 
     failing = clone.Installer(tmp_path / "install.log", python="py",
                               run=lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1))
@@ -220,7 +227,7 @@ def test_install_progress_counts_the_bytes_downloaded(tmp_path):
     blobs = hub / "models--k2-fsa--OmniVoice" / "blobs"
     blobs.mkdir(parents=True)
     (blobs / "abc.incomplete").write_bytes(b"x" * 10)
-    before = clone.STEP_SHARES["torch"] + clone.STEP_SHARES["omnivoice"]
+    before = clone.STEP_SHARES["torch"] + clone.STEP_SHARES["omnivoice"] + clone.STEP_SHARES["converter"]
     assert before <= installer.progress(hub_dir=hub) < before + 0.01
     clone.STEP_BYTES["model"], saved = 10, clone.STEP_BYTES["model"]
     try:  # all bytes there, still unpacking/checking: never 100% before the install says so
@@ -355,3 +362,65 @@ def test_each_speaker_is_copied_from_one_longer_sample_of_them(tmp_path):
     # one reference per speaker: A's lines 2+3 (6.3 s, joined across a 0.3-s pause), B's lines 4-6
     assert sorted(text for _, text in engine.prompts) == ["A two. A three.", "B two. B three. B four."]
     assert clone.speaker_references(lines, who) == {0: [2, 3], 1: [4, 5, 6]}
+
+
+def test_a_line_said_with_an_accent_is_spoken_again_natively_in_the_speakers_voice(tmp_path, vocals, monkeypatch):
+    """ADR-043: the copied voice keeps the accent of the English it was copied from. A line the listener doubts is
+    Russian is spoken from a native Edge sample, converted into the speaker's voice, and kept if it sounds better."""
+    from dubber.transcribe import Heard
+
+    monkeypatch.setattr(clone, "converter_ready", lambda: True)
+    lines = [seg(0.0, 3.2, "a", "Мы были здесь вчера."), seg(4.0, 7.5, "b", "Шесть щенков сидели у окна."),
+             seg(8.0, 11.5, "c", "Я думаю, что нам нужно время.")]
+    engine, natives, converted = FakeEngine(), [], []
+
+    def native(text, gender, path):
+        natives.append((text, gender))
+        run_ffmpeg(["-f", "lavfi", "-i", "sine=frequency=150:duration=3", "-ar", "24000", str(path)])
+
+    class Converter:
+        def __call__(self, audio, voice, key):
+            converted.append(key)
+            return audio
+
+        def close(self):
+            converted.append("closed")
+
+    def listen(clip, lang):
+        i = int(clip.name[:5])
+        fixed = clip.name.endswith(".accent.wav")
+        # line 1 has an accent that the native try removes; line 2's native try is no better, so it is not kept
+        return Heard(lines[i].ru, {0: 0.99, 1: 0.98 if fixed else 0.43, 2: 0.80}[i])
+
+    clips, _ = clone.synthesize(lines, vocals, "ru", tmp_path / "w" / "c", 1.6, engine=engine, listen=listen,
+                                native=native, converter=Converter)
+    assert len(natives) == 1 and natives[0][1] == "female"  # the 220-Hz "speaker" is above MALE_BELOW_HZ
+    assert natives[0][0].startswith("Мы были здесь вчера. Шесть щенков")  # the dub's own lines
+    report = clone.check_report(tmp_path / "w" / "c")
+    assert "accent" not in report["0"]  # sounded native the first time
+    assert report["1"]["native"] == 0.43 and report["1"]["accent"] == {
+        "heard": lines[1].ru, "share": 1.0, "native": 0.98, "kept": True}
+    assert report["2"]["accent"]["kept"] is False
+    assert len(converted) == 3 and converted[-1] == "closed"
+    assert not list((tmp_path / "w" / "c").glob("*.accent.wav"))  # tries that weren't kept are gone
+    # the native try is asked for the same length as the kept one, in the native sample's voice
+    native_calls = [c for c in engine.calls if sorted(c[0]) == sorted([lines[1].ru, lines[2].ru])]
+    assert len(native_calls) == 1
+
+
+def test_without_the_converter_accented_lines_stay_as_they_are(tmp_path, vocals, monkeypatch, capsys):
+    from dubber.transcribe import Heard
+
+    monkeypatch.setattr(clone, "converter_ready", lambda: False)
+    lines = [seg(0.0, 3.2, "b", "Шесть щенков сидели у окна.")]
+    clips, _ = clone.synthesize(lines, vocals, "ru", tmp_path / "w" / "c", 1.6, engine=FakeEngine(),
+                                listen=lambda clip, lang: Heard(lines[0].ru, 0.4), native=lambda *a: None,
+                                converter=lambda: None)
+    assert clips[0].exists() and "не установлено" in capsys.readouterr().out
+
+
+def test_pitch_tells_a_low_voice_from_a_high_one():
+    t = np.arange(clone.SAMPLE_RATE) / clone.SAMPLE_RATE
+    assert abs(clone.pitch_hz((0.1 * np.sin(2 * np.pi * 120 * t)).astype(np.float32)) - 120) < 5
+    assert abs(clone.pitch_hz((0.1 * np.sin(2 * np.pi * 220 * t)).astype(np.float32)) - 220) < 8
+    assert clone.pitch_hz(np.zeros(clone.SAMPLE_RATE, np.float32)) == 0.0

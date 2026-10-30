@@ -475,6 +475,9 @@ def create_app(
     `phone_bridge(submit)` (given by main()) starts the phone connection; `submit(link)` dubs a link left by a phone."""
     settings = settings or load_settings()
     installer = installer or clone.Installer(settings.work_dir / "omnivoice-install.log")
+    if clone.converter_missing():  # installed before 0.12.0: add the accent converter once, in the background
+        print("Голос оригинала: докачиваю исправление акцента (один раз, около 1 ГБ, в фоне)…", flush=True)
+        installer.start(clone.CONVERTER_STEPS)
     jobs = JobRunner(settings, runner, clock)
     updater = updater or update.Updater()
     newest: dict = {"version": None, "checked": None}  # GitHub is asked at most once an hour
