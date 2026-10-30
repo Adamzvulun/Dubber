@@ -551,3 +551,12 @@ Newest at the bottom. Format: context → decision → consequences.
   channel · language · voice · sound · date and time. The count reads "N озвучек"; search still matches title and
   channel. The watch page keeps «Другие озвучки этого видео». Supersedes ADR-027's grouping (the language tags are
   gone).
+
+## ADR-042 — Foreign lines inside a video: a second opinion, and Claude translates misheard phrases (2026-10-30)
+- **Context:** Adam's `check.json`: Spanish lines in an English film were transcribed as English nonsense and
+  transliterated by Claude. Reproduced under noise (RESEARCH "Foreign lines inside a video").
+- **Decision:** `transcribe.language_runs(checker=)` — a region ≥ `CHECK_SECONDS` (1.5 s) whose best "base" guess is
+  not one of the video's languages is heard again by the transcription model; ≥ `CHECK_SURE` (0.85) sure → it keeps
+  that language (transcribed and translated as such). Claude prompt v4 (re-translates cached Claude dubs once): a line
+  that makes no sense in its language is a misheard foreign phrase → translate the meaning, never spell it out.
+- **Not done:** the free translators get no such rule; truly short phrases (~1 s) can still be misheard.

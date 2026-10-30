@@ -38,3 +38,5 @@ have removed most). Candidate approaches — research and measure before proposi
 
 ## Narrative
 - 2026-10-30: Created from Adam's hand-off request at the end of session 9 (not started). (by @claude)
+- 2026-10-30: Weak point 2 (foreign lines): reproduced with Edge voices under noise; second-opinion language check
+  + Claude prompt v4 (ADR-042). Accent: measuring OmniVoice with a voice-converted Russian reference. (by @claude)
