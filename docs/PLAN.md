@@ -136,7 +136,7 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [x] Who speaks each line, one sample per speaker, two voices at once (0.11.0, ADR-038)
 - [x] Soft line edges (0.11.0, ADR-040); every dub its own library entry with date + time (0.11.0, ADR-039)
 - [ ] Adam: re-dub with 0.11.0 and listen (STATUS Next steps 0)
-- [ ] One library card per dub (`kanban/library-card-per-dub.md`)
+- [x] One library card per dub (ADR-041, `kanban/library-card-per-dub.md`)
 - [ ] One-word lines, misheard foreign speech, crosstalk (`kanban/original-voice-quality.md`)
 - [ ] No American accent in the Russian «Оригинал» dub — research, then propose (`kanban/original-voice-quality.md`)
 

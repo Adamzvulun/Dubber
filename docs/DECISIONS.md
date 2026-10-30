@@ -543,3 +543,11 @@ Newest at the bottom. Format: context → decision → consequences.
   attack / 800 ms release, ratio 4.
 - **Not verified:** by ear on Adam's PC.
 
+
+## ADR-041 — One library card per dub (2026-10-30)
+- **Context:** Adam: "separate card for each dub in the library". Since ADR-039 every run is its own entry with its
+  date and time, but the library still grouped a video's dubs on one card (ADR-027).
+- **Decision:** the library and «Недавние видео» show one card per dub, newest first: thumbnail, title, then
+  channel · language · voice · sound · date and time. The count reads "N озвучек"; search still matches title and
+  channel. The watch page keeps «Другие озвучки этого видео». Supersedes ADR-027's grouping (the language tags are
+  gone).

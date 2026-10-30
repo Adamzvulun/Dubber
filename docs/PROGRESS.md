@@ -2,6 +2,12 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-30 — Session 10: one library card per dub
+- Adam: start the M11 work; with «Оригинал» the dub must stay the speaker's own copied voice; the American accent in
+  Russian dubs happens only with «Оригинал».
+- Built: one library card per dub (ADR-041). Verified: 213 tests; Chromium on the stub server with 4 fake dubs of 2
+  videos (RU/EN, 1280/360 px, dark): 4 cards newest first, search, count "4 озвучки", recent strip.
+
 ## 2026-10-30 — Session 9 end: hand-off
 - Adam merged 0.11.0 (PR #20); `main` = 0.11.0, nothing open. Hand-off docs refreshed (STATUS, PLAN M11, CLAUDE.md,
   `dubber-pipeline` skill, kanban). Adam's next asks (not started): one library card per dub
