@@ -2,21 +2,6 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
-## 2026-10-30 — Session 10b: foreign lines, the accent fix (v0.12.0)
-- Foreign lines inside a video (ADR-042): reproduced Spanish-in-English under noise; second-opinion language check by
-  the transcription model; Claude prompt v4. Verified on the noisy clip ("Sí, sí, vámonos." transcribed exactly).
-- The accent (ADR-043): measured four approaches (RESEARCH), published a listening page; Adam chose (b) — today's
-  clone, accented lines re-spoken natively and converted into the speaker. Built in `clone.py` (`_fix_accents`,
-  `VoiceConverter`, `pitch_hz`), `transcribe.Heard`, installer step "converter", background top-up, guides, 0.12.0.
-- One-word lines: with a clean reference all six ("Да.", "Нет.", …) came out right at today's shortest length (one
-  seed; the test was stopped for the end-to-end run) — Adam's babble likely comes from the film's reference.
-
-## 2026-10-30 — Session 10: one library card per dub
-- Adam: start the M11 work; with «Оригинал» the dub must stay the speaker's own copied voice; the American accent in
-  Russian dubs happens only with «Оригинал».
-- Built: one library card per dub (ADR-041). Verified: 213 tests; Chromium on the stub server with 4 fake dubs of 2
-  videos (RU/EN, 1280/360 px, dark): 4 cards newest first, search, count "4 озвучки", recent strip.
-
 ## 2026-10-30 — Session 9 end: hand-off
 - Adam merged 0.11.0 (PR #20); `main` = 0.11.0, nothing open. Hand-off docs refreshed (STATUS, PLAN M11, CLAUDE.md,
   `dubber-pipeline` skill, kanban). Adam's next asks (not started): one library card per dub

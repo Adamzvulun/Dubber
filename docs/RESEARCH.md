@@ -384,45 +384,6 @@ female), Henri (fr, male) — 0.6-s pauses, turn 7 starting 1 s before turn 6 en
 - `speakers.assign` with the CAM++ advanced model: all 8 turns + two shorter cut-outs (1.1 s, 0.6 s) right, 1.8 s on
   2 CPU threads. The overlapped turns still group right (their prints stay closest to their own speaker).
 
-## Foreign lines inside a video — measured 2026-10-30 (ADR-042)
-Adam's `check.json` (Men in Black): Spanish lines in the English film were transcribed as English and Claude spelled
-the nonsense out in Russian letters ("Йо, хани, че, хайста…"). Test clip (sandbox CPU): Edge `en-US-AndrewNeural`
-lines with three short `es-MX-JorgeNeural` lines between them ("¿Qué pasa?" 1.3 s, "Oye, hermano." 1.9 s, "Sí, sí,
-vámonos." 2.5 s), clean and under pink noise (−10 / −3 dB):
-
-| clip | "base" detector (what decided) | runs before | "small" on the same region | runs after |
-|---|---|---|---|---|
-| clean | es 0.33 / es 0.44 / es 0.95 | en, es, en, es, en, es, en (Spanish found) | — | same |
-| noise −10 dB | es 0.53 / pl 0.20 / es 0.69 | **all English** | en 0.34 / ta 0.27 / **es 0.88** | the 2.5-s line Spanish |
-| noise −3 dB | ru 0.39 / en 0.14 / pt 0.24 | **all English** | en 0.44 / en 0.23 / **es 0.93** | the 2.5-s line Spanish |
-
-Spanish was too small a share of the speech to count as a video language (`MAIN_SHARE`), and no region was sure
-enough (`SURE`) for a quote. Whisper `small` (already loaded to transcribe) is much surer on the longer line, so a
-region of ≥ 1.5 s whose best "base" guess is not a video language is heard again by `small`, and kept in the language
-it is ≥ 0.85 sure of; transcribed in Spanish it reads "Sí, sí, vámonos." exactly. Lines of ~1–2 s stay ambiguous to
-both models (no fix from the detector): the Claude prompt (v4) now says such a nonsense line is usually a misheard
-phrase in another language — translate its meaning, never spell it out.
-
-## The English accent in Russian «Оригинал» dubs — measured 2026-10-30 (proposal, not built)
-Adam: with «Оригинал» the Russian dub sometimes has an American accent; the dub must stay the speaker's own voice.
-Cause: OmniVoice's README says cross-lingual cloning carries the reference language's accent; its `instruct`
-accents exist only for English speech, so no setting removes it. Test (sandbox CPU): "speaker" = Edge
-`en-US-AndrewNeural` (7.7-s English reference), 4 Russian lines; native Russian = Edge `ru-RU-DmitryNeural`; voice
-conversion = Chatterbox VC (Resemble AI, MIT, `s3gen` 1 GB; runs with torch 2.15 installed `--no-deps`). Scores:
-Whisper `small` language confidence for "ru" (accent proxy), share of words heard, CAM++ voice-print cosine to the
-speaker on another English sentence (the speaker vs himself = 0.89; vs the Russian Edge voice = 0.35).
-
-| version | ru | heard | like speaker | like Edge ru |
-|---|---|---|---|---|
-| today: OmniVoice cloned from the English reference | 0.82 (one line 0.43, "шесть щенков" → "6 шинков") | 0.95 | **0.75** | 0.33 |
-| OmniVoice cloned from a converted Russian reference (Edge ru → speaker) | 0.995 | 1.0 | 0.13 | 0.25 |
-| A: OmniVoice with a native Russian reference, then converted to the speaker | **0.99** | 0.96 | 0.67 | 0.39 |
-| B: Edge Russian line converted to the speaker | 0.98 | 1.0 | 0.65 | 0.44 |
-
-Conversion after speaking keeps native pronunciation and most of the voice (0.65-0.67 vs 0.75); feeding a
-converted sample to OmniVoice loses the voice. CPU: ~15 s per 4-s line for the conversion (a card: well under 1 s).
-Listening page for Adam: https://claude.ai/artifact/A7T3H47gXbeanCu7nEPwda (synthetic voices only).
-
 ## Phone version and NVIDIA libraries — notes 2026-10-28/29 (ADR-033, ADR-034, ADR-035)
 - **Reaching a home PC from a phone, no accounts for users:** Tailscale works anywhere but needs an app + sign-in on
   every PC and phone (rejected: Adam wants one click). Cloudflare **quick tunnels** (`cloudflared tunnel --url …`)

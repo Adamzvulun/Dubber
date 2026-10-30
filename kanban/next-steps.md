@@ -8,9 +8,7 @@ tags: [handoff, next]
 
 # Next steps (hand-off at the end of session 9, 2026-10-30)
 
-Read `docs/STATUS.md` first (its "Next steps" has the details). `main` = v0.11.0; 0.12.0 (session 10: library card
-per dub, foreign lines, the accent fix) is a PR from `claude/happy-brahmagupta-3zznvd`. Open items, in order:
-00. **Adam merges 0.12.0 and re-dubs with «Оригинал»** — accent gone, voice still his (STATUS Next steps 00).
+Read `docs/STATUS.md` first (its "Next steps" has the details). `main` = v0.11.0, nothing open. Open items, in order:
 0. **Adam re-dubs with 0.11.0 and listens** — speakers, one voice per person, soft edges, overlaps; ask for the window
    lines + `timing.json` + `clips_original_ru/check.json` (`kanban/original-voice-quality.md`).
 1. **Asked by Adam for next (not started):** one library card per dub (`kanban/library-card-per-dub.md`); «Оригинал»
@@ -32,4 +30,3 @@ per dub, foreign lines, the accent fix) is a PR from `claude/happy-brahmagupta-3
 - 2026-10-29: Session 9b: 0.10.3 merged; 0.10.4 listen-back + names. (by @claude)
 - 2026-10-29: Session 9c: 0.10.4 merged; 0.11.0 speakers + library times. (by @claude)
 - 2026-10-30: Rewritten at the end of session 9 (0.10.3–0.11.0 merged; Adam's next asks). (by @claude)
-- 2026-10-30: Session 10: 0.12.0 built (ADR-041…043), PR for Adam. (by @claude)

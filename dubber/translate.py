@@ -364,7 +364,7 @@ CLAUDE_MODELS = {
 DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
 
 # Part of the Claude cache key (pipeline.py): changing the prompt or the request translates cached videos again.
-CLAUDE_PROMPT_VERSION = 4
+CLAUDE_PROMPT_VERSION = 3
 CLAUDE_SYSTEM_PROMPT = """You translate the speech of a video into natural spoken {target} for a voice-over.
 The speech may be in any language, or several (each line says its language); translate every line into {target}.
 The listener is a {target}-speaking professional learning from this video. "video" gives its title and channel: use
@@ -373,9 +373,6 @@ Rules:
 - Return exactly one {target} line per input line, in the same order (same count).
 - The text comes from automatic speech recognition: it can contain misheard words, missing punctuation or a wrong
   language label. When a word makes no sense in context, translate what the speaker most likely said.
-- A line that makes no sense at all in its language is usually a short phrase in another language written down as
-  if it were in the line's language (e.g. Spanish "oye, hermano" heard in an English film as "oh yeah, ermano").
-  Recognise the phrase and translate its meaning; never spell out such nonsense letter by letter.
 - A line can be just part of a sentence that continues on the next line. Translate so that consecutive lines read as
   one natural {target} sentence, but keep each line's content on its own row.
 - Each line is spoken in the time the speaker took ("seconds"). Aim for about "max_chars" characters: prefer short,

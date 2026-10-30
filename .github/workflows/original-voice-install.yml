@@ -33,11 +33,6 @@ jobs:
       - name: CUDA PyTorch and OmniVoice import; the pipeline loads the engine class
         run: |
           .venv\Scripts\python -c "import torch, omnivoice; from dubber import clone; print(torch.__version__, torch.version.cuda); assert torch.version.cuda and torch.version.cuda.startswith('12.8'), torch.version.cuda; assert clone.installed()"
-      - name: The accent converter loads and converts on this PyTorch (ADR-043; CPU here, 1 GB model)
-        env:
-          DUBBER_CLONE_DEVICE: cpu
-        run: |
-          .venv\Scripts\python -c "import numpy as np, torch; from dubber import clone; assert clone.converter_ready(); t = np.arange(clone.SAMPLE_RATE * 2) / clone.SAMPLE_RATE; tone = (0.1 * np.sin(2 * np.pi * 140 * t)).astype(np.float32); out = clone.VoiceConverter()(tone, tone, 'k'); print(len(out) / clone.SAMPLE_RATE, torch.__version__); assert torch.version.cuda.startswith('12.8') and 1.0 < len(out) / clone.SAMPLE_RATE < 3.0"
       - name: Tests with the original voice's components installed
         run: .venv\Scripts\python -m pytest -q
       - name: Install log

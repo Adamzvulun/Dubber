@@ -8,7 +8,7 @@ import asyncio
 import json
 import subprocess
 
-from dubber import languages, pipeline
+from dubber import pipeline
 from dubber.config import Settings
 from dubber.segments import Segment
 
@@ -510,22 +510,3 @@ def test_the_voice_is_split_off_first_when_it_is_copied():
         "download", "transcribe", "translate", "separate", "tts", "align", "mux"]
     assert [k for k, *_ in pipeline.stages(True)][-2:] == ["separate", "mux"]
     assert [k for k, *_ in pipeline.stages(False, voice_first=True)] == [k for k, *_ in pipeline.stages(False)]
-
-
-def test_the_native_voice_for_the_accent_fix_retries_edge_and_leaves_no_half_file(tmp_path, monkeypatch):
-    """ADR-043: the native sample comes from Edge, which randomly answers "no audio" (tts.py)."""
-    calls = []
-
-    async def flaky(text, voice, out, rate="+0%"):
-        calls.append(voice)
-        out.write_bytes(b"half")
-        if len(calls) < 3:
-            raise RuntimeError("NoAudioReceived")
-        out.write_bytes(b"mp3")
-
-    monkeypatch.setattr(pipeline.tts, "edge_synthesize", flaky)
-    monkeypatch.setattr(pipeline.time, "sleep", lambda s: None)
-    path = tmp_path / "native_female.mp3"
-    pipeline.native_voice("ru")("Мы были здесь.", "female", path)
-    assert path.read_bytes() == b"mp3" and calls == [languages.voice_for("ru", "female")] * 3
-    assert not list(tmp_path.glob("*.partial"))
