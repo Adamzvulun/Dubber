@@ -403,6 +403,26 @@ it is ≥ 0.85 sure of; transcribed in Spanish it reads "Sí, sí, vámonos." ex
 both models (no fix from the detector): the Claude prompt (v4) now says such a nonsense line is usually a misheard
 phrase in another language — translate its meaning, never spell it out.
 
+## The English accent in Russian «Оригинал» dubs — measured 2026-10-30 (proposal, not built)
+Adam: with «Оригинал» the Russian dub sometimes has an American accent; the dub must stay the speaker's own voice.
+Cause: OmniVoice's README says cross-lingual cloning carries the reference language's accent; its `instruct`
+accents exist only for English speech, so no setting removes it. Test (sandbox CPU): "speaker" = Edge
+`en-US-AndrewNeural` (7.7-s English reference), 4 Russian lines; native Russian = Edge `ru-RU-DmitryNeural`; voice
+conversion = Chatterbox VC (Resemble AI, MIT, `s3gen` 1 GB; runs with torch 2.15 installed `--no-deps`). Scores:
+Whisper `small` language confidence for "ru" (accent proxy), share of words heard, CAM++ voice-print cosine to the
+speaker on another English sentence (the speaker vs himself = 0.89; vs the Russian Edge voice = 0.35).
+
+| version | ru | heard | like speaker | like Edge ru |
+|---|---|---|---|---|
+| today: OmniVoice cloned from the English reference | 0.82 (one line 0.43, "шесть щенков" → "6 шинков") | 0.95 | **0.75** | 0.33 |
+| OmniVoice cloned from a converted Russian reference (Edge ru → speaker) | 0.995 | 1.0 | 0.13 | 0.25 |
+| A: OmniVoice with a native Russian reference, then converted to the speaker | **0.99** | 0.96 | 0.67 | 0.39 |
+| B: Edge Russian line converted to the speaker | 0.98 | 1.0 | 0.65 | 0.44 |
+
+Conversion after speaking keeps native pronunciation and most of the voice (0.65-0.67 vs 0.75); feeding a
+converted sample to OmniVoice loses the voice. CPU: ~15 s per 4-s line for the conversion (a card: well under 1 s).
+Listening page for Adam: https://claude.ai/artifact/A7T3H47gXbeanCu7nEPwda (synthetic voices only).
+
 ## Phone version and NVIDIA libraries — notes 2026-10-28/29 (ADR-033, ADR-034, ADR-035)
 - **Reaching a home PC from a phone, no accounts for users:** Tailscale works anywhere but needs an app + sign-in on
   every PC and phone (rejected: Adam wants one click). Cloudflare **quick tunnels** (`cloudflared tunnel --url …`)
