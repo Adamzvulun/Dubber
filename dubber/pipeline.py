@@ -144,8 +144,16 @@ def native_voice(lang: str) -> Callable[[str, str, Path], None]:
         import asyncio
 
         partial = path.with_name(path.name + ".partial")
-        asyncio.run(tts.edge_synthesize(text, languages.voice_for(lang, gender), partial))
-        partial.replace(path)
+        for attempt in range(4):  # Edge randomly answers "no audio" (tts.py); the 4th failure goes to the caller
+            try:
+                asyncio.run(tts.edge_synthesize(text, languages.voice_for(lang, gender), partial))
+                partial.replace(path)
+                return
+            except Exception:
+                partial.unlink(missing_ok=True)
+                if attempt == 3:
+                    raise
+                time.sleep(2 * (attempt + 1))
 
     return speak
 
