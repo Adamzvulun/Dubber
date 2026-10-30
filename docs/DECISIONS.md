@@ -543,3 +543,11 @@ Newest at the bottom. Format: context → decision → consequences.
   attack / 800 ms release, ratio 4.
 - **Not verified:** by ear on Adam's PC.
 
+
+## ADR-044 — 0.12.0 reverted (2026-10-30)
+- **Context:** Adam merged 0.12.0 (PR #22: ADR-041 one library card per dub, ADR-042 foreign-line check + Claude
+  prompt v4, ADR-043 «Оригинал» accent fix by voice conversion), then: "I don't like that, let's go back one merge."
+- **Decision:** revert the whole merge; ship it as 0.12.1 (PCs update only to a higher version, ADR-024). ADR-027's
+  grouped library and the 0.11.0 «Оригинал» apply again. The texts of ADR-041…043 are in git history (PR #22); the
+  measurements stay in RESEARCH. PCs that already fetched the accent converter keep its files (unused, ~1 GB in the
+  Hugging Face cache, `models--ResembleAI--chatterbox`).

@@ -2,6 +2,11 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-30 — Session 10: 0.12.0 built, merged, then reverted (0.12.1)
+- Built 0.12.0 (one library card per dub, foreign-line check + Claude prompt v4, «Оригинал» accent fix by voice
+  conversion — PR #22, merged). Adam: "I don't like that, let's go back one merge" → the merge reverted as 0.12.1
+  (ADR-044). Research kept: RESEARCH "Foreign lines inside a video", "The English accent…".
+
 ## 2026-10-30 — Session 9 end: hand-off
 - Adam merged 0.11.0 (PR #20); `main` = 0.11.0, nothing open. Hand-off docs refreshed (STATUS, PLAN M11, CLAUDE.md,
   `dubber-pipeline` skill, kanban). Adam's next asks (not started): one library card per dub

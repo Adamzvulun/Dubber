@@ -6,8 +6,8 @@ _Last updated: 2026-10-30 (end of session 9). Update this page at the end of eve
 Dubber is a local website (FastAPI + hand-built front-end) that turns a **YouTube, TikTok, Instagram or Facebook**
 video **or a video file** in **any spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version: **0.11.0** on `main` (PR #20, merged 2026-10-30) — nothing open; the session branch
-`claude/modest-thompson-pp54kx` equals `main`. The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
+Current version: **0.12.1** on its way to `main` = the 0.11.0 code (session 10's 0.12.0 — PR #22 — was merged, then
+reverted at Adam's request, ADR-044). The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
 shipping. The phone version (0.10.0) is merged but **switched off** until Adam's Cloudflare mailbox address is put in
 `phone.MAILBOX_URL` (see Next steps 1).
 Session 7 (2026-10-28): **0.8.0 (merged, PR #13)** — the Windows install broke for anyone with Python 3.15 (released
