@@ -8,7 +8,9 @@ time, so the website offers it only with an NVIDIA card of >= 6 GB. Hebrew is le
 it and garbled it when measured.
 
 Not installed with Dubber: PyTorch for CUDA + omnivoice (~3 GB) and the model (~2.4 GB) are installed from the
-Settings page (`Installer`); `ready()` says whether that finished.
+Settings page (`Installer`); `ready()` says whether that finished. The voice converter that takes the English accent
+out of a line (`VoiceConverter`, ADR-043: ~0.2 GB of packages + a 1 GB model) is part of that install; PCs that
+installed the original voice before it get it in the background at start (`converter_missing`).
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ from typing import Protocol
 
 from . import timing
 from .hub import retry
-from .media import run_ffmpeg, write_wav
+from .media import decode_audio, run_ffmpeg, write_wav
 from .segments import Segment
 from .tts import speakable
 
@@ -62,10 +64,24 @@ LINE_EDGES = 0.2  # seconds a line needs beyond its syllables (onset and release
 MAX_RATE = 1.25  # at most this much faster than the voice's own pace
 TRIES = 3  # a line whose words can't be heard is spoken again; the last try at the voice's own pace
 HEARD_ENOUGH = 0.8  # share of a line's words the listener must hear
+# The accent (ADR-043, docs/RESEARCH.md "The English accent…"): OmniVoice speaks with the accent of the speech it copies
+# the voice from. The listener also says how sure it is that a clip is in the dub language; a line it doubts is spoken
+# again from a native speaker's sample (an Edge voice: `native`) and turned into the speaker's voice by a voice
+# converter, which keeps the pronunciation. Kept only when it is as clear and sounds more native.
+ACCENT_SURE = 0.9  # measured: accented lines 0.43-0.87, native ones 0.97-1.0
+ACCENT_MIN_SECONDS = 1.0  # Whisper's language guess on shorter clips is unreliable
+MALE_BELOW_HZ = 165.0  # the speaker's median pitch: which native voice (male/female) the line is spoken from
+CONVERTER_REPO, CONVERTER_FILE = "ResembleAI/chatterbox", "s3gen.safetensors"  # Chatterbox's converter (MIT)
+# --no-deps: chatterbox-tts pins PyTorch 2.6, which has no build for the newest cards; the converter runs on any recent
+# PyTorch (tried with 2.15). Their own dependencies are installed separately.
+CONVERTER_PACKAGES = ["chatterbox-tts==0.1.7", "conformer==0.3.2", "s3tokenizer==0.3.0"]
+CONVERTER_DEPS = ["diffusers", "einops", "omegaconf", "onnx", "librosa"]
+CONVERTER_STEPS = ("converter", "model")  # what a PC that installed the original voice before 0.12.0 still needs
 SAME_WORD = 0.85  # similarity at which a heard word counts as the written one (Whisper slips on lone short words)
 # The install's progress bar (Installer.progress): each step's share of the whole and how many bytes it downloads.
-STEP_SHARES = {"torch": 0.5, "omnivoice": 0.12, "model": 0.38}
-STEP_BYTES = {"torch": 3.4e9, "omnivoice": 0.45e9, "model": 3_267_470_260}  # model: k2-fsa/OmniVoice on Hugging Face
+STEP_SHARES = {"torch": 0.42, "omnivoice": 0.1, "converter": 0.04, "model": 0.44}
+# model: k2-fsa/OmniVoice + the converter's s3gen.safetensors on Hugging Face
+STEP_BYTES = {"torch": 3.4e9, "omnivoice": 0.45e9, "converter": 0.15e9, "model": 3_267_470_260 + 1_056_484_620}
 _DOWNLOADING = re.compile(r"Downloading (\S+?)(?: \(([\d.]+) ([kMG]B)\))?\s*$", re.M)
 _UNITS = {"kB": 1e3, "MB": 1e6, "GB": 1e9}
 
@@ -77,6 +93,16 @@ def marker() -> Path:
 
 def installed() -> bool:
     return all(importlib.util.find_spec(name) is not None for name in ("torch", "omnivoice"))
+
+
+def converter_ready() -> bool:
+    """The accent converter's packages are installed (its model downloads with the install's last step)."""
+    return all(importlib.util.find_spec(name) is not None for name in ("chatterbox", "s3tokenizer", "diffusers"))
+
+
+def converter_missing() -> bool:
+    """The original voice was installed before the converter existed: fetch it (Installer.start(CONVERTER_STEPS))."""
+    return ready() and not converter_ready()
 
 
 def ready() -> bool:
@@ -236,13 +262,15 @@ assert torch.cuda.is_available(), "PyTorch does not see the NVIDIA card (CUDA)"
 print(torch.cuda.get_device_name(0), torch.__version__)
 from huggingface_hub import snapshot_download
 snapshot_download("{MODEL_REPO}")
+from huggingface_hub import hf_hub_download
+hf_hub_download("{CONVERTER_REPO}", "{CONVERTER_FILE}")
 """
 
 
 class Installer:
     """Installs the components in the background, one step at a time; `state` is what the Settings page shows."""
 
-    STEPS = ("torch", "omnivoice", "model")
+    STEPS = ("torch", "omnivoice", "converter", "model")
 
     def __init__(self, log_file: Path, python: str = sys.executable, run=subprocess.run):
         self.log_file = log_file
@@ -258,6 +286,8 @@ class Installer:
         return [
             ("torch", pip + ["torch", "torchaudio", "--index-url", TORCH_INDEX]),
             ("omnivoice", pip + [OMNIVOICE]),  # keeps the CUDA PyTorch: omnivoice asks for any version
+            ("converter", pip + CONVERTER_DEPS),
+            ("converter", pip + ["--no-deps"] + CONVERTER_PACKAGES),
             ("model", [self.python, "-c", _CHECK]),
         ]
 
@@ -270,7 +300,9 @@ class Installer:
             return None
         done = sum(STEP_SHARES[s] for s in STEP_SHARES if list(STEP_SHARES).index(s) < list(STEP_SHARES).index(step))
         if step == "model":
-            got = _folder_bytes((hub_dir or _hub_cache()) / ("models--" + MODEL_REPO.replace("/", "--")))
+            hub = hub_dir or _hub_cache()
+            got = sum(_folder_bytes(hub / ("models--" + repo.replace("/", "--")))
+                      for repo in (MODEL_REPO, CONVERTER_REPO))
         else:
             got = self._pip_bytes(step, temp_dir or Path(tempfile.gettempdir()))
         return round(done + STEP_SHARES[step] * min(0.97, got / STEP_BYTES[step]), 3)
@@ -292,18 +324,20 @@ class Installer:
                       default=0)
         return finished + (partial or 0)
 
-    def start(self) -> bool:
-        """Start installing (False when it is already running)."""
+    def start(self, steps: tuple[str, ...] | None = None) -> bool:
+        """Start installing (False when it is already running); `steps`: only these (e.g. CONVERTER_STEPS)."""
         if not self._lock.acquire(blocking=False):
             return False
         self.state.update(running=True, step="", error="", done=False)
-        threading.Thread(target=self._install, daemon=True).start()
+        threading.Thread(target=self._install, args=(steps,), daemon=True).start()
         return True
 
-    def _install(self) -> None:
+    def _install(self, steps: tuple[str, ...] | None = None) -> None:
         try:
             self.log_file.parent.mkdir(parents=True, exist_ok=True)
             for step, cmd in self.commands():
+                if steps and step not in steps:
+                    continue
                 self.state["step"] = step
                 with self.log_file.open("a", encoding="utf-8") as out:
                     out.write(f"\n== {time.strftime('%Y-%m-%d %H:%M:%S')} {step}: {' '.join(cmd[:6])} ...\n")
@@ -385,6 +419,90 @@ class OmniVoiceEngine:
         del self.model
         if self.torch.cuda.is_available():
             self.torch.cuda.empty_cache()
+
+
+def _s3gen_class():
+    """Chatterbox's converter model, without running the package's __init__ (it loads its text-to-speech models and
+    their pinned dependencies, which the converter doesn't need)."""
+    import types
+
+    if "chatterbox" not in sys.modules:
+        spec = importlib.util.find_spec("chatterbox")
+        package = types.ModuleType("chatterbox")
+        package.__path__ = list(spec.submodule_search_locations)
+        sys.modules["chatterbox"] = package
+    from chatterbox.models.s3gen import S3Gen
+
+    return S3Gen
+
+
+class VoiceConverter:
+    """`convert(audio, voice, key)`: the same speech (words, pronunciation, timing) in the voice of `voice` (both
+    24 kHz); `key` names the voice, so its sample is analysed once."""
+
+    def __init__(self, device: str | None = None):
+        import torch
+        from huggingface_hub import hf_hub_download
+        from safetensors.torch import load_file
+
+        self.torch = torch
+        self.device = (device or os.environ.get("DUBBER_CLONE_DEVICE")
+                       or ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.model = _s3gen_class()()
+        self.model.load_state_dict(load_file(retry(lambda: hf_hub_download(CONVERTER_REPO, CONVERTER_FILE))),
+                                   strict=False)
+        self.model.to(self.device).eval()
+        self.voices: dict = {}
+
+    def __call__(self, audio, voice, key):
+        import torchaudio
+
+        torch = self.torch
+        with torch.inference_mode():
+            if key not in self.voices:
+                self.voices[key] = self.model.embed_ref(torch.from_numpy(voice[:10 * SAMPLE_RATE]).float(),
+                                                        SAMPLE_RATE, device=self.device)
+            speech = torchaudio.functional.resample(torch.from_numpy(audio).float(), SAMPLE_RATE, 16000)
+            tokens, _ = self.model.tokenizer(speech[None].to(self.device))
+            out, _ = self.model.inference(speech_tokens=tokens, ref_dict=self.voices[key])
+        return out.squeeze(0).float().cpu().numpy()
+
+    def close(self) -> None:
+        del self.model
+        if self.torch.cuda.is_available():
+            self.torch.cuda.empty_cache()
+
+
+def pitch_hz(audio) -> float:
+    """The median pitch of voiced speech (autocorrelation per 40-ms frame); 0 when none is found."""
+    import numpy as np
+
+    frame, hop = int(0.04 * SAMPLE_RATE), int(0.01 * SAMPLE_RATE)
+    lo, hi = SAMPLE_RATE // 400, SAMPLE_RATE // 60
+    loud = float(np.sqrt(np.mean(audio * audio))) if len(audio) else 0.0
+    found = []
+    for start in range(0, len(audio) - frame, hop):
+        x = audio[start:start + frame]
+        if float(np.sqrt(np.mean(x * x))) < loud:  # quieter than average: pauses and breath
+            continue
+        x = x - x.mean()
+        corr = np.correlate(x, x, "full")[frame - 1:]
+        if corr[0] <= 0:
+            continue
+        lag = lo + int(np.argmax(corr[lo:hi]))
+        if corr[lag] / corr[0] > 0.5:  # clearly periodic: voiced
+            found.append(SAMPLE_RATE / lag)
+    return float(np.median(found)) if found else 0.0
+
+
+def native_text(segments: list[Segment], todo: list[int], chars: int = 160) -> str:
+    """What the native voice says for its sample: the dub's own first lines, about 8-10 s of speech."""
+    text = ""
+    for i in todo:
+        if len(text) >= chars:
+            break
+        text = f"{text} {segments[i].ru.strip()}".strip()
+    return text
 
 
 def reference_lines(segments: list[Segment], i: int) -> list[int]:
@@ -472,6 +590,60 @@ def _level(audio):
     return audio * (0.95 / peak) if peak > 0.95 else audio
 
 
+def _fix_accents(lines, segments, lang, clips, clips_dir, asked, best, report, engine, listen, native, converter,
+                 keys, samples, batch) -> None:
+    """Speak the accented `lines` again from a native speaker's sample (same text and length), convert each into its
+    speaker's voice (`samples[keys[i]]`), listen again, and keep it only when it is as clear and sounds more native.
+    Without the converter or the native voice (e.g. no internet for Edge) the lines just keep their accent."""
+    print(f"Голос оригинала: в {len(lines)} строках слышен акцент — озвучиваю их с правильным произношением",
+          flush=True)
+    if native is None or converter is None or not converter_ready():
+        print("Голос оригинала: исправление акцента ещё не установлено — строки остаются как есть", flush=True)
+        return
+    try:
+        convert = converter()
+    except Exception:
+        log.exception("The accent converter failed to load")
+        return
+    try:
+        sex = {key: "male" if 0 < pitch_hz(samples[key]) < MALE_BELOW_HZ else "female" for key in set(keys.values())}
+        text = native_text(segments, [i for i, s in enumerate(segments) if speakable(s.ru)])
+        prompts = {}
+        for gender in sorted(set(sex.values())):
+            path = clips_dir / f"native_{gender}.mp3"
+            try:
+                if not (path.exists() and path.stat().st_size > 0):
+                    native(text, gender, path)
+                prompts[gender] = engine.prompt(decode_audio(path, SAMPLE_RATE), text)
+            except Exception:
+                log.exception("The native voice for the accent fix failed")
+        fixed = 0
+        todo = [i for i in lines if sex[keys[i]] in prompts]
+        for n in range(0, len(todo), batch):
+            group = todo[n:n + batch]
+            audios = engine.speak([segments[i].ru for i in group], [prompts[sex[keys[i]]] for i in group],
+                                  [asked[i] for i in group], lang)
+            for i, audio in zip(group, audios, strict=True):
+                trial = clips[i].with_suffix(".accent.wav")
+                write_wav(_level(convert(_level(audio), samples[keys[i]], keys[i])), trial, SAMPLE_RATE)
+                heard = listen(trial, lang)
+                share, sounds = heard_share(segments[i].ru, heard), getattr(heard, "native", 1.0)
+                before = report[str(i)]["native"]
+                keep = share >= min(best[i], HEARD_ENOUGH) and sounds > before
+                report[str(i)]["accent"] = {"heard": heard, "share": round(share, 2), "native": round(sounds, 2),
+                                            "kept": keep}
+                if keep:
+                    trial.replace(clips[i])
+                    fixed += 1
+                else:
+                    trial.unlink()
+        print(f"Голос оригинала: акцент исправлен в {fixed} из {len(lines)} строк", flush=True)
+    finally:
+        close = getattr(convert, "close", None)
+        if close:
+            close()
+
+
 def synthesize(
     segments: list[Segment],
     vocals_wav: Path,
@@ -483,6 +655,8 @@ def synthesize(
     batch: int | None = None,
     listen: Callable[[Path, str], str] | None = None,
     speakers: list[int | None] | None = None,
+    native: Callable[[str, str, Path], None] | None = None,
+    converter: Callable[[], Callable] | None = None,
 ) -> tuple[list[Path | None], list[float]]:
     """Speak every line in the voice of whoever said it; returns one clip per line (None = nothing to say) and the
     speaking-rate factors asked for (for timing.json).
@@ -493,7 +667,9 @@ def synthesize(
     memory allows). `listen(clip, lang)` -> the words heard: a line whose words aren't heard is spoken again (TRIES,
     the last at the voice's own pace) and the best try kept; `check_report` says what was heard. `speakers` (who says
     each line, speakers.py): each speaker's lines copy one longer sample of them (`speaker_references`).
-    Finished clips are reused; `progress` may raise to cancel between model calls.
+    A line `listen` hears with an accent (its `.native` < ACCENT_SURE) is spoken again from a native sample —
+    `native(text, "male" | "female", path)` writes one — and turned into the speaker's voice by `converter()`
+    (VoiceConverter); see `_fix_accents`. Finished clips are reused; `progress` may raise to cancel between model calls.
     """
     clips_dir.mkdir(parents=True, exist_ok=True)
     voice = VoiceTrack(vocals_wav, clips_dir.parent)
@@ -505,12 +681,14 @@ def synthesize(
         refs = {i: own_refs.get(speakers[i]) if speakers and speakers[i] in own_refs else reference_lines(segments, i)
                 for i in todo}
         prompts: dict[tuple, object] = {}
+        samples: dict[tuple, object] = {}  # each reference's audio: the voice an accented line is converted into
         for i in todo:
             key = tuple(refs[i])
             if key and key not in prompts:
                 first, last = segments[key[0]], segments[key[-1]]
                 text = " ".join(segments[j].text.strip() for j in key)
-                prompts[key] = engine.prompt(voice.cut(first.start, last.end), text)
+                samples[key] = voice.cut(first.start, last.end)
+                prompts[key] = engine.prompt(samples[key], text)
         if todo and not prompts:
             raise RuntimeError("No line of this video is short enough to copy the voice from")
         fallback = next(iter(prompts.values()), None)
@@ -543,6 +721,7 @@ def synthesize(
                   flush=True)
         report = check_report(clips_dir)
         best: dict[int, float] = {}
+        asked: dict[int, float] = {}  # the seconds each kept try was asked for
         began = time.monotonic()
         total, done = len(missing), 0
         for attempt in range(1, (TRIES if listen else 1) + 1):
@@ -572,11 +751,11 @@ def synthesize(
                     heard = listen(trial, lang)
                     share = heard_share(segments[i].ru, heard)
                     if share > best.get(i, -1.0):
-                        best[i] = share
+                        best[i], asked[i] = share, seconds
                         trial.replace(clips[i])
                         rates[i] = natural[i] / seconds
                         report[str(i)] = {"text": segments[i].ru, "heard": heard, "share": round(share, 2),
-                                          "tries": attempt}
+                                          "tries": attempt, "native": round(getattr(heard, "native", 1.0), 2)}
                     else:
                         trial.unlink()
                         report[str(i)]["tries"] = attempt
@@ -598,6 +777,12 @@ def synthesize(
         if listen and best:
             unclear = sum(share < HEARD_ENOUGH for share in best.values())
             print(f"Голос оригинала: проверено на слух {len(best)} строк, неразборчиво осталось {unclear}", flush=True)
+            accented = [i for i in best if report[str(i)]["native"] < ACCENT_SURE and asked[i] >= ACCENT_MIN_SECONDS
+                        and tuple(refs[i]) in samples]
+            if accented:
+                _fix_accents(accented, segments, lang, clips, clips_dir, asked, best, report, engine, listen,
+                             native, converter, {i: tuple(refs[i]) for i in accented}, samples, batch)
+                (clips_dir / CHECK_FILE).write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
         if progress and total:
             progress(1.0)
         return clips, rates

@@ -543,3 +543,39 @@ Newest at the bottom. Format: context → decision → consequences.
   attack / 800 ms release, ratio 4.
 - **Not verified:** by ear on Adam's PC.
 
+
+## ADR-041 — One library card per dub (2026-10-30)
+- **Context:** Adam: "separate card for each dub in the library". Since ADR-039 every run is its own entry with its
+  date and time, but the library still grouped a video's dubs on one card (ADR-027).
+- **Decision:** the library and «Недавние видео» show one card per dub, newest first: thumbnail, title, then
+  channel · language · voice · sound · date and time. The count reads "N озвучек"; search still matches title and
+  channel. The watch page keeps «Другие озвучки этого видео». Supersedes ADR-027's grouping (the language tags are
+  gone).
+
+## ADR-042 — Foreign lines inside a video: a second opinion, and Claude translates misheard phrases (2026-10-30)
+- **Context:** Adam's `check.json`: Spanish lines in an English film were transcribed as English nonsense and
+  transliterated by Claude. Reproduced under noise (RESEARCH "Foreign lines inside a video").
+- **Decision:** `transcribe.language_runs(checker=)` — a region ≥ `CHECK_SECONDS` (1.5 s) whose best "base" guess is
+  not one of the video's languages is heard again by the transcription model; ≥ `CHECK_SURE` (0.85) sure → it keeps
+  that language (transcribed and translated as such). Claude prompt v4 (re-translates cached Claude dubs once): a line
+  that makes no sense in its language is a misheard foreign phrase → translate the meaning, never spell it out.
+- **Not done:** the free translators get no such rule; truly short phrases (~1 s) can still be misheard.
+
+## ADR-043 — «Оригинал» without the English accent: re-speak accented lines natively, convert to the speaker (2026-10-30)
+- **Context:** Adam: Russian «Оригинал» dubs sometimes have an American accent. OmniVoice carries the reference's
+  accent into another language and has no setting against it. Measured (RESEARCH "The English accent…"): cloning
+  keeps the voice best (voice print 0.75) but sounds accented (Whisper "ru" 0.82, one line 0.43); OmniVoice from a
+  native Russian sample + Chatterbox voice conversion into the speaker sounds native (0.99) and keeps most of the voice
+  (0.67; the speaker vs himself 0.89, another person 0.35). Adam chose (2026-10-30) option (b): today's clone, the
+  conversion only for lines that sound accented — "the dub must still be the original voice".
+- **Decision:** the listen-back check (`transcribe.reader`) also returns Whisper's confidence that a clip is in the
+  dub language (`Heard.native`, in `check.json` as `native`). Lines ≥ `ACCENT_MIN_SECONDS` (1 s) under
+  `ACCENT_SURE` (0.9) are spoken again by OmniVoice from a native Edge sample (the dub language's male/female voice by
+  the speaker's median pitch, `MALE_BELOW_HZ` 165 Hz; it says the dub's first lines), at the same length, then
+  converted into the speaker's own reference (`VoiceConverter`: Chatterbox `s3gen`, MIT, 1 GB, loaded without the
+  package's `__init__`). Kept only when it is heard as clearly and sounds more native (`check.json` → `accent`).
+  Installed with «Оригинал» (step "converter": deps, then `chatterbox-tts`/`conformer`/`s3tokenizer` with `--no-deps`
+  because chatterbox pins PyTorch 2.6, too old for RTX 50xx); PCs that installed «Оригинал» before 0.12.0 fetch it in
+  the background at start. No converter, no Edge (offline) or a load failure → the lines keep their accent.
+- **Not verified:** on an NVIDIA card (speed, memory next to OmniVoice), by Adam's ear on a real film; the 0.9
+  threshold rests on 4 test lines.

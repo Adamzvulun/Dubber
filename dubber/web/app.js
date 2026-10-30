@@ -167,40 +167,15 @@ function route() {
 }
 
 /* ---------- library ---------- */
-/** One card per video (its dubs newest first): opens the newest dub; the watch page switches between them. */
-function card(dubs) {
-  const video = dubs[0];
+/** One card per dub (ADR-041): the video, what tells this dub apart (language · voice · sound) and when it was made. */
+function card(dub) {
   const node = $("#tpl-card").content.firstElementChild.cloneNode(true);
-  node.href = `#/watch/${encodeURIComponent(video.id)}`;
-  if (video.thumbnail) $("img", node).src = media(video.thumbnail);
-  $(".card__duration", node).textContent = clock(video.duration);
-  $(".card__title", node).textContent = video.title;
-  if (dubs.length === 1) {
-    $(".card__meta", node).textContent = [video.channel, dubLabel(video), dateLabel(video.created)]
-      .filter(Boolean).join(" · ");
-  } else { // several dubs: one tag per language; its dubs (voice, sound) on hover and for screen readers
-    $(".card__meta", node).textContent = [video.channel, t("card.dubs", dubs.length), dateLabel(video.created)]
-      .filter(Boolean).join(" · ");
-    const byLang = new Map();
-    for (const dub of dubs) {
-      byLang.set(dub.target_lang, [...(byLang.get(dub.target_lang) || []), `${dubLabel(dub)} · ${dateLabel(dub.created)}`]);
-    }
-    $(".card__tags", node).replaceChildren(...[...byLang].map(([lang, labels]) => el("span", {
-      class: "tag", title: labels.join("\n"), "aria-label": labels.join("; "), text: lang.toUpperCase(),
-    })));
-  }
+  node.href = `#/watch/${encodeURIComponent(dub.id)}`;
+  if (dub.thumbnail) $("img", node).src = media(dub.thumbnail);
+  $(".card__duration", node).textContent = clock(dub.duration);
+  $(".card__title", node).textContent = dub.title;
+  $(".card__meta", node).textContent = [dub.channel, dubLabel(dub), dateLabel(dub.created)].filter(Boolean).join(" · ");
   return node;
-}
-
-/** The library's dubs grouped per video, newest first (the API sends dubs newest first). */
-function videoGroups() {
-  const groups = new Map();
-  for (const dub of state.videos) {
-    const key = dub.video_id || dub.id;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(dub);
-  }
-  return [...groups.values()];
 }
 
 /** Lower case, "ё" = "е": what the search compares. */
@@ -220,27 +195,27 @@ async function loadLibrary() {
 }
 
 function renderLibrary() {
-  const recent = $("#recent"), all = $("#library"), groups = videoGroups();
-  recent.replaceChildren(...groups.slice(0, 6).map(card));
-  if (!groups.length) recent.append(el("p", { class: "empty-note", text: t("recent.empty") }));
-  $("#all-link").hidden = groups.length <= 6;
+  const recent = $("#recent"), all = $("#library"), dubs = state.videos; // newest first (the API's order)
+  recent.replaceChildren(...dubs.slice(0, 6).map(card));
+  if (!dubs.length) recent.append(el("p", { class: "empty-note", text: t("recent.empty") }));
+  $("#all-link").hidden = dubs.length <= 6;
 
   const query = searchable($("#library-search").value.trim());
-  const shown = query ? groups.filter((dubs) => searchable(`${dubs[0].title} ${dubs[0].channel}`).includes(query)) : groups;
-  $("#library-search-box").hidden = groups.length < 2 && !query; // nothing to search in one video
+  const shown = query ? dubs.filter((dub) => searchable(`${dub.title} ${dub.channel}`).includes(query)) : dubs;
+  $("#library-search-box").hidden = dubs.length < 2 && !query; // nothing to search in one dub
   all.replaceChildren(...shown.map(card));
-  if (!groups.length && PHONE && !PHONE.online) { // not empty: the PC that has the videos is off (phone mode)
+  if (!dubs.length && PHONE && !PHONE.online) { // not empty: the PC that has the videos is off (phone mode)
     recent.replaceChildren(el("p", { class: "empty-note", text: t("phone.libraryOff") }));
     all.append(el("p", { class: "empty-note", text: t("phone.libraryOff") }));
-  } else if (!groups.length) {
+  } else if (!dubs.length) {
     all.append(el("div", { class: "empty-note" },
       el("p", { text: t("library.empty") }),
       el("p", {}, el("a", { class: "link", href: "#/", text: t("library.first") }))));
   } else if (!shown.length) {
     all.append(el("p", { class: "empty-note", text: t("library.noMatch") }));
   }
-  $("#library-count").textContent = !groups.length ? "" : query ? t("library.found", shown.length, groups.length)
-    : t("library.count", groups.length);
+  $("#library-count").textContent = !dubs.length ? "" : query ? t("library.found", shown.length, dubs.length)
+    : t("library.count", dubs.length);
 }
 
 /* ---------- dubbing jobs ---------- */
@@ -978,7 +953,7 @@ async function removeLogins() {
 }
 
 /* ---------- the original voice (clone.py): graphics card check and install ---------- */
-const CLONE_STEPS = ["torch", "omnivoice", "model"];
+const CLONE_STEPS = ["torch", "omnivoice", "converter", "model"];
 let clonePoll = null;
 
 async function loadClone() {
