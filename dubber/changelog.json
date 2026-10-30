@@ -1,6 +1,7 @@
 {
-  "0.12.1": {
+  "0.13.0": {
     "ru": [
+      "Видеокарта NVIDIA теперь работает на большее: отделение голоса диктора (и голос «Оригинал») идёт на ней в несколько раз быстрее, на ней же запасной переводчик и перекодирование видео с телефонов и TikTok. Нужные файлы программа скачает сама один раз (около 2 ГБ, в фоне); если видеокарта не справится, всё работает на процессоре, как раньше.",
       "Голос «Оригинал» снова звучит как в версии 0.11.0: исправление акцента убрано.",
       "Вопросы «Удалить?» и «Очистить кэш?» теперь в окне самой программы; перед очисткой кэша одного видео программа тоже спрашивает.",
       "Выбор голоса и звука запоминается. Если окно программы закрыто, страница пишет об этом и подключается сама, когда программа снова запущена.",
@@ -8,6 +9,7 @@
       "Имена голосов других языков написаны по-русски (Эндрю, Хила…)."
     ],
     "en": [
+      "The NVIDIA graphics card now does more: removing the speaker's voice (and the “Original” voice) runs on it several times faster, and so do the backup translator and re-encoding videos from phones and TikTok. The program downloads what it needs once (about 2 GB, in the background); if the card can't do it, everything runs on the processor as before.",
       "The “Original” voice sounds as in version 0.11.0 again: the accent fix is removed.",
       "“Delete?” and “Clear cache?” questions now appear in the program's own window; clearing one video's cache asks first too.",
       "Your voice and sound choices are remembered. When the program window is closed, the page says so and reconnects by itself once the program runs again.",

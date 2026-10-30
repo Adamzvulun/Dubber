@@ -6,7 +6,7 @@ _Last updated: 2026-10-30 (session 10). Update this page at the end of every ses
 Dubber is a local website (FastAPI + hand-built front-end) that turns a **YouTube, TikTok, Instagram or Facebook**
 video **or a video file** in **any spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version: **0.12.0** on `main` (PR #22); **0.12.1** = PR #23 from `claude/happy-brahmagupta-3zznvd` takes the
+Current version: **0.12.0** on `main` (PR #22); **0.13.0** = PR #23 from `claude/happy-brahmagupta-3zznvd` takes the
 accent fix out again (Adam didn't like it, ADR-044). The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
 shipping. The phone version (0.10.0) is merged but **switched off** until Adam's Cloudflare mailbox address is put in
 `phone.MAILBOX_URL` (see Next steps 1).
@@ -48,7 +48,7 @@ own library entry with date + time (ADR-039, replaces ADR-022's "same choices re
 
 Session 10 (2026-10-30): 0.12.0 (merged, PR #22) — one library card per dub (ADR-041); foreign lines inside a video
 — a second-opinion language check + Claude prompt v4 (ADR-042); «Оригинал» accent fix by voice conversion (ADR-043,
-measured in RESEARCH "The English accent…"). Adam didn't like the accent change → 0.12.1 (PR #23) removes it
+measured in RESEARCH "The English accent…"). Adam didn't like the accent change → 0.13.0 (PR #23; first numbered 0.12.1) removes it
 (ADR-044); the accent stays an open problem. One-word lines: fine with a clean reference (one seed).
 
 ## Where things are
@@ -196,9 +196,10 @@ clip (garbled → up to 3 tries) → align lets different speakers overlap; line
   voice removal, Google, H.264 playback).
 
 ## Next steps (in order)
-00. **Adam merges 0.12.1** (PR #23: accent fix out, library cards + foreign-line check stay, the QA leftovers).
-01. **Graphics card for every stage** (Adam, 2026-10-30): voice removal (Demucs ONNX) and the offline translator
-   (NLLB) still run on the processor — next.
+00. **Adam merges 0.13.0** (PR #23: accent fix out, library cards + foreign-line check stay, the QA leftovers, the
+   graphics card for voice removal / NLLB / NVENC — ADR-045). Then on his RTX 5060 Ti: the window should say
+   «Видеокарта NVIDIA готова и для отделения голоса» once (≈2 GB download), then «Отделяю голос на видеокарте» in a
+   dub; ask how long the «Голос диктора» step took before/after. Check the `Windows install` CI job's ADR-045 step.
 0. **Adam re-dubs with 0.11.0 and listens** (the same Men-in-Black scene, «Оригинал», background on): each person one
    voice? soft line edges? interruptions natural? the window's «Голоса: в видео говорят N» right? Useful from him:
    that line, «проверено на слух … неразборчиво осталось N», total time, `timing.json` (lines carry `speaker`) and

@@ -80,3 +80,79 @@ def test_cancel_leaves_no_file(tmp_path):
     with pytest.raises(KeyboardInterrupt):
         separate.separate_background(source, tmp_path / "bg.wav", model=no_voice_model([]), progress=cancel)
     assert sorted(p.name for p in tmp_path.iterdir()) == ["in.wav"]
+
+
+FAKE_ORT = '''
+import numpy as np
+class SessionOptions:
+    graph_optimization_level = None
+class GraphOptimizationLevel:
+    ORT_ENABLE_ALL = 99
+class InferenceSession:
+    """onnxruntime-gpu stand-in: "{providers}" is what the card offers; everything is "drums", nothing "vocals"."""
+    def __init__(self, path, sess_options=None, providers=()):
+        self.providers = {providers!r}
+    def get_providers(self):
+        return self.providers
+    def run(self, names, feeds):
+        mix = feeds["mix"]
+        stems = np.zeros((1, 4, *mix.shape[1:]), dtype=np.float32)
+        stems[0, 0] = mix[0]
+        return [stems]
+'''
+
+
+def fake_ort_dir(tmp_path, providers):
+    """A folder like gpu.ORT_DIR whose `onnxruntime` is a stand-in, and whose `huggingface_hub` (first on the child's
+    path too) skips the model download."""
+    ort = tmp_path / "ort-gpu"
+    (ort / "onnxruntime" / "capi").mkdir(parents=True)
+    (ort / "onnxruntime" / "__init__.py").write_text(FAKE_ORT.format(providers=providers), encoding="utf-8")
+    (ort / "huggingface_hub").mkdir()
+    (ort / "huggingface_hub" / "__init__.py").write_text("def hf_hub_download(*a, **k):\n    return 'model.onnx'\n")
+    return ort
+
+
+def test_voice_removal_runs_on_the_card_in_a_child_process(tmp_path, monkeypatch, capsys):
+    """ADR-045: onnxruntime-gpu lives in its own folder; a child process loads it first and does the work there."""
+    source = stereo_tone(tmp_path / "in.wav", 10)
+    ort = fake_ort_dir(tmp_path, ["CUDAExecutionProvider", "CPUExecutionProvider"])
+    monkeypatch.setattr(separate.gpu, "ORT_DIR", ort)
+    monkeypatch.setattr(separate, "_gpu_failed", False)
+    monkeypatch.setattr(separate, "load_model", lambda card=False: pytest.fail("the processor was used"))
+    monkeypatch.delenv("DUBBER_DEVICE", raising=False)
+    seen = []
+    out = separate.separate_background(source, tmp_path / "w" / "bg.wav", progress=seen.append,
+                                       vocals_wav=tmp_path / "w" / "vocals.wav")
+    assert "видеокарте" in capsys.readouterr().out
+    assert seen[-1] == 1.0 and seen == sorted(seen)
+    original, background = decode_audio(source, 44100), decode_audio(out, 44100)
+    assert float(np.abs(background[: len(original)] - original[: len(background)]).max()) < 2e-3
+    assert (tmp_path / "w" / "vocals.wav").exists()
+
+
+def test_when_the_card_is_not_used_the_processor_does_it(tmp_path, monkeypatch, capsys):
+    source = stereo_tone(tmp_path / "in.wav", 5)
+    monkeypatch.setattr(separate.gpu, "ORT_DIR", fake_ort_dir(tmp_path, ["CPUExecutionProvider"]))  # CUDA missing
+    monkeypatch.setattr(separate, "_gpu_failed", False)
+    calls = []
+    monkeypatch.setattr(separate, "load_model", lambda card=False: no_voice_model(calls))
+    monkeypatch.delenv("DUBBER_DEVICE", raising=False)
+    out = separate.separate_background(source, tmp_path / "w" / "bg.wav")
+    assert out.exists() and calls and "процессоре" in capsys.readouterr().out
+    assert separate._gpu_failed  # not tried again in this run of the program
+    assert not list((tmp_path / "w").glob("tmp*"))
+
+
+def test_cancelling_stops_the_child_and_leaves_nothing(tmp_path, monkeypatch):
+    source = stereo_tone(tmp_path / "in.wav", 30)
+    monkeypatch.setattr(separate.gpu, "ORT_DIR", fake_ort_dir(tmp_path, ["CUDAExecutionProvider"]))
+    monkeypatch.setattr(separate, "_gpu_failed", False)
+    monkeypatch.delenv("DUBBER_DEVICE", raising=False)
+
+    def cancel(fraction):
+        raise RuntimeError("cancelled")
+
+    with pytest.raises(RuntimeError, match="cancelled"):
+        separate.separate_background(source, tmp_path / "w" / "bg.wav", progress=cancel)
+    assert not (tmp_path / "w" / "bg.wav").exists() and not list((tmp_path / "w").glob("tmp*"))

@@ -352,3 +352,32 @@ def test_haiku_costs_more_for_a_prompt_over_100k_tokens():
     assert haiku.cost_usd(100_000, 1_000_000) == pytest.approx(0.01 + 0.50)
     assert haiku.cost_usd(200_000, 1_000_000) == pytest.approx(0.10 + 2.50)
     assert opus.cost_usd(1_000_000, 1_000_000) == pytest.approx(24.0)
+
+
+def test_the_offline_translator_falls_back_to_the_processor_when_the_card_fails(monkeypatch):
+    """ADR-045: NLLB runs on the NVIDIA card when it can; a missing CUDA library shows on first use → the processor."""
+    import sys
+    import types
+
+    made = []
+
+    class Translator:
+        def __init__(self, path, device, compute_type):
+            made.append((device, compute_type))
+            self.device = device
+
+        def translate_batch(self, tokens, **kw):
+            if self.device == "cuda":
+                raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+            return ["ok"] * len(tokens)
+
+    monkeypatch.setitem(sys.modules, "ctranslate2", types.SimpleNamespace(Translator=Translator))
+    backend = NllbBackend.__new__(NllbBackend)
+    backend._path, backend._on_card, backend._model = "model", True, Translator("model", "cuda", "int8_float16")
+    assert backend._translate_batch([["a"], ["b"]]) == ["ok", "ok"]
+    assert made[-1] == ("cpu", "int8") and backend._on_card is False
+
+    backend._model = Translator("model", "cpu", "int8")  # other errors on the processor are real errors
+    backend._model.translate_batch = lambda tokens, **kw: (_ for _ in ()).throw(ValueError("bad input"))
+    with pytest.raises(ValueError):
+        backend._translate_batch([["a"]])

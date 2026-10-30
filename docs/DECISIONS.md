@@ -588,3 +588,25 @@ Newest at the bottom. Format: context → decision → consequences.
   the native Edge sample); «Оригинал» works as in 0.11.0. PCs that already fetched the converter keep its files
   (unused: ~1 GB in the Hugging Face cache, `models--ResembleAI--chatterbox`, and its pip packages). The measurements
   stay in RESEARCH; the code is in git (commits a952444, e36cbfa, 5fbf361).
+
+## ADR-045 — The NVIDIA card for every stage that can use it (2026-10-30)
+- **Context:** Adam: "if it has a graphics card then use it for everything — the whole process will be faster".
+  On the card already: Whisper (ADR-034), «Оригинал» (ADR-028). Translation (Claude/Google) and Edge voices run in
+  the cloud. Still on the processor: voice removal (Demucs ONNX, ~+5 min per 10 min; always on with «Оригинал»), the
+  offline translator (NLLB, ctranslate2), and HEVC → H.264 re-encoding (libx264).
+- **Decision:**
+  - Voice removal: `onnxruntime-gpu` can't share the program's Python with `onnxruntime` (same module; every update
+    reinstalls the normal one) and is built for CUDA 13 (1.31: cuDNN 9 cu13, cuBLAS 13 — Whisper's libraries are
+    CUDA 12). So `gpu.Installer` puts it, at the same version as `onnxruntime`, with the NVIDIA wheels its
+    `cuda`/`cudnn` extras name (~1.7 GB), into its own folder `gpu.ORT_DIR` (`.venv/onnxruntime-gpu`; built in a
+    `.partial` folder, renamed when complete; a failure marker per version stops retries at every start).
+    `separate.separate_background` runs the same code in a child process that puts that folder first on its path and
+    calls `onnxruntime.preload_dlls()`; the session must really use `CUDAExecutionProvider`, else the child fails →
+    this run of the program uses the processor (`separate._gpu_failed`). Progress and cancel go through the child's
+    output; a stopped child's work folder is removed.
+  - NLLB: `ctranslate2` on `cuda` (int8_float16) when it sees a card and Whisper's card hasn't failed; a CUDA
+    library error on first use → the processor.
+  - HEVC → H.264: `h264_nvenc` when `gpu.has_card()` (nvidia-smi), else or on failure `libx264`.
+- **Verified:** tests (a stand-in onnxruntime-gpu in a child process: card used, card refused → processor, cancel);
+  the real onnxruntime-gpu 1.31.1 (Linux) loaded from its own folder here and handed back without a card; the
+  Windows CI job installs the real one and checks the hand-back. **Not verified:** speed on a real card.

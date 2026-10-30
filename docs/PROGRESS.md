@@ -2,6 +2,11 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-30 — Session 10e: the graphics card for every stage (v0.13.0, PR #23, ADR-045)
+- Voice removal (Demucs) on the card via onnxruntime-gpu in its own folder + a child process; the offline translator
+  (NLLB) on the card; HEVC → H.264 with NVENC. All fall back to the processor. 0.12.1's changes are now 0.13.0.
+- Verified: 222 tests; the real onnxruntime-gpu here (no card: clean hand-back); Windows CI step added.
+
 ## 2026-10-30 — Session 10d: QA leftovers (still v0.12.1, PR #23)
 - Adam: "start with 4" (the QA list). Built: the page's own dialog instead of confirm()/alert() (delete, cache,
   logins, key); a question before a per-video «Очистить кэш»; accent-insensitive library search; voice + sound choices

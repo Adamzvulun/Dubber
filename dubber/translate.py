@@ -176,12 +176,33 @@ class NllbBackend:
         from huggingface_hub import snapshot_download
         from tokenizers import Tokenizer
 
+        from . import transcribe
         from .hub import retry
 
         self.target = languages.get(target)
-        path = retry(lambda: snapshot_download(self.REPO))
+        self._path = path = retry(lambda: snapshot_download(self.REPO))
         self._tok = Tokenizer.from_file(os.path.join(path, "tokenizer.json"))
-        self._model = ctranslate2.Translator(path, device="cpu", compute_type="int8")
+        # On the NVIDIA card when Whisper's libraries work there (gpu.py, ADR-045); its errors show on first use
+        card = (os.environ.get("DUBBER_DEVICE", "auto") != "cpu" and not transcribe._gpu_failed
+                and ctranslate2.get_cuda_device_count() > 0)
+        self._model = ctranslate2.Translator(path, device="cuda" if card else "cpu",
+                                             compute_type="int8_float16" if card else "int8")
+        self._on_card = card
+
+    def _translate_batch(self, *args, **kwargs):
+        try:
+            return self._model.translate_batch(*args, **kwargs)
+        except Exception as exc:
+            from . import transcribe
+
+            if not (self._on_card and transcribe.gpu_error(exc)):
+                raise
+            import ctranslate2
+
+            log.warning("The offline translator failed on the graphics card (%s); using the processor", exc)
+            self._model = ctranslate2.Translator(self._path, device="cpu", compute_type="int8")
+            self._on_card = False
+            return self._model.translate_batch(*args, **kwargs)
 
     def _decode(self, tokens: list[str]) -> str:
         text = self._tok.decode([self._tok.token_to_id(t) for t in tokens]).strip()
@@ -189,7 +210,7 @@ class NllbBackend:
 
     def _generate(self, texts: list[str], src: str, prefixes=None, min_length: int = 0) -> list[list[str]]:
         tokens = [[src, *self._tok.encode(t, add_special_tokens=False).tokens, "</s>"] for t in texts]
-        results = self._model.translate_batch(
+        results = self._translate_batch(
             tokens, target_prefix=prefixes or [[self.target.nllb]] * len(texts), beam_size=4, length_penalty=1.5,
             min_decoding_length=min_length, max_decoding_length=256,
         )

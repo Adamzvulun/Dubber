@@ -1016,8 +1016,9 @@ def main() -> int:
         restarting.set()
         server.should_exit = True
 
-    if gpu.wanted():  # an NVIDIA card without its libraries: fetch them in the background (ADR-034)
-        print("Готовлю видеокарту NVIDIA для быстрого распознавания речи (один раз, около 1 ГБ, в фоне)…", flush=True)
+    if gpu.wanted():  # an NVIDIA card without its libraries: fetch them in the background (ADR-034, ADR-045)
+        print("Готовлю видеокарту NVIDIA для быстрого распознавания речи и отделения голоса (один раз, около 3 ГБ, "
+              "в фоне)…", flush=True)
         gpu.Installer(settings.work_dir / "gpu-install.log").start()
 
     def phone_bridge(submit):
