@@ -124,11 +124,21 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [x] NVIDIA PCs: no "cublas64_12.dll" failure, Whisper on the card (0.10.1, ADR-034)
 - [ ] Adam: re-dub on the new NVIDIA PC; faster after the background download?
 - [x] «Оригинал»: card check, no CPU crawl, install progress bar, voice-free background (0.10.2, ADR-035)
-- [ ] Adam: «Оригинал» 5-min dub on the RTX 5060 Ti — program window lines + total time
+- [x] Adam: «Оригинал» 5-min dub on the RTX 5060 Ti — runs on the card (~50% load); quality work → M11
 - [x] Dub videos from Facebook, Instagram, TikTok + «Вход на сайты» login file (v0.9.0, ADR-031, `kanban/more-video-sites.md`)
 - [x] Public videos without a login: yt-dlp `curl-cffi` impersonation (v0.9.0, ADR-032)
 - [ ] Adam: dub a real TikTok, Instagram Reel and Facebook video without a login; report what fails
 - [ ] If Instagram often needs a login: in-program login window (Edge own profile + DevTools cookies) — ask Adam first
+
+### M11 — «Оригинал» quality (Adam, 2026-10-29/30)
+- [x] No swallowed words: speed floor, bigger groups on big cards (0.10.3, ADR-036)
+- [x] Listen-back check, ≤1.25× pace, names in the dub language's letters (0.10.4, ADR-037)
+- [x] Who speaks each line, one sample per speaker, two voices at once (0.11.0, ADR-038)
+- [x] Soft line edges (0.11.0, ADR-040); every dub its own library entry with date + time (0.11.0, ADR-039)
+- [ ] Adam: re-dub with 0.11.0 and listen (STATUS Next steps 0)
+- [ ] One library card per dub (`kanban/library-card-per-dub.md`)
+- [ ] One-word lines, misheard foreign speech, crosstalk (`kanban/original-voice-quality.md`)
+- [ ] No American accent in the Russian «Оригинал» dub — research, then propose (`kanban/original-voice-quality.md`)
 
 ### M4 — Nice to have
 - [x] Queue of several links / playlists (v0.6.0)
@@ -144,7 +154,7 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - Claude key for translation: built (ADR-017); Adam decides whether to buy credit. Estimate at 2026-10 prices: ~$0.10 per 10 min of
   speech on Opus 5.5 ($4/$20 per M tokens), ~$0.05 on Sonnet 5.5, under $0.01 on Haiku 5.5. The key would stay on
   the PC (env var), with a monthly spend limit set in the Anthropic Console; no payment code in Dubber.
-- ~~Should one video keep several dub languages in the library?~~ — yes, one entry per dub; same choices replace
+- ~~Should one video keep several dub languages in the library?~~ — yes, one entry per dub; since 0.11.0 every run is a new entry (ADR-039)
   it (Adam, 2026-10-18, ADR-022, v0.4.1).
 - Hosting on Hugging Face Spaces: researched, not now — YouTube blocks its servers (ADR-023).
 - Windows confirmed as the target OS (Adam, 2026-10-17).

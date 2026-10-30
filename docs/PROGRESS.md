@@ -2,6 +2,13 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-30 — Session 9 end: hand-off
+- Adam merged 0.11.0 (PR #20); `main` = 0.11.0, nothing open. Hand-off docs refreshed (STATUS, PLAN M11, CLAUDE.md,
+  `dubber-pipeline` skill, kanban). Adam's next asks (not started): one library card per dub
+  (`kanban/library-card-per-dub.md`); «Оригинал» weak points + the American accent in Russian dubs
+  (`kanban/original-voice-quality.md`). STATUS gotchas now say how to test the real OmniVoice/voice-print models on
+  the sandbox CPU.
+
 ## 2026-10-29 — Session 9c: who speaks, two voices at once, soft edges, every dub its own entry (v0.11.0)
 - Adam merged 0.10.4 (PR #19): "better", sent `check.json`; "very rough chops between sentences, harsh on the ear";
   asked to build the speaker proposal (who speaks, overlap, one sample per speaker); and (as asked at the start of the
