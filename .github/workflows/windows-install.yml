@@ -117,6 +117,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "NVIDIA's libraries have no wheels for this Python" }
       - name: Voice removal's onnxruntime-gpu installs into its own folder, and without a card hands back (ADR-045)
         shell: powershell
+        env:
+          PYTHONIOENCODING: utf-8  # the program prints Russian; this step's output is a pipe, not a console
         run: |
           .venv\Scripts\python.exe -c "from pathlib import Path; from dubber import gpu; i = gpu.Installer(Path('gpu-install.log')); assert i.install_ort(), 'install failed'; assert gpu.ort_ready(), gpu.ORT_DIR; print('installed in', gpu.ORT_DIR)"
           if ($LASTEXITCODE -ne 0) { if (Test-Path gpu-install.log) { Get-Content gpu-install.log -Tail 30 }; throw "onnxruntime-gpu did not install" }

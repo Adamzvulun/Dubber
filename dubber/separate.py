@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import collections
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -75,7 +76,7 @@ def on_card(video: Path, out_wav: Path, progress, vocals_wav: Path | None, pytho
     `progress` raising (a cancelled job) stops the child and raises on."""
     cmd = [python, "-c", _CHILD, str(ort_dir or gpu.ORT_DIR), str(video), str(out_wav), str(vocals_wav or "")]
     child = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
-                             errors="replace")
+                             errors="replace", env={**os.environ, "PYTHONIOENCODING": "utf-8"})
     said = collections.deque(maxlen=20)
     out_wav.parent.mkdir(parents=True, exist_ok=True)
     before = set(out_wav.parent.glob("tmp*"))  # the child's work folder: removed here if the child is stopped
