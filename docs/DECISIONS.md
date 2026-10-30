@@ -579,3 +579,12 @@ Newest at the bottom. Format: context → decision → consequences.
   the background at start. No converter, no Edge (offline) or a load failure → the lines keep their accent.
 - **Not verified:** on an NVIDIA card (speed, memory next to OmniVoice), by Adam's ear on a real film; the 0.9
   threshold rests on 4 test lines.
+- **Reverted in 0.12.1 (ADR-044).**
+
+## ADR-044 — The accent fix taken out again (2026-10-30)
+- **Context:** Adam merged 0.12.0 (PR #22), then: "I don't like the new dubbing accent change." The library cards
+  (ADR-041) and the foreign-line check (ADR-042) stay.
+- **Decision:** 0.12.1 removes ADR-043's code (converter, its install step and background top-up, `Heard.native`,
+  the native Edge sample); «Оригинал» works as in 0.11.0. PCs that already fetched the converter keep its files
+  (unused: ~1 GB in the Hugging Face cache, `models--ResembleAI--chatterbox`, and its pip packages). The measurements
+  stay in RESEARCH; the code is in git (commits a952444, e36cbfa, 5fbf361).

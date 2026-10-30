@@ -10,7 +10,7 @@ tags: [handoff, next]
 
 Read `docs/STATUS.md` first (its "Next steps" has the details). `main` = v0.11.0; 0.12.0 (session 10: library card
 per dub, foreign lines, the accent fix) is a PR from `claude/happy-brahmagupta-3zznvd`. Open items, in order:
-00. **Adam merges 0.12.0 and re-dubs with «Оригинал»** — accent gone, voice still his (STATUS Next steps 00).
+00. **Adam merges 0.12.1** (PR #23: accent fix out). Then QA leftovers (`kanban/nice-to-haves.md`), as Adam asked.
 0. **Adam re-dubs with 0.11.0 and listens** — speakers, one voice per person, soft edges, overlaps; ask for the window
    lines + `timing.json` + `clips_original_ru/check.json` (`kanban/original-voice-quality.md`).
 1. **Asked by Adam for next (not started):** one library card per dub (`kanban/library-card-per-dub.md`); «Оригинал»

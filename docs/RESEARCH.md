@@ -403,7 +403,9 @@ it is ≥ 0.85 sure of; transcribed in Spanish it reads "Sí, sí, vámonos." ex
 both models (no fix from the detector): the Claude prompt (v4) now says such a nonsense line is usually a misheard
 phrase in another language — translate its meaning, never spell it out.
 
-## The English accent in Russian «Оригинал» dubs — measured 2026-10-30 (proposal, not built)
+## The English accent in Russian «Оригинал» dubs — measured 2026-10-30
+_Option (b) was built in 0.12.0 and taken out in 0.12.1: Adam didn't like the result (ADR-044)._
+
 Adam: with «Оригинал» the Russian dub sometimes has an American accent; the dub must stay the speaker's own voice.
 Cause: OmniVoice's README says cross-lingual cloning carries the reference language's accent; its `instruct`
 accents exist only for English speech, so no setting removes it. Test (sandbox CPU): "speaker" = Edge

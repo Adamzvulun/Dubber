@@ -187,21 +187,8 @@ def _transcribe(audio_wav: Path, model_size: str, device: str, progress, info_ou
     return segments
 
 
-class Heard(str):
-    """What Whisper heard in a clip; `.native`: how sure it is that the clip is in the language it should be (an
-    accent lowers it: measured 0.43-0.87 on accented Russian, 0.97-1.0 on native; ADR-043)."""
-
-    native: float = 1.0
-
-    def __new__(cls, text: str, native: float = 1.0):
-        heard = super().__new__(cls, text)
-        heard.native = native
-        return heard
-
-
 def reader(model_size: str = "small", device: str = "auto"):
-    """`read(clip, lang)` -> what Whisper hears in a short clip (the original voice's listen-back check, clone.py),
-    as a `Heard` that also says how native the speech sounds.
+    """`read(clip, lang)` -> what Whisper hears in a short clip (the original voice's listen-back check, clone.py).
 
     The model loads on the first clip; on the card when it works, else the processor (as `transcribe`)."""
     from faster_whisper import WhisperModel
@@ -214,23 +201,19 @@ def reader(model_size: str = "small", device: str = "auto"):
             models[where] = retry(lambda: WhisperModel(model_size, device=where, compute_type=compute_type))
         return models[where]
 
-    def hear(model, samples, lang: str) -> Heard:
-        segments, _ = model.transcribe(samples, language=lang, beam_size=5)
-        text = " ".join(s.text.strip() for s in segments)
-        _, _, probs = model.detect_language(audio=samples)
-        return Heard(text, dict(probs or []).get(lang, 1.0))  # a language Whisper doesn't know: no judgement
-
-    def read(clip: Path, lang: str) -> Heard:
+    def read(clip: Path, lang: str) -> str:
         global _gpu_failed
         samples = decode_audio(clip, SAMPLE_RATE)
         if device != "cpu" and not _gpu_failed:
             try:
-                return hear(model_on(device), samples, lang)
+                segments, _ = model_on(device).transcribe(samples, language=lang, beam_size=5)
+                return " ".join(s.text.strip() for s in segments)
             except Exception as exc:
                 if not gpu_error(exc):
                     raise
                 _gpu_failed = True
-        return hear(model_on("cpu"), samples, lang)
+        segments, _ = model_on("cpu").transcribe(samples, language=lang, beam_size=5)
+        return " ".join(s.text.strip() for s in segments)
 
     return read
 

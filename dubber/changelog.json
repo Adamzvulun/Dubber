@@ -1,13 +1,19 @@
 {
+  "0.12.1": {
+    "ru": [
+      "Голос «Оригинал» снова звучит как в версии 0.11.0: исправление акцента убрано."
+    ],
+    "en": [
+      "The “Original” voice sounds as in version 0.11.0 again: the accent fix is removed."
+    ]
+  },
   "0.12.0": {
     "ru": [
       "Библиотека: у каждой озвучки своя карточка — даже у повторной с теми же настройками; новые первыми.",
-      "Голос «Оригинал» без иностранного акцента: если во фразе слышен акцент, программа озвучивает её заново с правильным произношением — тем же голосом говорящего. Если голос оригинала уже был установлен, исправление акцента докачается само (около 1 ГБ, в фоне).",
       "Короткие фразы на другом языке внутри видео (например, испанский в английском фильме) распознаются лучше, а перевод через Claude передаёт их смысл, а не набор букв."
     ],
     "en": [
       "Library: every dub has its own card — even a repeat with the same settings; newest first.",
-      "The “Original” voice without a foreign accent: a line that sounds accented is spoken again with native pronunciation, in the same speaker's voice. If the original voice is already installed, the accent fix downloads by itself (about 1 GB, in the background).",
       "Short lines in another language inside a video (e.g. Spanish in an English film) are recognised better, and the Claude translation gives their meaning instead of a jumble of letters."
     ]
   },

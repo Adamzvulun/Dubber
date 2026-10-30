@@ -6,8 +6,8 @@ _Last updated: 2026-10-30 (session 10). Update this page at the end of every ses
 Dubber is a local website (FastAPI + hand-built front-end) that turns a **YouTube, TikTok, Instagram or Facebook**
 video **or a video file** in **any spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version: **0.11.0** on `main`; **0.12.0** on branch `claude/happy-brahmagupta-3zznvd` (session 10, PR into
-`main` for Adam to merge). The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
+Current version: **0.12.0** on `main` (PR #22); **0.12.1** = PR #23 from `claude/happy-brahmagupta-3zznvd` takes the
+accent fix out again (Adam didn't like it, ADR-044). The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
 shipping. The phone version (0.10.0) is merged but **switched off** until Adam's Cloudflare mailbox address is put in
 `phone.MAILBOX_URL` (see Next steps 1).
 Session 7 (2026-10-28): **0.8.0 (merged, PR #13)** — the Windows install broke for anyone with Python 3.15 (released
@@ -46,12 +46,10 @@ names in the dub language's letters. **0.11.0:** `speakers.py` (voice prints of 
 ADR-038) → one sample per speaker + different speakers may overlap; soft fades at line edges (ADR-040); every dub its
 own library entry with date + time (ADR-039, replaces ADR-022's "same choices replace").
 
-Session 10 (2026-10-30), 0.12.0: one library card per dub (ADR-041); foreign lines inside a video — a second-opinion
-language check + Claude prompt v4 (ADR-042); «Оригинал» without the English accent — measured four approaches
-(RESEARCH "The English accent…", listening page https://claude.ai/artifact/A7T3H47gXbeanCu7nEPwda), Adam chose (b):
-keep the clone, re-speak only lines Whisper hears as accented from a native Edge sample and convert them into the
-speaker's voice (Chatterbox converter, ADR-043). One-word lines: fine with a clean reference (RESEARCH not yet; the
-test was stopped after one seed).
+Session 10 (2026-10-30): 0.12.0 (merged, PR #22) — one library card per dub (ADR-041); foreign lines inside a video
+— a second-opinion language check + Claude prompt v4 (ADR-042); «Оригинал» accent fix by voice conversion (ADR-043,
+measured in RESEARCH "The English accent…"). Adam didn't like the accent change → 0.12.1 (PR #23) removes it
+(ADR-044); the accent stays an open problem. One-word lines: fine with a clean reference (one seed).
 
 ## Where things are
 - **Git:** `main` = stable and **shipped** (PCs self-update from it; every release bumps the version and adds a
@@ -116,12 +114,10 @@ offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 original voice; the voice-free background goes under the dub, ducked while it speaks. «Оригинал» (`clone.py`,
 NVIDIA only): voice split off first → `speakers.assign` (who says each line) → OmniVoice speaks each line in its
 speaker's voice (one ≤10-s sample per speaker, ≤1.25× their pace, ≥ `clone.min_seconds`), Whisper listens to every
-clip (garbled → up to 3 tries) → align lets different speakers overlap; lines fade in/out (ADR-036…040). Whisper
-also scores how native each clip sounds; < 0.9 → re-spoken from a native Edge sample and converted into the
-speaker's voice (`clone._fix_accents`, `VoiceConverter`, ADR-043; `check.json` → `native`, `accent`).
+clip (garbled → up to 3 tries) → align lets different speakers overlap; lines fade in/out (ADR-036…040).
 
 ## What works (verified by running it)
-- **0.12.0 (session 10, ADR-041…043):** 218 tests; library cards in Chromium (RU/EN, 1280/360 px, dark), the
+- **0.12.0 (session 10, ADR-041…043; ADR-043 removed in 0.12.1):** 218 tests; library cards in Chromium (RU/EN, 1280/360 px, dark), the
   4-step «Оригинал» install in Chromium; the foreign-line check on a noisy Edge en+es clip; the accent fix end to end
   with the real OmniVoice + Whisper + Chatterbox converter on the sandbox CPU (accent detected, male sample chosen by
   pitch, a line re-spoken + converted and kept: Russian 0.97 → 0.99, voice print 0.69 vs the speaker / 0.34 vs Edge;
@@ -200,10 +196,7 @@ speaker's voice (`clone._fix_accents`, `VoiceConverter`, ADR-043; `check.json` �
   voice removal, Google, H.264 playback).
 
 ## Next steps (in order)
-00. **Adam merges 0.12.0** (PR from `claude/happy-brahmagupta-3zznvd`; check the `Original voice install` Windows job:
-   it installs and runs the converter) and re-dubs a film with «Оригинал»: accent gone? still his voice? The window
-   says «акцент исправлен в N из M строк»; `check.json` lines carry `native` and `accent`. If too many/few lines are
-   redone → tune `clone.ACCENT_SURE` (0.9, from 4 test lines). Not measured on a card: the converter's speed/memory.
+00. **Adam merges 0.12.1** (PR #23: accent fix out, library cards + foreign-line check stay).
 0. **Adam re-dubs with 0.11.0 and listens** (the same Men-in-Black scene, «Оригинал», background on): each person one
    voice? soft line edges? interruptions natural? the window's «Голоса: в видео говорят N» right? Useful from him:
    that line, «проверено на слух … неразборчиво осталось N», total time, `timing.json` (lines carry `speaker`) and

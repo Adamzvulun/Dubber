@@ -953,7 +953,7 @@ async function removeLogins() {
 }
 
 /* ---------- the original voice (clone.py): graphics card check and install ---------- */
-const CLONE_STEPS = ["torch", "omnivoice", "converter", "model"];
+const CLONE_STEPS = ["torch", "omnivoice", "model"];
 let clonePoll = null;
 
 async function loadClone() {

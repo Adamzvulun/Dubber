@@ -2,6 +2,10 @@
 
 Newest entries at the top. One entry per working session / milestone.
 
+## 2026-10-30 — Session 10c: the accent fix taken out (v0.12.1)
+- Adam merged 0.12.0 (PR #22), didn't like the accent change. A first PR (#23) wrongly reverted all of 0.12.0; on the
+  same branch it now removes only the accent fix (ADR-044) — library cards and the foreign-line check stay.
+
 ## 2026-10-30 — Session 10b: foreign lines, the accent fix (v0.12.0)
 - Foreign lines inside a video (ADR-042): reproduced Spanish-in-English under noise; second-opinion language check by
   the transcription model; Claude prompt v4. Verified on the noisy clip ("Sí, sí, vámonos." transcribed exactly).

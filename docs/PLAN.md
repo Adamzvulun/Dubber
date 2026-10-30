@@ -139,8 +139,7 @@ A Russian speaker (not a developer) pastes a YouTube link into a local web page 
 - [x] One library card per dub (ADR-041, `kanban/library-card-per-dub.md`)
 - [x] Misheard foreign lines: second-opinion language check + Claude prompt v4 (ADR-042)
 - [ ] One-word lines, crosstalk (`kanban/original-voice-quality.md`)
-- [x] No American accent in the Russian «Оригинал» dub — measured, Adam chose (b): convert only accented lines (0.12.0, ADR-043)
-- [ ] Adam: dub with 0.12.0 «Оригинал» and listen (accent, voice)
+- [ ] No American accent in the Russian «Оригинал» dub — (b) built in 0.12.0, Adam didn't like it, removed in 0.12.1 (ADR-044); open
 
 ### M4 — Nice to have
 - [x] Queue of several links / playlists (v0.6.0)
