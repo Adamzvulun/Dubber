@@ -1,14 +1,13 @@
 # Status — read this first
 
-_Last updated: 2026-10-29 (session 9). Update this page at the end of every session._
+_Last updated: 2026-10-30 (end of session 9). Update this page at the end of every session._
 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a **YouTube, TikTok, Instagram or Facebook**
 video **or a video file** in **any spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version: **0.10.4** on `main` (PR #19); **0.11.0** (ADR-038/039/040: who speaks each line, two voices at once,
-one voice sample per speaker, soft line edges, every dub its own library entry with its time) on branch
-`claude/modest-thompson-pp54kx`, waiting for a PR / Adam's merge. The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
+Current version: **0.11.0** on `main` (PR #20, merged 2026-10-30) — nothing open; the session branch
+`claude/modest-thompson-pp54kx` equals `main`. The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
 shipping. The phone version (0.10.0) is merged but **switched off** until Adam's Cloudflare mailbox address is put in
 `phone.MAILBOX_URL` (see Next steps 1).
 Session 7 (2026-10-28): **0.8.0 (merged, PR #13)** — the Windows install broke for anyone with Python 3.15 (released
@@ -37,7 +36,7 @@ Session 8 (2026-10-28/29), PRs #15–#17:
   → Edge voice), device/timing lines in the program window, the install progress bar, voice-free background always
   with «Оригинал»; a QA pass by two agents (desktop + phone) and its fixes.
 
-Session 9 (2026-10-29): Adam's first «Оригинал» dub on the RTX 5060 Ti — voice copy good, card ~50% busy, words
+Session 9 (2026-10-29/30), PRs #18–#20, all merged: Adam's first «Оригинал» dub on the RTX 5060 Ti — voice copy good, card ~50% busy, words
 "swallowed or warped" (lines told to last 0.14–0.26 s, crowded stretches 1.6×). **0.10.3 (ADR-036):** each line asks
 for at least `clone.min_seconds` (≤ 7 syllables/s); 12/8/4 lines per call by card memory, longest first, a failing
 group halved. His "no background" was a job with the background switch off (`meta.json`). **0.10.4 (ADR-037):**
@@ -58,11 +57,12 @@ own library entry with date + time (ADR-039, replaces ADR-022's "same choices re
 - **Code:** `dubber/` (pipeline stages, `app.py` = server/API/jobs/settings, `eta.py` = time left, `config.py` =
   settings + `save_env` + local ffmpeg on PATH, `separate.py` = voice removal, `sites.py` = TikTok/Instagram/Facebook +
   login file, `deps.py` = component self-check run by the launcher, `clone.py` = «Оригинал» voice + its installer +
-  card check, `phone.py` = the phone: cloudflared tunnel + mailbox, `gpu.py` = NVIDIA libraries for Whisper),
+  card check + listen-back check + per-speaker references, `speakers.py` = who says each line (voice prints,
+  sherpa-onnx), `phone.py` = the phone: cloudflared tunnel + mailbox, `gpu.py` = NVIDIA libraries for Whisper),
   `dubber/web/` (site; `i18n.js` = all UI text RU/EN; also the phone app: `manifest.webmanifest`, `sw.js`, `icons/`,
   phone mode in `app.js` under `/p/<token>/` — keep file addresses relative), `cloud/` (mailbox Worker
   `cloud/worker/` + its Node tests, `cloud/build.py` = phone app build), `update.py` = self-update, `changelog.json` =
-  "What's new", `assets/` = logo + Windows icon), `tests/` (194 tests, offline), `tools/` (stub server,
+  "What's new", `assets/` = logo + Windows icon), `tests/` (213 tests, offline), `tools/` (stub server,
   `phone_dev.mjs` = local Cloudflare stand-in, 12-language QA, Hebrew voice QA, `make_icon.py`,
   `make_phone_icons.js`), `Start Dubber.cmd` +
   `scripts/windows/dubber.ps1` (Windows start: install, shortcut, font, start; `-NoStart`, `-ShortcutOnly`; ADR-025),
@@ -71,9 +71,9 @@ own library entry with date + time (ADR-039, replaces ADR-022's "same choices re
   repair, curl-cffi check, real cloudflared tunnel 401/200, NVIDIA wheels resolve); `original-voice-install.yml` (also
   runs pytest on Windows); `deploy-phone.yml` (mailbox Worker on merges to `main`; no-op without the Cloudflare
   secrets)). Conventions: `CLAUDE.md`.
-- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…035), `DESIGN.md`
+- **Docs:** `PLAN.md` (roadmap), `PROGRESS.md` (history, newest first), `DECISIONS.md` (ADR-001…040), `DESIGN.md`
   (design system), `RESEARCH.md` (tools, timing research, 12-language QA, VoiceStudio/OmniVoice, TikTok/Instagram/Facebook without a
-  login), `SKILLS.md`, `README.ru.md` (longer Russian
+  login, OmniVoice speed limits, who speaks each line), `SKILLS.md`, `README.ru.md` (longer Russian
   reference). **User guides (RU + HE) are at the top of `README.md`** — they quote UI labels from `i18n.js`. Task cards: `kanban/` (hand-off list: `kanban/next-steps.md`).
 - **Data on a user's PC (git-ignored):** `.env` (settings saved by the website, incl. the Claude key and
   `DUBBER_PHONE_TOKEN` = the household's phone secret), `cloudflared/` (the tunnel program, downloaded at the first
@@ -85,12 +85,15 @@ own library entry with date + time (ADR-039, replaces ADR-022's "same choices re
   `segments_src_v3.json` = what was said with each line's language, `speech_info.json`, `segments_<lang>_v3.json` (free
   engines) / `segments_<lang>_v3_claude_<hash>.json` + `.info.json` (engine, cost, notes), `clips_<voice>/`,
   `dub_track_<voice>_<hash>.wav`, `timing_<voice>_<hash>.json`, `background_htdemucs.wav` = original without the
-  voice, only when that switch was on), `work/stage_times.json` (stage timings of the last
+  voice (voice removal or «Оригинал»), «Оригинал» only: `vocals_htdemucs.wav` + `vocals_24k.f32` = the voice alone,
+  `speakers_<hash>.json` = speaker per line, `clips_original_<lang>/` + its `check.json` = what Whisper heard per
+  line), `work/stage_times.json` (stage timings of the last
   10 dubs, for the time-left estimate); `output/<id>/` = what the library shows (`dubbed.mp4`, `meta.json` with
   languages/files/translator/cost, `thumbnail.jpg`, `segments.json`, `timing.json`, subtitles, transcripts).
-  One **dub** = one library entry: `output/<video-id>--<lang>-<hash>/` (hash of language, voice, background,
-  voice removal; `pipeline.dub_id`); redoing the same choices replaces it. Folders from before 0.4.1 are named
-  `output/<video-id>/` and still work.
+  One **dub** = one library entry: `output/<video-id>--<lang>-<hash>-<YYYYMMDD-HHMMSS>/` (hash of language, voice,
+  background, voice removal + the dub's time; `pipeline.dub_id`, ADR-039): every run is a new entry, even with the
+  same choices. Older folders (`…--<lang>-<hash>/`, before 0.4.1 `output/<video-id>/`) still work. The library
+  groups a video's dubs on one card (ADR-027) — Adam now wants one card per dub (Next steps 1).
 
 ## How it works (one line per stage — details in the `dubber-pipeline` skill)
 1. Download (yt-dlp + deno + curl-cffi impersonation; YouTube/TikTok/Instagram/Facebook or a file; optional
@@ -103,9 +106,17 @@ slots, else one-language batches to Google (retries 2-4-8-16-30 s); fallback cha
 offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 `timing.plan_rates`) → 5. Align (trim Edge silence, lines on the speaker's start times, ≤1.1× correction) → 6. Mux
 (language tags) + subtitles + meta. Optional before 6: `separate.py` (Demucs ONNX) removes the
-original voice; the voice-free background goes under the dub, ducked while it speaks.
+original voice; the voice-free background goes under the dub, ducked while it speaks. «Оригинал» (`clone.py`,
+NVIDIA only): voice split off first → `speakers.assign` (who says each line) → OmniVoice speaks each line in its
+speaker's voice (one ≤10-s sample per speaker, ≤1.25× their pace, ≥ `clone.min_seconds`), Whisper listens to every
+clip (garbled → up to 3 tries) → align lets different speakers overlap; lines fade in/out (ADR-036…040).
 
 ## What works (verified by running it)
+- **0.10.3–0.11.0 (session 9, ADR-036…040):** unit tests for every piece (213); real OmniVoice + real Whisper on the
+  sandbox CPU: the speed table (RESEARCH "how fast can a line be asked for"), the listen-back loop, and speakers +
+  per-speaker references end to end on a 3-voice test (7/8 lines exact); the voice-print model on that test (all
+  lines right, RESEARCH "Who speaks each line"); Chromium: library/watch page with dates + times RU/EN, 360–1280 px.
+  Adam (by ear, 2026-10-29): 0.10.3 "a lot better", 0.10.4 "better" — but rough edges, which 0.11.0 addresses.
 - **0.10.2 (ADR-035):** unit tests (card check ok / "no kernel image" / cached / non-blocking, `clone:no_gpu`,
   voice-free background, install progress from bytes checked against a real pip log, `tts_clone` estimate,
   logged-out login files refused); Chromium on the stub server (progress bar RU/EN, Settings card line with
@@ -161,9 +172,9 @@ original voice; the voice-free background goes under the dub, ducked while it sp
 - Timing (ADR-013), all 12 dub languages (ADR-014/016: 24 real QA dubs), real YouTube runs (session 1).
 
 ## Not verified yet
-- **On a real NVIDIA card (Adam's new PC, RTX 5060 Ti 16 GB):** Whisper on the card after the background install
-  (0.10.1), the «Оригинал» card check and its real speed (0.10.2). His first «Оригинал» try on 0.10.0/0.10.1 estimated
-  90 min for 5 min of video with the card looking idle — most likely OmniVoice running on the CPU (ADR-035).
+- **0.11.0 by ear on Adam's RTX 5060 Ti:** speakers right? one voice per person? soft edges? overlaps natural? the
+  12-lines-per-call speed. (Since 0.10.2 «Оригинал» runs on his card — he saw ~50% GPU load; the voice copy is
+  "good".)
 - **Phone version (0.10.0):** a real quick tunnel and the real Worker (blocked here; the Windows CI step runs real
   cloudflared through a real tunnel), a real Samsung / iPhone (install, share target, paste, video playback). Needs
   Adam's Cloudflare account first.
@@ -175,38 +186,50 @@ original voice; the voice-free background goes under the dub, ducked while it sp
   voice removal, Google, H.264 playback).
 
 ## Next steps (in order)
-0. **0.10.4 (ADR-037):** PR + Adam's merge; he re-dubs the same «Оригинал» video and reports: still cut off? the
-   window's «проверено на слух … неразборчиво осталось N» line, total time, and `work/<id>/clips_original_ru/check.json`
-   (what Whisper heard per line — text only). Still slow → offer 16 generation steps (≈ 2×, ask first) and Demucs on
-   the card.
-0b. **0.11.0 by ear:** does each person keep one voice? do the edges sound soft? overlaps natural? The window prints
-   «Голоса: в видео говорят N»; `timing.json` lines carry `speaker`. Known weak spots: one-word lines ("Да.") babble
-   in OmniVoice (idea: speak them together with a neighbouring line of the same speaker); misheard foreign speech
-   that Claude transliterates. True crosstalk (both talking at once) is mostly missing from Whisper's text — dubbing
-   both needs separating the voices first (offer, don't build unasked).
-1. **Switch the phone version on:** Adam (a) creates a free Cloudflare account, opens "Workers & Pages" once (choose
+0. **Adam re-dubs with 0.11.0 and listens** (the same Men-in-Black scene, «Оригинал», background on): each person one
+   voice? soft line edges? interruptions natural? the window's «Голоса: в видео говорят N» right? Useful from him:
+   that line, «проверено на слух … неразборчиво осталось N», total time, `timing.json` (lines carry `speaker`) and
+   `work/<id>/clips_original_ru/check.json` (text only — fine to share; never the audio/video of third-party films).
+1. **Asked by Adam for next (2026-10-30) — not started:**
+   a. **One library card per dub** (`kanban/library-card-per-dub.md`): today a video's dubs share one card (ADR-027,
+      his earlier choice); now each dub — even a repeat with the same settings — gets its own card with its date and
+      time. Keep search; decide what the watch page's «Другие озвучки этого видео» shows (keep it). Update guides.
+   b. **«Оригинал» weak points** (`kanban/original-voice-quality.md`): one-word lines ("Да.") babble after 3 tries;
+      foreign speech in the original (e.g. Spanish in an English film) misheard by Whisper and transliterated by Claude
+      into nonsense; true crosstalk missing from Whisper's text.
+   c. **American accent in the Russian dub** (same card): the copied voice carries the English reference's accent
+      (cross-lingual cloning). Research first, then propose to Adam — see the card for candidate approaches.
+2. **Switch the phone version on:** Adam (a) creates a free Cloudflare account, opens "Workers & Pages" once (choose
    the `workers.dev` name), makes an API token from the template "Edit Cloudflare Workers" and adds GitHub secrets
    `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`; (b) sends the address `https://dubber.<name>.workers.dev` →
    set `phone.MAILBOX_URL` in a small PR (until then «Телефон» says "not switched on yet"); (c) merge →
    `deploy-phone.yml` deploys (check its log: KV namespace made, `wrangler deploy` ok); (d) he pairs his Samsung
    (QR), dubs with the PC on and off; an iPhone if at hand. If quick tunnels prove flaky → named tunnel (ADR-033
    "Risks").
-2. **Real TikTok / Instagram Reel / Facebook links without a login** (0.9.0): ask what the job card said for any
+3. **Real TikTok / Instagram Reel / Facebook links without a login** (0.9.0): ask what the job card said for any
    failure; login-only → «Вход на сайты»; rate limit → wait an hour; Instagram often failing → propose the
    in-program login window (ADR-032 "Next") — ask first.
-3. **Father's Windows 11 PC:** fresh install (Visual C++ prompt → «Да»), a dub with both subtitle switches
+4. **Father's Windows 11 PC:** fresh install (Visual C++ prompt → «Да»), a dub with both subtitle switches
    (`kanban/install-and-subtitles.md`). His RTX 3050 has 4 GB — no «Оригинал» there, but 0.10.1's Whisper-on-card
    applies.
-4. QA leftovers (`kanban/nice-to-haves.md`, 2026-10-29): own dialogs instead of confirm(), accent-insensitive search,
+5. QA leftovers (`kanban/nice-to-haves.md`, 2026-10-29): own dialogs instead of confirm(), accent-insensitive search,
    remember voice/background choices, confirm before per-video «Очистить кэш», offline banner on the PC, glossary
    validation, playlist-cancel keeps the other links, re-check the Haiku price in `translate.py`, Cyrillic voice names.
-5. Ideas not yet chosen (offer, don't build unasked): voice speed control; Hebrew spelling fix on the free path
-   (PLAN M7); offline TTS fallback (Silero); Telegram bot; ElevenLabs (paid); listen-back check of the dub / slight
-   video slow-down (`kanban/voicestudio-omnivoice.md`).
-6. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;
+6. Ideas not yet chosen (offer, don't build unasked): voice speed control; 16 generation steps for «Оригинал» (≈2× faster, quality risk); Demucs on the card; Hebrew spelling fix on the free path
+   (PLAN M7); offline TTS fallback (Silero); Telegram bot; ElevenLabs (paid); slight video slow-down (`kanban/voicestudio-omnivoice.md`).
+7. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;
    speaker gender unknown to the translator; offline-backup slips (Hebrew "flour" → "acid/vinegar").
 
 ## Gotchas for Claude in the cloud sandbox
+- **Testing the real «Оригинал» models here (CPU, no NVIDIA):** `download.pytorch.org` is blocked — make a scratch
+  venv (not the repo's `.venv`) and `pip install torch torchaudio omnivoice==0.2.1 faster-whisper edge-tts
+  sherpa-onnx` from PyPI (~6.5 GB; CUDA wheels run on the CPU). Append `/root/.ccr/ca-bundle.crt` to that venv's
+  `certifi` bundle, else edge-tts fails with CERTIFICATE_VERIFY_FAILED (it uses certifi). `en-US-GuyNeural` once
+  returned NoAudioReceived — `en-US-AndrewNeural` worked. Run with `DUBBER_CLONE_DEVICE=cpu HF_HUB_DISABLE_XET=1` and
+  `python -I` + `sys.path.insert(0, repo)`; OmniVoice takes ~70 s per line on 4 cores (32 steps), so test 3–8 lines in
+  the background and watch with Monitor. A reference's text must be what is said in it (a placeholder text made the
+  model speak it: "Turn. Buy."). faster-whisper 1.2 + av 19: pass samples, not a file path. Test conversations: Edge
+  voices of different speakers mixed with numpy (session 9 scripts lived in the scratchpad, not the repo).
 - **New Python releases break installs:** components without a build for the newest Python fail as "No matching
   distribution found for onnxruntime". The launchers accept only 3.10–3.14 (ADR-029); check wheels with
   `pip install --dry-run --target X --platform win_amd64 --python-version 3.N --only-binary=:all: -e .`-style

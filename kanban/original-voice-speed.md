@@ -1,6 +1,6 @@
 ---
 id: 36
-status: review
+status: done
 priority: High
 blocked_by: []
 tags: [nvidia, original-voice, qa, v0.10.2, v0.10.3]
@@ -21,3 +21,5 @@ voice studio install, whether the background switches should be on with «Ори
   check, ≤1.25×, Claude prompt v3. Next: his re-dub + `check.json`. (by @claude)
 - 2026-10-29: 0.10.4 merged; Adam: rough edges, wants speakers/overlap + separate dubs with time. 0.11.0
   (ADR-038/039/040). Next: his ears. (by @claude)
+- 2026-10-30: 0.11.0 merged (PR #20). Closed; follow-ups in `kanban/original-voice-quality.md` and
+  `kanban/library-card-per-dub.md`. (by @claude)

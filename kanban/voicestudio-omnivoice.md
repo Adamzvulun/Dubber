@@ -1,6 +1,6 @@
 ---
 id: 30
-status: doing
+status: done
 priority: High
 blocked_by: [Adam: test on his own NVIDIA PC (≥ 6 GB)]
 tags: [research, quality, voice]
@@ -22,3 +22,5 @@ improve the dub. Findings: `docs/RESEARCH.md` → "VoiceStudio / OmniVoice"; pro
   real CPU dub; waiting for the first run on the 3070. (by @claude)
 - 2026-10-28: The father's PC has an RTX 3050 with 4 GB (not a 3070) — below the 6 GB minimum. Adam will try it on his own PC later; not urgent. (by @claude)
 - 2026-10-29: First real-card try (RTX 5060 Ti) was very slow; 0.10.2 adds a card check, no CPU fallback and timing lines (ADR-035, `original-voice-speed.md`). (by @claude)
+- 2026-10-30: The borrowed ideas are built: listen-back check (0.10.4, ADR-037), a voice per speaker (0.11.0,
+  ADR-038). Closed; «Оригинал» follow-ups in `kanban/original-voice-quality.md`. (by @claude)

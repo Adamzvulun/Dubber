@@ -18,14 +18,22 @@ description: How the Dubber dubbing pipeline (any spoken language → 12 dub lan
 
 Optional stages: **voice removal** (`separate.py`, Demucs ONNX → `background_htdemucs.wav`, before the mux) and the
 **original voice** (`clone.py`, voice `"original"`, OmniVoice on an NVIDIA GPU, installed from Settings): the voice is
-split off *before* TTS (`vocals_htdemucs.wav` → `vocals_24k.f32`), each line copies whoever said it, clips in
+split off *before* TTS (`vocals_htdemucs.wav` → `vocals_24k.f32`); `speakers.assign` gives each line a speaker
+(CAM++ voice prints via sherpa-onnx, cached `speakers_<hash>.json`, ADR-038); each speaker is copied from one ≤10-s
+run of their own lines (`clone.speaker_references`; unknown → `reference_lines`), paced ≤ `clone.MAX_RATE` 1.25× and
+≥ `clone.min_seconds`; Whisper (`transcribe.reader`) listens to every new clip and redoes garbled ones (`clone.TRIES`,
+`check.json`, ADR-037); align lets different speakers overlap (`build_track(speakers=)`); clips in
 `clips_original_<lang>/`; Hebrew, not installed, PyTorch not computing on the card (`clone.cuda_ok`, ADR-035) or any
 error → the Edge male voice + `voice_notes` in meta.json (`clone:language|not_installed|no_gpu|failed`, ADR-028). With
 the original voice and the background on, the background is always the voice-free one.
 
 **Devices:** Whisper runs with `device="auto"` (the NVIDIA card when cuBLAS/cuDNN load — `gpu.py` installs them on
 Windows NVIDIA PCs — else the CPU: `transcribe.gpu_error` → redo on CPU, remembered per run, ADR-034). The program
-window prints «Распознаю речь: видеокарта/процессор» and «Голос оригинала: n/m строк, x с на группу».
+window prints «Распознаю речь: видеокарта/процессор», «Голоса: в видео говорят N», «Голос оригинала: n/m строк,
+x с на группу» and «… проверено на слух N строк, неразборчиво осталось M».
+
+**Every line** of any voice fades in/out in `align.build_track` (ADR-040); every run writes a new
+`output/<id>-<YYYYMMDD-HHMMSS>/` (ADR-039).
 
 **Resume/cache rule:** a stage is skipped if its cache file exists. To redo a stage, delete its file
 and everything after it (e.g. new translation → delete `segments_<lang>_v3.json`; the track is keyed by the lines' content, clips by their text).

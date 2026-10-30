@@ -35,7 +35,7 @@ node tools/phone_dev.mjs 7871                                  # local Cloudflar
 - `dubber/` — pipeline stages (`download`, `transcribe`, `translate`, `tts`, `align`, `separate` (optional voice
   removal), `mux`, `subtitles`), orchestrated by
   `pipeline.py`; `languages.py` (the 12 dub languages: voices, codes), `timing.py` (pace planner), `segments.py`
-  (lines from word timings), `sites.py` (TikTok/Instagram/Facebook, the «Вход на сайты» login file — ADR-031), `clone.py` (optional «Оригинал» voice: OmniVoice voice cloning, NVIDIA GPU only, installed
+  (lines from word timings), `speakers.py` (who says each line, for «Оригинал» — ADR-038), `sites.py` (TikTok/Instagram/Facebook, the «Вход на сайты» login file — ADR-031), `clone.py` (optional «Оригинал» voice: OmniVoice voice cloning, NVIDIA GPU only, installed
   from Settings — ADR-028), `phone.py` (the phone: cloudflared quick tunnel + mailbox — ADR-033), `gpu.py` (NVIDIA libraries for Whisper,
   CPU fallback — ADR-034), `hub.py` (model downloads), `cli.py`, `app.py` (FastAPI server + JSON API, jobs, cancel,
   settings: Claude key/model/glossary saved to `.env` + `glossary.txt`), `config.py` (settings, `save_env`).
@@ -75,6 +75,9 @@ node tools/phone_dev.mjs 7871                                  # local Cloudflar
   (ADR-029). Every start runs `python -m dubber.deps` (missing components → reinstall).
 - yt-dlp is always `yt-dlp[default,curl-cffi]` (pyproject, launcher refresh, updater, install.sh): curl-cffi lets
   TikTok/Instagram download without a login (ADR-032). TikTok/Instagram/Facebook are unreachable from the sandbox.
+- «Оригинал» quality work (ADR-036…040): read `docs/RESEARCH.md` "OmniVoice: how fast…" and "Who speaks each line"
+  first; real-model tests run on the sandbox CPU in a scratch venv (STATUS gotchas). Every dub run = a new library
+  entry (ADR-039).
 - NVIDIA PCs: Whisper uses the card when `gpu.py`'s libraries load, else the CPU (never fail a dub on a GPU-library
   error, ADR-034); «Оригинал» runs only when `clone.cuda_ok()` (ADR-035). No NVIDIA card here or in CI — stub/mock it.
 - Phone version (ADR-033): switched off until `phone.MAILBOX_URL` holds Adam's Worker address; tunnel requests need the
