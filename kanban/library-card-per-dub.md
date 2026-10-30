@@ -1,6 +1,6 @@
 ---
 id: 37
-status: todo
+status: done
 priority: High
 blocked_by: []
 tags: [library, ui, next]
@@ -22,3 +22,5 @@ video's dubs on one card (ADR-027, his choice on 2026-10-18; `videoGroups()` + t
 
 ## Narrative
 - 2026-10-30: Created from Adam's hand-off request at the end of session 9 (not started). (by @claude)
+- 2026-10-30: Built (ADR-041): one card per dub newest first, count in dubs, tag row removed; other dubs kept on the
+  watch page; guides RU/HE + README.ru updated; Chromium RU/EN 1280/360 dark checked. (by @claude)

@@ -385,8 +385,6 @@ female), Henri (fr, male) — 0.6-s pauses, turn 7 starting 1 s before turn 6 en
   2 CPU threads. The overlapped turns still group right (their prints stay closest to their own speaker).
 
 ## Foreign lines inside a video — measured 2026-10-30 (ADR-042)
-_Built in 0.12.0, reverted in 0.12.1 at Adam's request — the measurements stay valid._
-
 Adam's `check.json` (Men in Black): Spanish lines in the English film were transcribed as English and Claude spelled
 the nonsense out in Russian letters ("Йо, хани, че, хайста…"). Test clip (sandbox CPU): Edge `en-US-AndrewNeural`
 lines with three short `es-MX-JorgeNeural` lines between them ("¿Qué pasa?" 1.3 s, "Oye, hermano." 1.9 s, "Sí, sí,
@@ -405,9 +403,7 @@ it is ≥ 0.85 sure of; transcribed in Spanish it reads "Sí, sí, vámonos." ex
 both models (no fix from the detector): the Claude prompt (v4) now says such a nonsense line is usually a misheard
 phrase in another language — translate its meaning, never spell it out.
 
-## The English accent in Russian «Оригинал» dubs — measured 2026-10-30
-_Option (b) was built in 0.12.0 and reverted in 0.12.1: Adam didn't like the result. The code is in git (PR #22)._
-
+## The English accent in Russian «Оригинал» dubs — measured 2026-10-30 (proposal, not built)
 Adam: with «Оригинал» the Russian dub sometimes has an American accent; the dub must stay the speaker's own voice.
 Cause: OmniVoice's README says cross-lingual cloning carries the reference language's accent; its `instruct`
 accents exist only for English speech, so no setting removes it. Test (sandbox CPU): "speaker" = Edge

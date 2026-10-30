@@ -96,7 +96,7 @@ class StubClone:
                 "ready": self.ready, "min_vram_gb": clone.MIN_VRAM_GB, "unsupported": sorted(clone.UNSUPPORTED),
                 "cuda": cuda if self.ready else None}
 
-    def start(self) -> bool:
+    def start(self, steps=None) -> bool:
         if self.state["running"]:
             return False
         self.state.update(running=True, error="", done=False)

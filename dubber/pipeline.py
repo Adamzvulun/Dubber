@@ -136,6 +136,28 @@ def timing_report(lines: list[dict]) -> dict:
     }
 
 
+def native_voice(lang: str) -> Callable[[str, str, Path], None]:
+    """`speak(text, "male" | "female", path)`: the dub language's own Edge voice — the native sample the original
+    voice re-speaks an accented line from (clone._fix_accents)."""
+
+    def speak(text: str, gender: str, path: Path) -> None:
+        import asyncio
+
+        partial = path.with_name(path.name + ".partial")
+        for attempt in range(4):  # Edge randomly answers "no audio" (tts.py); the 4th failure goes to the caller
+            try:
+                asyncio.run(tts.edge_synthesize(text, languages.voice_for(lang, gender), partial))
+                partial.replace(path)
+                return
+            except Exception:
+                partial.unlink(missing_ok=True)
+                if attempt == 3:
+                    raise
+                time.sleep(2 * (attempt + 1))
+
+    return speak
+
+
 def line_speakers(segments: list, vocals_wav: Path, work: Path, finder: SpeakersFn | None = None) -> list | None:
     """Who says each line (ADR-038), cached per set of lines; None when it can't be told (the dub goes on without:
     per-line voice samples, and no two lines at once)."""
@@ -334,6 +356,9 @@ def run(
             extra: dict = {}
             if cloner is None:
                 extra["listen"] = transcribe.reader(settings.whisper_model, settings.whisper_device)
+                # a line heard with an accent: spoken from a native Edge voice, converted to the speaker (ADR-043)
+                extra["native"] = native_voice(target.code)
+                extra["converter"] = clone.VoiceConverter
             if who:
                 extra["speakers"] = who
             clips, rates = (cloner or clone.synthesize)(

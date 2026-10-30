@@ -1,13 +1,13 @@
 # Status — read this first
 
-_Last updated: 2026-10-30 (end of session 9). Update this page at the end of every session._
+_Last updated: 2026-10-30 (session 10). Update this page at the end of every session._
 
 ## In one paragraph
 Dubber is a local website (FastAPI + hand-built front-end) that turns a **YouTube, TikTok, Instagram or Facebook**
 video **or a video file** in **any spoken language** (also mixed, e.g. English + French) into a **dubbed MP4 in one of 12 languages** (Russian by
 default) with subtitles and transcripts. For a Russian speaker on a Windows PC who learns from videos on every topic.
-Current version: **0.12.1** on its way to `main` = the 0.11.0 code (session 10's 0.12.0 — PR #22 — was merged, then
-reverted at Adam's request, ADR-044). The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
+Current version: **0.11.0** on `main`; **0.12.0** on branch `claude/happy-brahmagupta-3zznvd` (session 10, PR into
+`main` for Adam to merge). The repo is **public** and the PCs **update themselves from `main`** at start (ADR-024) — merging is
 shipping. The phone version (0.10.0) is merged but **switched off** until Adam's Cloudflare mailbox address is put in
 `phone.MAILBOX_URL` (see Next steps 1).
 Session 7 (2026-10-28): **0.8.0 (merged, PR #13)** — the Windows install broke for anyone with Python 3.15 (released
@@ -45,6 +45,13 @@ is hurried ≤ 1.25× and Whisper listens to every clip (garbled → up to 3 tri
 names in the dub language's letters. **0.11.0:** `speakers.py` (voice prints of the lines, sherpa-onnx CAM++,
 ADR-038) → one sample per speaker + different speakers may overlap; soft fades at line edges (ADR-040); every dub its
 own library entry with date + time (ADR-039, replaces ADR-022's "same choices replace").
+
+Session 10 (2026-10-30), 0.12.0: one library card per dub (ADR-041); foreign lines inside a video — a second-opinion
+language check + Claude prompt v4 (ADR-042); «Оригинал» without the English accent — measured four approaches
+(RESEARCH "The English accent…", listening page https://claude.ai/artifact/A7T3H47gXbeanCu7nEPwda), Adam chose (b):
+keep the clone, re-speak only lines Whisper hears as accented from a native Edge sample and convert them into the
+speaker's voice (Chatterbox converter, ADR-043). One-word lines: fine with a clean reference (RESEARCH not yet; the
+test was stopped after one seed).
 
 ## Where things are
 - **Git:** `main` = stable and **shipped** (PCs self-update from it; every release bumps the version and adds a
@@ -109,9 +116,16 @@ offline; quality gate → 4. TTS twice (measure, then planned Edge `rate`,
 original voice; the voice-free background goes under the dub, ducked while it speaks. «Оригинал» (`clone.py`,
 NVIDIA only): voice split off first → `speakers.assign` (who says each line) → OmniVoice speaks each line in its
 speaker's voice (one ≤10-s sample per speaker, ≤1.25× their pace, ≥ `clone.min_seconds`), Whisper listens to every
-clip (garbled → up to 3 tries) → align lets different speakers overlap; lines fade in/out (ADR-036…040).
+clip (garbled → up to 3 tries) → align lets different speakers overlap; lines fade in/out (ADR-036…040). Whisper
+also scores how native each clip sounds; < 0.9 → re-spoken from a native Edge sample and converted into the
+speaker's voice (`clone._fix_accents`, `VoiceConverter`, ADR-043; `check.json` → `native`, `accent`).
 
 ## What works (verified by running it)
+- **0.12.0 (session 10, ADR-041…043):** 218 tests; library cards in Chromium (RU/EN, 1280/360 px, dark), the
+  4-step «Оригинал» install in Chromium; the foreign-line check on a noisy Edge en+es clip; the accent fix end to end
+  with the real OmniVoice + Whisper + Chatterbox converter on the sandbox CPU (accent detected, male sample chosen by
+  pitch, a line re-spoken + converted and kept: Russian 0.97 → 0.99, voice print 0.69 vs the speaker / 0.34 vs Edge;
+  a worse try rejected). Edge refused the sandbox during that run, so a Russian Edge clip made earlier was used.
 - **0.10.3–0.11.0 (session 9, ADR-036…040):** unit tests for every piece (213); real OmniVoice + real Whisper on the
   sandbox CPU: the speed table (RESEARCH "how fast can a line be asked for"), the listen-back loop, and speakers +
   per-speaker references end to end on a 3-voice test (7/8 lines exact); the voice-print model on that test (all
@@ -186,6 +200,10 @@ clip (garbled → up to 3 tries) → align lets different speakers overlap; line
   voice removal, Google, H.264 playback).
 
 ## Next steps (in order)
+00. **Adam merges 0.12.0** (PR from `claude/happy-brahmagupta-3zznvd`; check the `Original voice install` Windows job:
+   it installs and runs the converter) and re-dubs a film with «Оригинал»: accent gone? still his voice? The window
+   says «акцент исправлен в N из M строк»; `check.json` lines carry `native` and `accent`. If too many/few lines are
+   redone → tune `clone.ACCENT_SURE` (0.9, from 4 test lines). Not measured on a card: the converter's speed/memory.
 0. **Adam re-dubs with 0.11.0 and listens** (the same Men-in-Black scene, «Оригинал», background on): each person one
    voice? soft line edges? interruptions natural? the window's «Голоса: в видео говорят N» right? Useful from him:
    that line, «проверено на слух … неразборчиво осталось N», total time, `timing.json` (lines carry `speaker`) and
@@ -194,11 +212,10 @@ clip (garbled → up to 3 tries) → align lets different speakers overlap; line
    a. **One library card per dub** (`kanban/library-card-per-dub.md`): today a video's dubs share one card (ADR-027,
       his earlier choice); now each dub — even a repeat with the same settings — gets its own card with its date and
       time. Keep search; decide what the watch page's «Другие озвучки этого видео» shows (keep it). Update guides.
-   b. **«Оригинал» weak points** (`kanban/original-voice-quality.md`): one-word lines ("Да.") babble after 3 tries;
-      foreign speech in the original (e.g. Spanish in an English film) misheard by Whisper and transliterated by Claude
-      into nonsense; true crosstalk missing from Whisper's text.
-   c. **American accent in the Russian dub** (same card): the copied voice carries the English reference's accent
-      (cross-lingual cloning). Research first, then propose to Adam — see the card for candidate approaches.
+   a–c. **Done in 0.12.0** (library card per dub; foreign lines; the accent). Left on
+      `kanban/original-voice-quality.md`: one-word lines ("Да.") babble on Adam's film — clean test lines were fine
+      at the current floor, so look at the reference audio of his babbled lines (`check.json` + the line times);
+      true crosstalk (speech separation — offer, don't build).
 2. **Switch the phone version on:** Adam (a) creates a free Cloudflare account, opens "Workers & Pages" once (choose
    the `workers.dev` name), makes an API token from the template "Edit Cloudflare Workers" and adds GitHub secrets
    `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`; (b) sends the address `https://dubber.<name>.workers.dev` →
@@ -221,6 +238,9 @@ clip (garbled → up to 3 tries) → align lets different speakers overlap; line
    speaker gender unknown to the translator; offline-backup slips (Hebrew "flour" → "acid/vinegar").
 
 ## Gotchas for Claude in the cloud sandbox
+- **Edge in the sandbox** refuses requests for long stretches ("NoAudioReceived" for every text) — retry later or
+  reuse clips made earlier. The accent converter in the scratch venv: `pip install --no-deps chatterbox-tts==0.1.7
+  conformer==0.3.2 s3tokenizer==0.3.0` + `diffusers einops omegaconf onnx librosa` (session 10 scripts: scratchpad).
 - **Testing the real «Оригинал» models here (CPU, no NVIDIA):** `download.pytorch.org` is blocked — make a scratch
   venv (not the repo's `.venv`) and `pip install torch torchaudio omnivoice==0.2.1 faster-whisper edge-tts
   sherpa-onnx` from PyPI (~6.5 GB; CUDA wheels run on the CPU). Append `/root/.ccr/ca-bundle.crt` to that venv's

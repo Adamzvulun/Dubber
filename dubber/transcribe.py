@@ -23,6 +23,9 @@ EDGE = 1.0  # at most this much audio is kept around a run when it is cut out (n
 MAIN_SHARE = 0.15
 # …or when one stretch of at least SURE_SECONDS is detected this surely (a short quote in another language).
 SURE, SURE_SECONDS = 0.9, 2.0
+# A region whose best guess is none of the video's languages, at least CHECK_SECONDS long, is heard again by the
+# transcription model; if it is this sure of a language, the region keeps it (a foreign line in a film).
+CHECK_SECONDS, CHECK_SURE = 1.5, 0.85
 # NVIDIA's libraries missing or broken: Whisper picks the card ("auto") and fails on first use (cuBLAS/cuDNN DLLs).
 _GPU_ERROR = re.compile(r"cublas|cudnn|cudart|nvrtc|cuda", re.I)
 _gpu_failed = False  # the card failed once in this run of the program: use the processor from now on (gpu.py resets)
@@ -76,7 +79,7 @@ def video_languages(pieces: list[tuple[float, float, dict[str, float]]]) -> set[
     return spoken or ({share.most_common(1)[0][0]} if share else set())
 
 
-def language_runs(detector, samples) -> list[tuple[float, float, str]]:
+def language_runs(detector, samples, checker=None) -> list[tuple[float, float, str]]:
     """Stretches of the audio in one language each: [(start_s, end_s, language)].
 
     The language is detected for EVERY speech region (a sentence or two): Whisper's language detection mostly hears
@@ -84,6 +87,11 @@ def language_runs(detector, samples) -> list[tuple[float, float, str]]:
     its English lines were mislabelled (measured 2026-10-16). `detector` is a small Whisper model ("base"): it
     identified all 19 regions of two mixed test clips correctly, at ~0.3 s per region on CPU. Each region then gets
     the most likely of the languages spoken in the whole video (`video_languages`), never a stray guess.
+
+    Except a foreign line: a region that "base" doesn't place in one of the video's languages is heard again by
+    `checker` (the bigger transcription model) and keeps the language it is sure of. Spanish lines in an English film
+    under noise: "base" said Portuguese 0.24 and the line was transcribed as English nonsense; "small" said Spanish
+    0.93 (measured 2026-10-30, docs/RESEARCH.md).
     """
     from faster_whisper.vad import VadOptions, get_speech_timestamps
 
@@ -96,6 +104,12 @@ def language_runs(detector, samples) -> list[tuple[float, float, str]]:
     spoken = video_languages(detected)
     pieces = []
     for start, end, probs in detected:
+        guess = max(probs, key=probs.get, default="")
+        if checker is not None and guess not in spoken and end - start >= CHECK_SECONDS:
+            heard, sure, _ = checker.detect_language(audio=samples[int(start * SAMPLE_RATE):int(end * SAMPLE_RATE)])
+            if sure >= CHECK_SURE:
+                pieces.append((start, end, heard, 1.0))
+                continue
         lang = max(spoken, key=lambda language: probs.get(language, 0.0))
         among = sum(probs.get(language, 0.0) for language in spoken)
         pieces.append((start, end, lang, probs.get(lang, 0.0) / among if among else 0.0))
@@ -135,7 +149,7 @@ def _transcribe(audio_wav: Path, model_size: str, device: str, progress, info_ou
     samples = decode_audio(audio_wav, SAMPLE_RATE)
     total = len(samples) / SAMPLE_RATE
     detector = retry(lambda: WhisperModel(DETECTOR, device=device, compute_type=compute_type))
-    runs = language_runs(detector, samples)
+    runs = language_runs(detector, samples, checker=model)
 
     spoken: Counter[str] = Counter()
     for start, end, lang in runs:
@@ -173,8 +187,21 @@ def _transcribe(audio_wav: Path, model_size: str, device: str, progress, info_ou
     return segments
 
 
+class Heard(str):
+    """What Whisper heard in a clip; `.native`: how sure it is that the clip is in the language it should be (an
+    accent lowers it: measured 0.43-0.87 on accented Russian, 0.97-1.0 on native; ADR-043)."""
+
+    native: float = 1.0
+
+    def __new__(cls, text: str, native: float = 1.0):
+        heard = super().__new__(cls, text)
+        heard.native = native
+        return heard
+
+
 def reader(model_size: str = "small", device: str = "auto"):
-    """`read(clip, lang)` -> what Whisper hears in a short clip (the original voice's listen-back check, clone.py).
+    """`read(clip, lang)` -> what Whisper hears in a short clip (the original voice's listen-back check, clone.py),
+    as a `Heard` that also says how native the speech sounds.
 
     The model loads on the first clip; on the card when it works, else the processor (as `transcribe`)."""
     from faster_whisper import WhisperModel
@@ -187,19 +214,23 @@ def reader(model_size: str = "small", device: str = "auto"):
             models[where] = retry(lambda: WhisperModel(model_size, device=where, compute_type=compute_type))
         return models[where]
 
-    def read(clip: Path, lang: str) -> str:
+    def hear(model, samples, lang: str) -> Heard:
+        segments, _ = model.transcribe(samples, language=lang, beam_size=5)
+        text = " ".join(s.text.strip() for s in segments)
+        _, _, probs = model.detect_language(audio=samples)
+        return Heard(text, dict(probs or []).get(lang, 1.0))  # a language Whisper doesn't know: no judgement
+
+    def read(clip: Path, lang: str) -> Heard:
         global _gpu_failed
         samples = decode_audio(clip, SAMPLE_RATE)
         if device != "cpu" and not _gpu_failed:
             try:
-                segments, _ = model_on(device).transcribe(samples, language=lang, beam_size=5)
-                return " ".join(s.text.strip() for s in segments)
+                return hear(model_on(device), samples, lang)
             except Exception as exc:
                 if not gpu_error(exc):
                     raise
                 _gpu_failed = True
-        segments, _ = model_on("cpu").transcribe(samples, language=lang, beam_size=5)
-        return " ".join(s.text.strip() for s in segments)
+        return hear(model_on("cpu"), samples, lang)
 
     return read
 
