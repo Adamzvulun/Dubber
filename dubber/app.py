@@ -703,7 +703,7 @@ def create_app(
     def settings_view() -> dict:
         prices = []
         for model_id, model in translate.CLAUDE_MODELS.items():
-            per10 = (_TEN_MIN_TOKENS[0] * model.input_usd + _TEN_MIN_TOKENS[1] * model.output_usd) / 1e6
+            per10 = model.cost_usd(*_TEN_MIN_TOKENS)
             prices.append({"id": model_id, "label": model.label, "per_10_min_usd": round(per10, 3)})
         return {
             "claude": {"key_set": bool(settings.claude_key), "key_hint": _key_hint(settings.claude_key),

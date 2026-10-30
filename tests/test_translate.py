@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from dubber import languages
+from dubber import languages, translate
 from dubber.segments import Segment
 from dubber.translate import (
     ClaudeBackend,
@@ -344,3 +344,11 @@ def test_gate_accepts_a_line_google_says_is_already_in_the_dub_language():
     t = Translator("en", GoogleBackend("en", fetch=fetch))
     assert t.translate_texts(["So patience and good flour are the secret."], ["fr"]) == [
         "So patience and good flour are the secret."]
+
+
+def test_haiku_costs_more_for_a_prompt_over_100k_tokens():
+    """Anthropic's prices checked 2026-10-30: Haiku 5.5 is $0.10/$0.50 per M tokens up to 100K, $0.50/$2.50 beyond."""
+    haiku, opus = translate.CLAUDE_MODELS["claude-haiku-5-5"], translate.CLAUDE_MODELS["claude-opus-5-5"]
+    assert haiku.cost_usd(100_000, 1_000_000) == pytest.approx(0.01 + 0.50)
+    assert haiku.cost_usd(200_000, 1_000_000) == pytest.approx(0.10 + 2.50)
+    assert opus.cost_usd(1_000_000, 1_000_000) == pytest.approx(24.0)

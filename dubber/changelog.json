@@ -1,10 +1,18 @@
 {
   "0.12.1": {
     "ru": [
-      "Голос «Оригинал» снова звучит как в версии 0.11.0: исправление акцента убрано."
+      "Голос «Оригинал» снова звучит как в версии 0.11.0: исправление акцента убрано.",
+      "Вопросы «Удалить?» и «Очистить кэш?» теперь в окне самой программы; перед очисткой кэша одного видео программа тоже спрашивает.",
+      "Выбор голоса и звука запоминается. Если окно программы закрыто, страница пишет об этом и подключается сама, когда программа снова запущена.",
+      "Поиск в библиотеке не различает буквы с акцентами (lecon найдёт «Leçon»). Глоссарий показывает строки без «=». «Отмена» в вопросе о плейлисте больше не отменяет остальные ссылки.",
+      "Имена голосов других языков написаны по-русски (Эндрю, Хила…)."
     ],
     "en": [
-      "The “Original” voice sounds as in version 0.11.0 again: the accent fix is removed."
+      "The “Original” voice sounds as in version 0.11.0 again: the accent fix is removed.",
+      "“Delete?” and “Clear cache?” questions now appear in the program's own window; clearing one video's cache asks first too.",
+      "Your voice and sound choices are remembered. When the program window is closed, the page says so and reconnects by itself once the program runs again.",
+      "Library search ignores accents (lecon finds “Leçon”). The glossary points out lines without “=”. “Cancel” in the playlist question no longer cancels the other links.",
+      "In the Russian interface, the voices of other languages have their names in Russian letters (Эндрю, Хила…)."
     ]
   },
   "0.12.0": {

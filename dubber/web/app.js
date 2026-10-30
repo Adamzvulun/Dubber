@@ -5,7 +5,16 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const STEP_KEYS = ["download", "transcribe", "translate", "tts", "align", "separate", "mux"]; // matches t("steps")
 // Russian voices keep their Russian names in the Russian interface.
-const RU_VOICE_NAMES = { "ru-RU-DmitryNeural": "Дмитрий", "ru-RU-SvetlanaNeural": "Светлана" };
+const RU_VOICE_NAMES = { // every Edge voice of languages.py, as a Russian reader says the name
+  "ru-RU-DmitryNeural": "Дмитрий", "ru-RU-SvetlanaNeural": "Светлана", "en-US-AndrewNeural": "Эндрю",
+  "en-US-AvaNeural": "Ава", "he-IL-AvriNeural": "Аври", "he-IL-HilaNeural": "Хила", "de-DE-ConradNeural": "Конрад",
+  "de-DE-KatjaNeural": "Катя", "fr-FR-HenriNeural": "Анри", "fr-FR-DeniseNeural": "Дениз",
+  "es-ES-AlvaroNeural": "Альваро", "es-ES-ElviraNeural": "Эльвира", "it-IT-DiegoNeural": "Диего",
+  "it-IT-ElsaNeural": "Эльза", "pt-BR-AntonioNeural": "Антониу", "pt-BR-FranciscaNeural": "Франсиска",
+  "uk-UA-OstapNeural": "Остап", "uk-UA-PolinaNeural": "Полина", "ar-SA-HamedNeural": "Хамед",
+  "ar-SA-ZariyahNeural": "Зария", "ja-JP-KeitaNeural": "Кэйта", "ja-JP-NanamiNeural": "Нанами",
+  "zh-CN-YunxiNeural": "Юньси", "zh-CN-XiaoxiaoNeural": "Сяосяо",
+};
 const FALLBACK_LANGS = [{ code: "ru", name_ru: "Русский", name_en: "Russian", native: "Русский", rtl: false }];
 
 const state = {
@@ -56,8 +65,10 @@ async function api(path, options = {}) {
   } catch (_) {
     // the program window was closed, or the network is down
     if (PHONE && url !== path) { phoneLost(); throw new Error(t("phone.pcLost")); }
+    if (!PHONE) showOffline(true);
     throw new Error(PHONE ? t("phone.noInternet") : t("server.down"));
   }
+  if (!PHONE) showOffline(false);
   if (!res.ok) {
     let message = res.status === 404 ? t("server.notFound") : t("server.down");
     try {
@@ -124,6 +135,31 @@ function looksLikeUrl(text) {
   catch (_) { return false; }
 }
 
+/** On the PC: the program stopped answering (its window was closed) → a banner until it answers again; the job
+ * list is asked every few seconds anyway (pollJobs), so the banner goes by itself and the page catches up. */
+function showOffline(off) {
+  const banner = $("#offline");
+  if (banner.hidden === !off) return;
+  banner.hidden = !off;
+  if (!off) { loadLibrary(); if (!$("#view-settings").hidden) route(); }
+}
+
+/* ---------- the page's own questions (the browser's confirm()/alert() look foreign and can't be styled) ---------- */
+/** Asks `text` in a dialog; resolves true when `yes` is pressed. Esc or «Отмена» → false. The safe answer has the
+ * focus. `alone`: a message with one button (instead of alert). */
+function ask(text, yes, { danger = true, alone = false } = {}) {
+  const box = $("#ask"), ok = $("#ask-yes");
+  $("#ask-text").textContent = text;
+  ok.textContent = yes;
+  ok.classList.toggle("btn--danger-fill", danger && !alone);
+  ok.classList.toggle("btn--primary", !danger || alone);
+  $("#ask-no").hidden = alone;
+  box.returnValue = "";
+  box.showModal();
+  (alone ? ok : $("#ask-no")).focus();
+  return new Promise((resolve) => box.addEventListener("close", () => resolve(box.returnValue === "yes"), { once: true }));
+}
+
 /* ---------- router ---------- */
 function route() {
   const hash = location.hash || "#/";
@@ -178,9 +214,10 @@ function card(dub) {
   return node;
 }
 
-/** Lower case, "ё" = "е": what the search compares. */
+/** Lower case, "ё" = "е", no accents or vowel marks ("Leçon" = "lecon", Hebrew niqqud): what the search compares. */
 function searchable(text) {
-  return (text || "").toLocaleLowerCase().replace(/ё/g, "е");
+  return (text || "").toLocaleLowerCase().replace(/ё/g, "е").replace(/й/g, "\u0000")
+    .normalize("NFD").replace(/\p{M}/gu, "").replace(/\u0000/g, "й");
 }
 
 /** What tells dubs of one video apart: language, voice, and the sound choices (e.g. "Русский · Дмитрий · без фона"). */
@@ -392,6 +429,27 @@ function showFormError(message) {
 }
 
 /** The form's choices for a new dub. */
+/** The voice and sound switches are remembered on this device (like the dub language). «Оригинал» comes back only
+ * once the settings say it is installed (updateVoiceOption keeps it otherwise). */
+const CHOICES_KEY = "dubber.choices";
+
+function saveChoices() {
+  const c = formChoices();
+  try { localStorage.setItem(CHOICES_KEY, JSON.stringify({ voice: c.voice, background: c.background,
+    remove_voice: $("#remove-voice").disabled ? state.removeVoiceChoice ?? false : $("#remove-voice").checked })); } catch (_) {}
+}
+
+function restoreChoices() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(CHOICES_KEY) || "null"); } catch (_) {}
+  if (!saved) return;
+  const radio = document.querySelector(`input[name="voice"][value="${saved.voice}"]`);
+  if (radio) radio.checked = true;
+  state.wantOriginal = saved.voice === "original"; // the install status arrives later (loadClone)
+  if (typeof saved.background === "boolean") $("#background").checked = saved.background;
+  if (typeof saved.remove_voice === "boolean") { $("#remove-voice").checked = saved.remove_voice; state.removeVoiceChoice = saved.remove_voice; }
+}
+
 function formChoices() {
   const background = $("#background").checked;
   return { voice: new FormData($("#dub-form")).get("voice") || "male", background, lang: $("#lang").value || "ru",
@@ -482,6 +540,7 @@ async function submitLinks() {
   const choices = formChoices(), sources = [];
   if (PHONE && !PHONE.online) { await queueOnPhone(links, choices); return; }
   let cancelled = false;
+  const skipped = []; // playlists whose question was cancelled: they stay in the field, the other links are dubbed
   await busy(async () => {
     for (const link of links) {
       const kind = playlistKind(link);
@@ -492,14 +551,15 @@ async function submitLinks() {
       // a video inside a playlist: always ask; a playlist page: ask only when it is long
       const answer = kind === "both" ? await askPlaylist(playlist, true)
         : playlist.entries.length > 10 ? await askPlaylist(playlist, false) : "all";
-      if (answer === null) { cancelled = true; return; }
+      if (answer === null) { skipped.push(link); continue; }
       if (answer === "one") sources.push({ url: link });
       else sources.push(...playlist.entries.map((entry) => ({ url: entry.url })));
     }
+    if (!sources.length) { cancelled = true; return; }
     $("#submit").textContent = t("form.sending");
     const unique = [...new Map(sources.map((source) => [source.url, source])).values()]; // a link listed twice
     await startJobs(unique, choices);
-    field.value = ""; autoGrow();
+    field.value = skipped.join("\n"); autoGrow();
   });
   if (cancelled) field.focus();
 }
@@ -785,8 +845,9 @@ function renderTranscript(video) {
 }
 
 async function deleteVideo(video) {
-  if (!confirm(t("watch.delete", video.title, dubLabel(video), (video.siblings || []).length > 0))) return;
-  try { await api(`/api/videos/${encodeURIComponent(video.id)}`, { method: "DELETE" }); } catch (e) { alert(e.message); return; }
+  if (!await ask(t("watch.delete", video.title, dubLabel(video), (video.siblings || []).length > 0), t("ask.delete"))) return;
+  try { await api(`/api/videos/${encodeURIComponent(video.id)}`, { method: "DELETE" }); }
+  catch (e) { await ask(e.message, t("news.close"), { alone: true }); return; }
   location.hash = "#/library";
 }
 
@@ -805,6 +866,7 @@ function updateVoiceOption() {
   const ready = Boolean(state.clone?.ready), radio = $("#voice-original");
   radio.disabled = !ready;
   $("#voice-original-label").hidden = !ready;
+  if (ready && state.wantOriginal) { radio.checked = true; state.wantOriginal = false; } // remembered, now installed
   if (!ready && radio.checked) $("#voice-male").checked = true;
   const hint = $("#voice-hint");
   hint.hidden = !radio.checked;
@@ -890,12 +952,13 @@ function renderStorage() {
     el("span", { class: "storage-list__size", text: [sizeLabel(v.cache), v.dubs ? t("storage.inLibrary", v.dubs) : null]
       .filter(Boolean).join(" · ") }),
     el("button", { class: "btn btn--quiet", type: "button", text: t("storage.clear"), "aria-label": t("storage.clearAria", v.title),
-      onclick: () => clearCache(`/api/storage/cache/${encodeURIComponent(v.video_id)}`) }))));
+      onclick: () => clearCache(`/api/storage/cache/${encodeURIComponent(v.video_id)}`,
+        t("storage.confirmOne", v.title || t("storage.uploads"), sizeLabel(v.cache))) }))));
   if (!s.videos.length) $("#storage-list").append(el("li", { class: "muted", text: t("storage.empty") }));
 }
 
 async function clearCache(path, confirmText) {
-  if (confirmText && !confirm(confirmText)) return;
+  if (confirmText && !await ask(confirmText, t("storage.clear"))) return;
   const note = $("#storage-note");
   try {
     const { freed } = await api(path, { method: "DELETE" });
@@ -945,7 +1008,7 @@ async function addLoginFile(file) {
 }
 
 async function removeLogins() {
-  if (!confirm(t("logins.confirmRemove"))) return;
+  if (!await ask(t("logins.confirmRemove"), t("ask.delete"))) return;
   try { state.logins = await api("/api/cookies", { method: "DELETE" }); } catch (e) { loginNote(e.message, true); return; }
   renderLogins();
   loginNote(t("logins.removed"));
@@ -1185,7 +1248,7 @@ function initSettings() {
   });
   $("#claude-key").addEventListener("input", () => { if (!$("#key-error").hidden) showKeyError(""); });
   $("#key-remove").addEventListener("click", async () => {
-    if (!confirm(t("settings.key.confirmRemove"))) return;
+    if (!await ask(t("settings.key.confirmRemove"), t("ask.delete"))) return;
     try {
       state.settings = await api("/api/settings/claude-key", { method: "DELETE" });
       renderSettings();
@@ -1197,6 +1260,11 @@ function initSettings() {
   $("#claude-model").addEventListener("change", (e) => saveSettings({ model: e.target.value }));
   $("#glossary").addEventListener("input", () => { state.glossaryDirty = true; $("#glossary-saved").hidden = true; });
   $("#glossary-save").addEventListener("click", async () => {
+    // Saved anyway; lines without "=" are pointed out (Claude may read them as notes, not as a term and its translation)
+    const odd = $("#glossary").value.split("\n").map((l) => l.trim()).filter((l) => l && !l.includes("="));
+    const warn = $("#glossary-warn");
+    warn.hidden = !odd.length;
+    warn.textContent = odd.length ? t("settings.glossary.noEquals", odd.slice(0, 3).join(" · "), odd.length) : "";
     await saveSettings({ glossary: $("#glossary").value }, $("#glossary-saved"));
     state.glossaryDirty = false;
   });
@@ -1227,6 +1295,7 @@ async function init() {
   });
 
   try { state.dubLang = localStorage.getItem("dubber.dubLang") || "ru"; } catch (_) {}
+  restoreChoices();
   $("#lang").addEventListener("change", (e) => {
     state.dubLang = e.target.value;
     updateVoiceOption();
@@ -1236,9 +1305,11 @@ async function init() {
   // The skip link must not change the hash (that is the router's job): just move focus to the content.
   $(".skip").addEventListener("click", (e) => { e.preventDefault(); $("#main").focus(); });
   $("#library-search").addEventListener("input", renderLibrary);
-  $("#background").addEventListener("change", updateBackgroundHint);
-  document.querySelectorAll('input[name="voice"]').forEach((r) => r.addEventListener("change", updateVoiceOption));
-  $("#remove-voice").addEventListener("change", updateBackgroundHint);
+  $("#background").addEventListener("change", () => { updateBackgroundHint(); saveChoices(); });
+  document.querySelectorAll('input[name="voice"]').forEach((r) => r.addEventListener("change", () => {
+    updateVoiceOption(); saveChoices();
+  }));
+  $("#remove-voice").addEventListener("change", () => { updateBackgroundHint(); saveChoices(); });
   document.querySelectorAll("[data-ui-lang]").forEach((b) => b.addEventListener("click", () => {
     setUiLang(b.dataset.uiLang); applyUiLang();
   }));

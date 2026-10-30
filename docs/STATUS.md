@@ -196,7 +196,9 @@ clip (garbled → up to 3 tries) → align lets different speakers overlap; line
   voice removal, Google, H.264 playback).
 
 ## Next steps (in order)
-00. **Adam merges 0.12.1** (PR #23: accent fix out, library cards + foreign-line check stay).
+00. **Adam merges 0.12.1** (PR #23: accent fix out, library cards + foreign-line check stay, the QA leftovers).
+01. **Graphics card for every stage** (Adam, 2026-10-30): voice removal (Demucs ONNX) and the offline translator
+   (NLLB) still run on the processor — next.
 0. **Adam re-dubs with 0.11.0 and listens** (the same Men-in-Black scene, «Оригинал», background on): each person one
    voice? soft line edges? interruptions natural? the window's «Голоса: в видео говорят N» right? Useful from him:
    that line, «проверено на слух … неразборчиво осталось N», total time, `timing.json` (lines carry `speaker`) and
@@ -222,9 +224,7 @@ clip (garbled → up to 3 tries) → align lets different speakers overlap; line
 4. **Father's Windows 11 PC:** fresh install (Visual C++ prompt → «Да»), a dub with both subtitle switches
    (`kanban/install-and-subtitles.md`). His RTX 3050 has 4 GB — no «Оригинал» there, but 0.10.1's Whisper-on-card
    applies.
-5. QA leftovers (`kanban/nice-to-haves.md`, 2026-10-29): own dialogs instead of confirm(), accent-insensitive search,
-   remember voice/background choices, confirm before per-video «Очистить кэш», offline banner on the PC, glossary
-   validation, playlist-cancel keeps the other links, re-check the Haiku price in `translate.py`, Cyrillic voice names.
+5. QA leftovers: done in 0.12.1 (PROGRESS session 10d).
 6. Ideas not yet chosen (offer, don't build unasked): voice speed control; 16 generation steps for «Оригинал» (≈2× faster, quality risk); Demucs on the card; Hebrew spelling fix on the free path
    (PLAN M7); offline TTS fallback (Silero); Telegram bot; ElevenLabs (paid); slight video slow-down (`kanban/voicestudio-omnivoice.md`).
 7. Known limits: Hebrew homographs and grammatical gender (לך) can't be read right from plain text by any voice;
